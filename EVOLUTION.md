@@ -3,7 +3,7 @@
 **Última atualização:** 25/09/2026  
 **Repositório:** `agenciamobi/nossojornal`  
 **Domínio:** `nossojornal.com.br`  
-**Estado:** fundação da nova aplicação
+**Estado:** produção publicada; Header + API real em desenvolvimento
 
 Este é o único documento de evolução do projeto. Planos, decisões arquiteturais, fases, pendências e mudanças de direção devem ser consolidados aqui.
 
@@ -258,7 +258,7 @@ Compatibilidade com slugs históricos será decidida a partir do inventário rea
 
 ### Fase 0 - Fundação
 
-Estado: **EM ANDAMENTO**
+Estado: **CONCLUÍDA**
 
 Entregas:
 
@@ -311,7 +311,7 @@ Definir:
 
 ### Fase 2 - Inventário do legado
 
-Estado: **PLANEJADA**
+Estado: **EM ANDAMENTO**
 
 Ler e documentar:
 
@@ -338,7 +338,7 @@ Resultado:
 
 ### Fase 3 - API pública de leitura
 
-Estado: **PLANEJADA**
+Estado: **EM ANDAMENTO**
 
 Criar endpoints server-side:
 
@@ -650,3 +650,52 @@ A primeira etapa termina quando:
 - build é reproduzível;
 - MOBI Core reconhece receita `vite_spa`;
 - nenhum release é executado até persistent paths estarem suportados.
+
+
+## 13. Header: leitura real do legado e primeira API
+
+Leitura do snapshot `nossojornal_wp262.sql` concluída para o domínio necessário ao Header.
+
+### Taxonomia real
+
+A taxonomia WordPress `category` contém 25 termos: 16 categorias raiz e 9 filhas. `Cobertura Regional` é o agrupador das cidades Hulha Negra, Bagé, Aceguá, Candiota, Dom Pedrito, Herval, Pedras Altas, Pinheiro Machado e Piratini.
+
+O snapshot possui 34 posts publicados. As categorias com maior presença são Hulha Negra (32), Geral (17) e Política (12). As contagens do frontend não serão congeladas: a API recalcula contra `post_type=post` e `post_status=publish`.
+
+### Menu legado
+
+O Porto registrava `main_menu=70` e `top_nav=28`. O menu principal histórico tinha oito itens: Início, Quem Somos, Notícias, quatro filhos de Notícias (Outros, Política, Esportes e Hulha Negra) e Contato. Isso é tratado como evidência histórica, não como política editorial obrigatória do novo Header.
+
+### API criada
+
+Endpoints iniciais:
+
+```text
+GET /api/v1/health.php
+GET /api/v1/categories.php
+GET /api/v1/categories.php?include_empty=0
+```
+
+`categories.php` retorna coleção flat e árvore hierárquica com id, taxonomyId, nome, slug, parentId, URL normalizada, legacyCount, publishedCount e latestPublishedAt.
+
+A API é PHP 8.4 + PDO, somente leitura nesta fase. O frontend não consulta `njsite_*` diretamente.
+
+### Credenciais
+
+Credenciais não são versionadas. O runtime procura configuração server-side fora do document root em:
+
+```text
+~/.mobi/nossojornal-api.php
+```
+
+Também aceita `NJ_DB_HOST`, `NJ_DB_PORT`, `NJ_DB_NAME`, `NJ_DB_USER`, `NJ_DB_PASSWORD` e `NJ_DB_PREFIX`.
+
+O usuário runtime deverá ter somente `SELECT` nas tabelas legadas necessárias.
+
+### Próxima etapa do Header
+
+1. provisionar a configuração read-only do banco no servidor;
+2. publicar a API;
+3. validar health e categorias contra o MariaDB live;
+4. substituir o array estático de editorias pelo endpoint;
+5. definir a seleção e ordem editorial do Header, mantendo a taxonomia original intacta.
