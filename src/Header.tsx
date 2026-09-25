@@ -116,11 +116,11 @@ function TickerGroup({
 export function Brand() {
   return (
     <a className="brand" href="/" aria-label="Nosso Jornal - página inicial">
-      <img src="/nosso-jornal-brand.webp" alt="" className="brand__mark" />
-      <span className="brand__copy">
-        <strong>NOSSO</strong>
-        <span>JORNAL</span>
-      </span>
+      <img
+        src="/nosso-jornal-hulha-negra-bage.png"
+        alt="Nosso Jornal"
+        className="brand__wordmark"
+      />
     </a>
   );
 }
