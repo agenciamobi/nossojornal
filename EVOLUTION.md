@@ -675,7 +675,10 @@ Endpoints iniciais:
 GET /api/v1/health.php
 GET /api/v1/categories.php
 GET /api/v1/categories.php?include_empty=0
+GET /api/v1/latest.php?limit=6
 ```
+
+`latest.php` expõe as notícias publicadas mais recentes do legado, ordenadas por data e ID, sem posts protegidos por senha. O contrato retorna título normalizado, slug, URL editorial, data de publicação e data de atualização. O limite aceito é de 1 a 20 itens.
 
 `categories.php` retorna coleção flat e árvore hierárquica com id, taxonomyId, nome, slug, parentId, URL normalizada, legacyCount, publishedCount e latestPublishedAt.
 
@@ -701,9 +704,13 @@ O Header deixou de usar o array estático de editorias. A navegação principal 
 
 `Últimas` permanece como rota editorial do produto, não como categoria do banco. `Cobertura Regional` recebe uma faixa secundária alimentada pelos filhos reais da taxonomia: Aceguá, Bagé, Candiota, Dom Pedrito, Herval, Hulha Negra, Pedras Altas, Pinheiro Machado e Piratini.
 
+O Header agora também abandona os textos de projeto/demonstração. A barra utilitária usa links públicos reais (`/sobre`, `/classificados`, `/comunicados`, `/contato`, `/busca`), informa a edição regional e a data atual. O masthead assume linguagem editorial regional.
+
+A antiga faixa `EM DESENVOLVIMENTO` foi removida. Em seu lugar, o Header consome `/api/v1/latest.php?limit=6` e exibe as seis notícias publicadas mais recentes em ticker horizontal contínuo, com looping infinito, pausa em hover/foco e fallback acessível para `prefers-reduced-motion`.
+
 Próximo gate do Header:
 
-1. build e publicação do componente conectado;
-2. validar comportamento desktop/mobile em produção;
-3. validar estados de loading e falha;
+1. publicar a nova `main`;
+2. validar `latest.php?limit=6` contra o MariaDB live;
+3. validar ticker, links, editorias e cobertura regional em desktop/mobile;
 4. encerrar a seção Header antes de avançar para a manchete/capa.
