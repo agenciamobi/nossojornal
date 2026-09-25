@@ -3,7 +3,7 @@
 **Última atualização:** 25/09/2026  
 **Repositório:** `agenciamobi/nossojornal`  
 **Domínio:** `nossojornal.com.br`  
-**Estado:** produção publicada; Header + API real em desenvolvimento
+**Estado:** API real validada em produção; Header conectado à taxonomia real em desenvolvimento
 
 Este é o único documento de evolução do projeto. Planos, decisões arquiteturais, fases, pendências e mudanças de direção devem ser consolidados aqui.
 
@@ -89,11 +89,12 @@ A Edge `deployment-release-runner-provision` foi atualizada para provisionar o w
 
 Estado atual:
 
-- source do portal: pronto;
+- source do portal: publicado em produção;
 - receita detectada: `vite_spa` + `npm_ci` + `dist`;
-- persistent paths no Core: implementados;
-- primeiro Release Runner da conta `nossojornal`: ainda não provisionado;
-- primeiro cutover: pendente do provisionamento e readback do runner.
+- persistent paths no Core: implementados e preservados;
+- Release Runner da conta `nossojornal`: operacional;
+- deploy canônico já executado com readback de SHA e homepage HTTP 200;
+- API PHP publicada e conectada ao MariaDB legado com usuário runtime read-only.
 
 ## 4. Identidade visual
 
@@ -279,7 +280,7 @@ Gate:
 
 ### Fase 1 - Design system editorial
 
-Estado: **PLANEJADA**
+Estado: **EM ANDAMENTO**
 
 Construir:
 
@@ -367,7 +368,7 @@ Requisitos:
 
 ### Fase 4 - Conteúdo real no frontend
 
-Estado: **PLANEJADA**
+Estado: **EM ANDAMENTO**
 
 Substituir demonstração por API real:
 
@@ -692,10 +693,17 @@ Também aceita `NJ_DB_HOST`, `NJ_DB_PORT`, `NJ_DB_NAME`, `NJ_DB_USER`, `NJ_DB_PA
 
 O usuário runtime deverá ter somente `SELECT` nas tabelas legadas necessárias.
 
-### Próxima etapa do Header
+### Estado validado do Header
 
-1. provisionar a configuração read-only do banco no servidor;
-2. publicar a API;
-3. validar health e categorias contra o MariaDB live;
-4. substituir o array estático de editorias pelo endpoint;
-5. definir a seleção e ordem editorial do Header, mantendo a taxonomia original intacta.
+Em produção, `GET /api/v1/health.php` confirmou `database=reachable` e 25 categorias legadas. `GET /api/v1/categories.php?include_empty=1` confirmou 16 categorias raiz, 9 cidades filhas de `Cobertura Regional` e a árvore hierárquica completa.
+
+O Header deixou de usar o array estático de editorias. A navegação principal agora consome a API real e mantém apenas a política editorial de apresentação no frontend. Categorias técnicas ou históricas de organização (`Capa`, `Geral`, `Outros` e `Eleições 2024`) ficam fora da barra principal sem serem removidas da taxonomia.
+
+`Últimas` permanece como rota editorial do produto, não como categoria do banco. `Cobertura Regional` recebe uma faixa secundária alimentada pelos filhos reais da taxonomia: Aceguá, Bagé, Candiota, Dom Pedrito, Herval, Hulha Negra, Pedras Altas, Pinheiro Machado e Piratini.
+
+Próximo gate do Header:
+
+1. build e publicação do componente conectado;
+2. validar comportamento desktop/mobile em produção;
+3. validar estados de loading e falha;
+4. encerrar a seção Header antes de avançar para a manchete/capa.
