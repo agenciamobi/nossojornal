@@ -132,37 +132,13 @@ img {
 .brand {
   display: inline-flex;
   align-items: center;
-  gap: 14px;
   min-width: max-content;
 }
 
-.brand__mark {
-  width: 58px;
-  height: 58px;
-  object-fit: cover;
-  object-position: center;
-  border-radius: 17px;
-  box-shadow: 0 8px 25px rgba(0,0,0,.22);
-}
-
-.brand__copy {
-  display: grid;
-  line-height: .82;
-  letter-spacing: .08em;
-}
-
-.brand__copy strong {
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: 34px;
-  font-weight: 500;
-  letter-spacing: .05em;
-}
-
-.brand__copy span {
-  margin-top: 7px;
-  font-size: 12px;
-  letter-spacing: .42em;
-  color: #d7e4ff;
+.brand__wordmark {
+  width: clamp(180px, 18vw, 235px);
+  height: auto;
+  object-fit: contain;
 }
 
 .masthead__message {
@@ -182,10 +158,11 @@ img {
 
 .masthead__message strong {
   display: block;
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: clamp(22px, 3vw, 34px);
-  line-height: 1.12;
-  font-weight: 500;
+  font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
+  font-size: clamp(23px, 3vw, 35px);
+  line-height: 1.1;
+  font-weight: 600;
+  letter-spacing: -.018em;
 }
 
 .primary-nav {
@@ -841,13 +818,8 @@ img {
   color: #fff;
 }
 
-.site-footer .brand__mark {
-  width: 48px;
-  height: 48px;
-}
-
-.site-footer .brand__copy strong {
-  font-size: 27px;
+.site-footer .brand__wordmark {
+  width: 170px;
 }
 
 .site-footer p {
@@ -993,13 +965,8 @@ input:focus-visible {
     display: none;
   }
 
-  .brand__mark {
-    width: 48px;
-    height: 48px;
-  }
-
-  .brand__copy strong {
-    font-size: 29px;
+  .brand__wordmark {
+    width: 188px;
   }
 
   .primary-nav__scroll {
