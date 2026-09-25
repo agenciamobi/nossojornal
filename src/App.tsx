@@ -1,296 +1,390 @@
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Brand, SiteHeader } from './Header';
+import './home.css';
 
-type Story = {
-  section: string;
-  title: string;
-  summary: string;
-  time: string;
-  tone: 'navy' | 'blue' | 'sky' | 'slate';
+type Category = {
+  id: number;
+  taxonomyId: number;
+  name: string;
+  slug: string;
+  parentId: number | null;
+  url: string;
 };
 
+type FeaturedImage = {
+  url: string;
+  alt: string;
+};
 
-const recentStories: Story[] = [
-  {
-    section: 'Demonstração',
-    title: 'Título de matéria para validar a hierarquia editorial da nova capa',
-    summary: 'Este conteúdo é apenas demonstrativo e será substituído pela API editorial do Nosso Jornal.',
-    time: 'layout de demonstração',
-    tone: 'navy',
-  },
-  {
-    section: 'Demonstração',
-    title: 'Bloco secundário mostra como notícias recentes convivem com a manchete',
-    summary: 'A estrutura foi pensada para receber conteúdo real sem mudar a composição visual.',
-    time: 'layout de demonstração',
-    tone: 'blue',
-  },
-  {
-    section: 'Demonstração',
-    title: 'Cards menores priorizam leitura rápida e navegação entre editorias',
-    summary: 'Imagem, título, editoria e horário serão abastecidos por dados normalizados.',
-    time: 'layout de demonstração',
-    tone: 'sky',
-  },
-  {
-    section: 'Demonstração',
-    title: 'A capa poderá misturar relevância editorial com recência',
-    summary: 'A ordem final será controlada pela redação, não apenas por data de publicação.',
-    time: 'layout de demonstração',
-    tone: 'slate',
-  },
-];
+type Article = {
+  id: number;
+  title: string;
+  slug: string;
+  url: string;
+  excerpt: string;
+  publishedAt: string;
+  modifiedAt: string;
+  author: {
+    id: number;
+    name: string;
+  };
+  featuredImage: FeaturedImage | null;
+  views: number;
+  primaryCategory: Category | null;
+  categories: Category[];
+};
 
-const latest = [
-  'Espaço preparado para a primeira notícia real conectada à API',
-  'Categoria, autoria e horário entram no mesmo contrato editorial',
-  'O acervo legado será normalizado sem expor o schema WordPress',
-  'Links históricos poderão ser preservados durante o cutover',
-  'Classificados e comunicados terão áreas próprias no novo portal',
-  'A home poderá destacar colunas e conteúdos especiais',
-];
+type HomeSection = {
+  category: Category;
+  stories: Article[];
+};
 
-const classifiedCards = [
-  'Empregos e oportunidades',
-  'Imóveis e serviços',
-  'Comércio e negócios',
-  'Editais e oportunidades',
-];
+type HomePayload = {
+  ok: boolean;
+  data?: {
+    hero: Article | null;
+    latest: Article[];
+    mostRead: Article[];
+    sections: HomeSection[];
+    summary: {
+      publishedArticles: number;
+      sectionCount: number;
+      heroSelection: 'capa_category' | 'latest_fallback' | 'none';
+    };
+  };
+};
 
-const officialNotices = [
-  'Comunicado oficial de demonstração',
-  'Edital de demonstração',
-  'Aviso institucional de demonstração',
-];
+function formatPublishedAt(value: string) {
+  const normalized = value.includes('T') ? value : value.replace(' ', 'T');
+  const date = new Date(normalized);
 
-function StoryArtwork({ tone, label }: { tone: Story['tone']; label: string }) {
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat('pt-BR', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date);
+}
+
+function formatViews(value: number) {
+  return new Intl.NumberFormat('pt-BR').format(value);
+}
+
+function StoryMedia({
+  article,
+  className = '',
+}: {
+  article: Article;
+  className?: string;
+}) {
+  const category = article.primaryCategory?.name ?? 'Nosso Jornal';
+
+  if (article.featuredImage) {
+    return (
+      <div className={`home-media ${className}`}>
+        <img
+          src={article.featuredImage.url}
+          alt={article.featuredImage.alt}
+          loading="lazy"
+        />
+      </div>
+    );
+  }
+
   return (
-    <div className={`story-art story-art--${tone}`} aria-hidden="true">
-      <span>{label}</span>
+    <div className={`home-media home-media--fallback ${className}`} aria-hidden="true">
+      <span>{category}</span>
     </div>
   );
 }
 
+function StoryMeta({ article, showViews = false }: { article: Article; showViews?: boolean }) {
+  return (
+    <div className="home-story-meta">
+      <span>{formatPublishedAt(article.publishedAt)}</span>
+      {article.author.name && <span>{article.author.name}</span>}
+      {showViews && article.views > 0 && <span>{formatViews(article.views)} visualizações</span>}
+    </div>
+  );
+}
+
+function CategoryBadge({ category }: { category: Category | null }) {
+  if (!category) {
+    return <span className="home-eyebrow">Nosso Jornal</span>;
+  }
+
+  return (
+    <a className="home-eyebrow" href={category.url}>
+      {category.name}
+    </a>
+  );
+}
+
+function HomeSkeleton() {
+  return (
+    <main className="home-main" aria-busy="true" aria-label="Carregando homepage">
+      <section className="container home-skeleton">
+        <div className="home-skeleton__hero" />
+        <div className="home-skeleton__rail">
+          <span />
+          <span />
+          <span />
+          <span />
+        </div>
+      </section>
+    </main>
+  );
+}
+
 export function App() {
+  const [data, setData] = useState<HomePayload['data']>();
+  const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
+
+  const loadHome = useCallback(async () => {
+    setState('loading');
+
+    try {
+      const response = await fetch('/api/v1/home.php', {
+        headers: { Accept: 'application/json' },
+      });
+
+      if (!response.ok) {
+        throw new Error(`home_http_${response.status}`);
+      }
+
+      const payload = (await response.json()) as HomePayload;
+
+      if (!payload.ok || !payload.data) {
+        throw new Error('home_invalid_payload');
+      }
+
+      setData(payload.data);
+      setState('ready');
+    } catch {
+      setData(undefined);
+      setState('error');
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadHome();
+  }, [loadHome]);
+
+  const hero = data?.hero ?? null;
+  const latest = data?.latest ?? [];
+  const mostRead = data?.mostRead ?? [];
+  const sections = data?.sections ?? [];
+
+  const heroSide = useMemo(() => latest.slice(0, 4), [latest]);
+
   return (
     <div className="site-shell">
       <SiteHeader />
 
-      <main>
-        <section className="container hero" aria-labelledby="hero-title">
-          <article className="lead-story">
-            <StoryArtwork tone="navy" label="MANCHETE" />
-            <div className="lead-story__content">
-              <span className="eyebrow">Demonstração editorial</span>
-              <h1 id="hero-title">A nova capa do Nosso Jornal começa pela hierarquia da informação</h1>
-              <p>
-                Uma manchete forte, navegação por editorias, blocos de recência e espaço para produtos
-                editoriais específicos. O conteúdo real entra na próxima fase via API.
-              </p>
-              <div className="story-meta">
-                <span>Nosso Jornal</span>
-                <span>estrutura de demonstração</span>
-              </div>
-            </div>
-          </article>
+      {state === 'loading' && <HomeSkeleton />}
 
-          <aside className="hero-side" aria-label="Destaques secundários">
-            <div className="section-heading section-heading--compact">
-              <div>
-                <span>AGORA</span>
-                <h2>Mais recentes</h2>
-              </div>
-              <a href="#recentes">Ver todas</a>
-            </div>
+      {state === 'error' && (
+        <main className="home-main">
+          <section className="container home-error">
+            <span className="home-eyebrow">Nosso Jornal</span>
+            <h1>Não foi possível carregar a capa agora.</h1>
+            <p>A conexão editorial pode ser tentada novamente sem recarregar a página.</p>
+            <button type="button" onClick={() => void loadHome()}>
+              Tentar novamente
+            </button>
+          </section>
+        </main>
+      )}
 
-            {recentStories.slice(0, 3).map((story, index) => (
-              <article className="compact-story" key={story.title}>
-                <span className="compact-story__index">{String(index + 1).padStart(2, '0')}</span>
+      {state === 'ready' && hero && (
+        <main className="home-main">
+          <section className="container home-cover" aria-labelledby="home-cover-title">
+            <article className="home-hero">
+              <a href={hero.url} className="home-hero__media-link" aria-label={hero.title}>
+                <StoryMedia article={hero} className="home-hero__media" />
+              </a>
+
+              <div className="home-hero__content">
+                <div className="home-hero__kicker">
+                  <span>Capa do dia</span>
+                  <CategoryBadge category={hero.primaryCategory} />
+                </div>
+
+                <h1 id="home-cover-title">
+                  <a href={hero.url}>{hero.title}</a>
+                </h1>
+
+                {hero.excerpt && <p>{hero.excerpt}</p>}
+                <StoryMeta article={hero} />
+              </div>
+            </article>
+
+            <aside className="home-cover__rail" aria-label="Últimas notícias">
+              <div className="home-section-heading home-section-heading--compact">
                 <div>
-                  <span className="eyebrow">{story.section}</span>
-                  <h3>{story.title}</h3>
-                  <span className="story-time">{story.time}</span>
+                  <span>Agora</span>
+                  <h2>Últimas notícias</h2>
                 </div>
-              </article>
-            ))}
-          </aside>
-        </section>
-
-        <section className="container editorial-grid" id="editorias">
-          <div className="editorial-grid__main">
-            <div className="section-heading">
-              <div>
-                <span>CAPA</span>
-                <h2>Destaques editoriais</h2>
+                <a href="/ultimas">Ver todas</a>
               </div>
-              <p>Estrutura modular pronta para receber conteúdo real.</p>
+
+              <div className="home-cover__latest">
+                {heroSide.map((article, index) => (
+                  <article className="home-compact-story" key={article.id}>
+                    <span className="home-compact-story__index">
+                      {String(index + 1).padStart(2, '0')}
+                    </span>
+                    <div>
+                      <CategoryBadge category={article.primaryCategory} />
+                      <h3>
+                        <a href={article.url}>{article.title}</a>
+                      </h3>
+                      <StoryMeta article={article} />
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </aside>
+          </section>
+
+          <section className="container home-latest" aria-labelledby="latest-title">
+            <div className="home-section-heading">
+              <div>
+                <span>Atualização</span>
+                <h2 id="latest-title">Últimas notícias</h2>
+              </div>
+              <a href="/ultimas">Acompanhar todas</a>
             </div>
 
-            <div className="story-grid">
-              {recentStories.map((story) => (
-                <article className="story-card" key={story.title}>
-                  <StoryArtwork tone={story.tone} label={story.section.toUpperCase()} />
-                  <div className="story-card__body">
-                    <span className="eyebrow">{story.section}</span>
-                    <h3>{story.title}</h3>
-                    <p>{story.summary}</p>
-                    <span className="story-time">{story.time}</span>
+            <div className="home-latest__layout">
+              <div className="home-latest__grid">
+                {latest.map((article) => (
+                  <article className="home-story-card" key={article.id}>
+                    <a href={article.url} aria-label={article.title}>
+                      <StoryMedia article={article} className="home-story-card__media" />
+                    </a>
+
+                    <div className="home-story-card__body">
+                      <CategoryBadge category={article.primaryCategory} />
+                      <h3>
+                        <a href={article.url}>{article.title}</a>
+                      </h3>
+                      {article.excerpt && <p>{article.excerpt}</p>}
+                      <StoryMeta article={article} />
+                    </div>
+                  </article>
+                ))}
+              </div>
+
+              {mostRead.length > 0 && (
+                <aside className="home-most-read" aria-labelledby="most-read-title">
+                  <div className="home-most-read__heading">
+                    <span>Leitura</span>
+                    <h2 id="most-read-title">Mais lidas</h2>
                   </div>
-                </article>
-              ))}
-            </div>
-          </div>
 
-          <aside className="editorial-rail">
-            <div className="rail-card rail-card--column">
-              <span className="eyebrow">Colunas</span>
-              <h2>Opinião e análise terão um espaço visual próprio</h2>
-              <p>Autores e colunistas serão conectados ao novo modelo editorial em fase posterior.</p>
-              <a href="#colunas">Conhecer estrutura</a>
+                  <ol>
+                    {mostRead.map((article) => (
+                      <li key={article.id}>
+                        <div>
+                          <CategoryBadge category={article.primaryCategory} />
+                          <h3>
+                            <a href={article.url}>{article.title}</a>
+                          </h3>
+                          <StoryMeta article={article} showViews />
+                        </div>
+                      </li>
+                    ))}
+                  </ol>
+                </aside>
+              )}
             </div>
+          </section>
 
-            <div className="ad-slot" aria-label="Espaço reservado para publicidade">
-              <span>PUBLICIDADE</span>
-              <strong>Espaço comercial</strong>
-              <p>Slot preparado para campanhas futuras.</p>
-            </div>
-          </aside>
-        </section>
-
-        <section className="support-strip" aria-labelledby="support-title">
-          <div className="container support-strip__inner">
-            <div>
-              <span className="eyebrow eyebrow--light">Institucional</span>
-              <h2 id="support-title">Apoiadores e colaboradores</h2>
-            </div>
-            <div className="support-logos" aria-label="Espaços de apoiadores">
-              <span>APOIADOR 01</span>
-              <span>APOIADOR 02</span>
-              <span>APOIADOR 03</span>
-            </div>
-          </div>
-        </section>
-
-        <section className="container latest-section" id="recentes">
-          <div className="section-heading">
-            <div>
-              <span>FLUXO</span>
-              <h2>Notícias mais recentes</h2>
-            </div>
-            <p>Uma grade densa para acompanhar a atualização do portal ao longo do dia.</p>
-          </div>
-
-          <div className="latest-grid">
-            {latest.map((title, index) => (
-              <article className="latest-card" key={title}>
-                <div className={`latest-card__media tone-${(index % 4) + 1}`} aria-hidden="true">
-                  <span>{String(index + 1).padStart(2, '0')}</span>
-                </div>
-                <span className="eyebrow">Demonstração</span>
-                <h3>{title}</h3>
-                <p>Texto provisório usado exclusivamente para validar composição, densidade e leitura.</p>
-              </article>
-            ))}
-          </div>
-        </section>
-
-        <section className="classifieds" id="classificados">
-          <div className="container">
-            <div className="section-heading section-heading--dark">
-              <div>
-                <span>UTILIDADE</span>
-                <h2>Classificados</h2>
-              </div>
-              <p>Produto separado das notícias, com linguagem visual própria.</p>
-            </div>
-            <div className="classified-grid">
-              {classifiedCards.map((title, index) => (
-                <article className="classified-card" key={title}>
-                  <span className="classified-card__number">0{index + 1}</span>
+          {sections.map((section) => (
+            <section
+              className="home-category-section"
+              key={section.category.id}
+              aria-labelledby={`section-${section.category.slug}`}
+            >
+              <div className="container">
+                <div className="home-section-heading">
                   <div>
-                    <span className="eyebrow">Demonstração</span>
-                    <h3>{title}</h3>
-                    <p>Área preparada para ofertas reais, expiração e moderação.</p>
+                    <span>Editoria</span>
+                    <h2 id={`section-${section.category.slug}`}>{section.category.name}</h2>
                   </div>
-                </article>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <section className="container notices" id="comunicados">
-          <div className="section-heading">
-            <div>
-              <span>DOCUMENTOS</span>
-              <h2>Comunicados oficiais</h2>
-            </div>
-            <p>Área dedicada a editais, avisos e publicações institucionais.</p>
-          </div>
-          <div className="notice-grid">
-            {officialNotices.map((title, index) => (
-              <article className="notice-card" key={title}>
-                <div className="notice-card__icon" aria-hidden="true">{String(index + 1).padStart(2, '0')}</div>
-                <div>
-                  <span className="eyebrow">Demonstração</span>
-                  <h3>{title}</h3>
-                  <p>Estrutura preparada para documento, data, categoria e arquivo histórico.</p>
+                  <a href={section.category.url}>Ver editoria</a>
                 </div>
-              </article>
-            ))}
-          </div>
-        </section>
 
-        <section className="newsletter">
-          <div className="container newsletter__inner">
-            <div>
-              <span className="eyebrow eyebrow--light">Newsletter</span>
-              <h2>O resumo do dia direto para o leitor.</h2>
-              <p>A captura real de e-mail só será ativada quando consentimento e backend estiverem prontos.</p>
-            </div>
-            <form className="newsletter__form" onSubmit={(event) => event.preventDefault()}>
-              <label htmlFor="newsletter-email">E-mail</label>
-              <div>
-                <input id="newsletter-email" type="email" placeholder="voce@exemplo.com" disabled />
-                <button type="submit" disabled>Em breve</button>
+                <div className="home-category-grid">
+                  {section.stories.map((article, index) => (
+                    <article
+                      className={index === 0 ? 'home-category-card home-category-card--lead' : 'home-category-card'}
+                      key={article.id}
+                    >
+                      <a href={article.url} aria-label={article.title}>
+                        <StoryMedia article={article} className="home-category-card__media" />
+                      </a>
+
+                      <div className="home-category-card__body">
+                        <CategoryBadge category={article.primaryCategory} />
+                        <h3>
+                          <a href={article.url}>{article.title}</a>
+                        </h3>
+                        {index === 0 && article.excerpt && <p>{article.excerpt}</p>}
+                        <StoryMeta article={article} />
+                      </div>
+                    </article>
+                  ))}
+                </div>
               </div>
-            </form>
-          </div>
-        </section>
-      </main>
+            </section>
+          ))}
+        </main>
+      )}
 
       <footer className="site-footer" id="sobre">
         <div className="container site-footer__grid">
           <div>
             <Brand />
             <p>
-              Fundação da nova experiência digital do Nosso Jornal. Conteúdo real e funcionalidades
-              editoriais serão conectados por etapas.
+              Jornalismo local e regional de Hulha Negra e municípios da região.
             </p>
           </div>
+
           <div>
-            <strong>Editorias</strong>
-            <a href="#editorias">Últimas</a>
-            <a href="#editorias">Região</a>
-            <a href="#editorias">Esportes</a>
-            <a href="#editorias">Cultura</a>
+            <strong>Notícias</strong>
+            <a href="/ultimas">Últimas</a>
+            <a href="/categoria/hulha-negra">Hulha Negra</a>
+            <a href="/categoria/politica">Política</a>
+            <a href="/categoria/rural">Rural</a>
           </div>
+
           <div>
             <strong>Serviços</strong>
-            <a href="#classificados">Classificados</a>
-            <a href="#comunicados">Comunicados</a>
-            <a href="#recentes">Arquivo</a>
-            <a href="#sobre">Sobre</a>
+            <a href="/classificados">Classificados</a>
+            <a href="/comunicados">Comunicados</a>
+            <a href="/busca">Busca</a>
+            <a href="/contato">Contato</a>
           </div>
+
           <div>
-            <strong>Projeto</strong>
-            <span>React + Vite</span>
-            <span>Mobile-first</span>
-            <span>SEO orientado a notícias</span>
-            <span>Integração MOBI Core</span>
+            <strong>Nosso Jornal</strong>
+            <a href="/sobre">Sobre</a>
+            <a href="/categoria/cobertura-regional">Cobertura Regional</a>
+            <a href="/categoria/rio-grande-do-sul">Rio Grande do Sul</a>
+            <a href="/categoria/brasil">Brasil</a>
           </div>
         </div>
+
         <div className="container site-footer__bottom">
           <span>Nosso Jornal</span>
-          <span>Nova aplicação em desenvolvimento</span>
+          <span>Hulha Negra • Rio Grande do Sul</span>
         </div>
       </footer>
     </div>
