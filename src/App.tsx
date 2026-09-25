@@ -1,3 +1,5 @@
+import { Brand, SiteHeader } from './Header';
+
 type Story = {
   section: string;
   title: string;
@@ -6,7 +8,6 @@ type Story = {
   tone: 'navy' | 'blue' | 'sky' | 'slate';
 };
 
-const navItems = ['Últimas', 'Pelotas', 'Região', 'Política', 'Economia', 'Segurança', 'Esportes', 'Cultura'];
 
 const recentStories: Story[] = [
   {
@@ -69,62 +70,10 @@ function StoryArtwork({ tone, label }: { tone: Story['tone']; label: string }) {
   );
 }
 
-function Brand() {
-  return (
-    <a className="brand" href="/" aria-label="Nosso Jornal - página inicial">
-      <img src="/nosso-jornal-brand.webp" alt="" className="brand__mark" />
-      <span className="brand__copy">
-        <strong>NOSSO</strong>
-        <span>JORNAL</span>
-      </span>
-    </a>
-  );
-}
-
 export function App() {
   return (
     <div className="site-shell">
-      <div className="demo-notice">
-        <span>FUNDAÇÃO VISUAL</span>
-        <p>Conteúdo demonstrativo. Nenhum título abaixo representa notícia real.</p>
-      </div>
-
-      <header className="site-header">
-        <div className="utility">
-          <div className="container utility__inner">
-            <span>Nosso Jornal</span>
-            <div className="utility__links">
-              <a href="#sobre">Sobre</a>
-              <a href="#classificados">Classificados</a>
-              <a href="#comunicados">Comunicados</a>
-              <button type="button" className="utility__search" aria-label="Abrir busca">Buscar</button>
-            </div>
-          </div>
-        </div>
-
-        <div className="masthead">
-          <div className="container masthead__inner">
-            <Brand />
-            <div className="masthead__message">
-              <span>Nova experiência editorial</span>
-              <strong>Informação local com leitura mais clara, rápida e organizada.</strong>
-            </div>
-          </div>
-        </div>
-
-        <nav className="primary-nav" aria-label="Editorias">
-          <div className="container primary-nav__scroll">
-            {navItems.map((item) => <a key={item} href="#editorias">{item}</a>)}
-          </div>
-        </nav>
-
-        <div className="breaking">
-          <div className="container breaking__inner">
-            <strong>EM DESENVOLVIMENTO</strong>
-            <span>Esta capa estabelece a base visual que receberá o acervo e as notícias reais.</span>
-          </div>
-        </div>
-      </header>
+      <SiteHeader />
 
       <main>
         <section className="container hero" aria-labelledby="hero-title">
