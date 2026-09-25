@@ -72,16 +72,28 @@ public_html/wp-content/uploads/
 
 As URLs históricas de mídia devem continuar válidas após o cutover.
 
-### Bloqueio de release conhecido
+### Estado do release
 
-O Release Runner estático atual sincroniza o artefato para `public_html` de forma destrutiva. Antes da primeira publicação do novo portal, ele deve preservar no mínimo:
+Em 25/09/2026 o MOBI Core recebeu a correção do Release Runner para tratar caminhos persistentes no deploy Vite.
+
+O contrato seguro passou a preservar e verificar:
 
 ```text
 .well-known/
 wp-content/uploads/
 ```
 
-Nenhum cutover será feito antes desse gate.
+Além disso, o backup estático passou a excluir esses caminhos persistentes, evitando duplicar o acervo de mídia em uma conta cPanel com pouco espaço livre. O backup continua cobrindo os arquivos gerenciados pela aplicação e o acervo persistente permanece intacto no document root.
+
+A Edge `deployment-release-runner-provision` foi atualizada para provisionar o worker pinado com essa correção.
+
+Estado atual:
+
+- source do portal: pronto;
+- receita detectada: `vite_spa` + `npm_ci` + `dist`;
+- persistent paths no Core: implementados;
+- primeiro Release Runner da conta `nossojornal`: ainda não provisionado;
+- primeiro cutover: pendente do provisionamento e readback do runner.
 
 ## 4. Identidade visual
 
