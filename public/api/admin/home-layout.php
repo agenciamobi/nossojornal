@@ -6,6 +6,7 @@ require __DIR__ . '/_admin.php';
 const NJ_HOME_META_SLOT = '_nj_home_slot';
 const NJ_HOME_META_RANK = '_nj_home_rank';
 const NJ_HOME_META_UNTIL = '_nj_home_until';
+const NJ_HOME_META_HEADLINE = '_nj_home_headline';
 
 function nj_home_admin_until(mixed $value): string
 {
@@ -61,6 +62,13 @@ SELECT
         ORDER BY pm.meta_id DESC
         LIMIT 1
     ), '') AS home_until,
+    COALESCE((
+        SELECT pm.meta_value
+        FROM {$postmeta} pm
+        WHERE pm.post_id = p.ID AND pm.meta_key = '_nj_home_headline'
+        ORDER BY pm.meta_id DESC
+        LIMIT 1
+    ), '') AS home_headline,
     COALESCE((
         SELECT a.guid
         FROM {$postmeta} thumb
@@ -149,6 +157,7 @@ SQL)->fetchAll();
                 'slot' => $slot,
                 'rank' => max(0, min(99, (int) $row['home_rank'])),
                 'until' => $until,
+                'headline' => (string) $row['home_headline'],
                 'active' => $active,
             ],
         ];
@@ -181,6 +190,11 @@ nj_admin_run(['GET', 'POST'], static function (string $method): array {
     $slot = trim((string) ($body['slot'] ?? 'automatic'));
     $rank = max(0, min(99, (int) ($body['rank'] ?? 0)));
     $until = nj_home_admin_until($body['until'] ?? '');
+    $headline = trim((string) ($body['headline'] ?? ''));
+
+    if ((function_exists('mb_strlen') ? mb_strlen($headline, 'UTF-8') : strlen($headline)) > 280) {
+        throw new NjApiHttpException(422, 'home_headline_too_large');
+    }
 
     if (!is_int($postId) || $postId <= 0) {
         throw new NjApiHttpException(422, 'invalid_post_id');
@@ -230,6 +244,7 @@ nj_admin_run(['GET', 'POST'], static function (string $method): array {
         nj_admin_upsert_postmeta($pdo, $postId, NJ_HOME_META_SLOT, $slot);
         nj_admin_upsert_postmeta($pdo, $postId, NJ_HOME_META_RANK, (string) $rank);
         nj_admin_upsert_postmeta($pdo, $postId, NJ_HOME_META_UNTIL, $until);
+        nj_admin_upsert_postmeta($pdo, $postId, NJ_HOME_META_HEADLINE, $headline);
 
         $pdo->commit();
     } catch (PDOException $error) {
