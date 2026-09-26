@@ -132,13 +132,19 @@ img {
 .brand {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  align-self: center;
   min-width: max-content;
+  line-height: 0;
 }
 
 .brand__wordmark {
-  width: clamp(180px, 18vw, 235px);
+  display: block;
+  width: clamp(145px, 13vw, 172px);
   height: auto;
+  max-height: 108px;
   object-fit: contain;
+  object-position: center;
 }
 
 .masthead__message {
@@ -819,7 +825,8 @@ img {
 }
 
 .site-footer .brand__wordmark {
-  width: 170px;
+  width: 142px;
+  max-height: 90px;
 }
 
 .site-footer p {
@@ -966,7 +973,8 @@ input:focus-visible {
   }
 
   .brand__wordmark {
-    width: 188px;
+    width: 150px;
+    max-height: 96px;
   }
 
   .primary-nav__scroll {
