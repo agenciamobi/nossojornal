@@ -1095,6 +1095,419 @@ function DashboardView({ user }: { user: AdminUser }) {
   );
 }
 
+function HomeLayoutView({ csrfToken }: { csrfToken: string }) {
+  const [data, setData] = useState<HomeLayoutPayload['data']>();
+  const [drafts, setDrafts] = useState<Record<number, HomeLayoutItem['home']>>({});
+  const [savingId, setSavingId] = useState(0);
+  const [message, setMessage] = useState<'idle' | 'saved' | 'error'>('idle');
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    void adminFetch<HomeLayoutPayload>('/api/admin/home-layout.php')
+      .then((payload) => {
+        if (!payload.ok || !payload.data) throw new Error('home_layout_invalid');
+        setData(payload.data);
+        setDrafts(Object.fromEntries(payload.data.items.map((item) => [item.id, item.home])));
+      })
+      .catch(() => setError(true));
+  }, []);
+
+  if (error) return <AdminError />;
+  if (!data) return <AdminLoading />;
+
+  const activeHero = data.items.find((item) => item.home.slot === 'hero');
+  const featured = data.items
+    .filter((item) => item.home.slot === 'featured')
+    .sort((a, b) => a.home.rank - b.home.rank);
+
+  function updateDraft(postId: number, patch: Partial<HomeLayoutItem['home']>) {
+    setDrafts((current) => ({
+      ...current,
+      [postId]: {
+        ...(current[postId] ?? { slot: 'automatic', rank: 0, until: '' }),
+        ...patch,
+      },
+    }));
+    setMessage('idle');
+  }
+
+  async function savePlacement(item: HomeLayoutItem) {
+    const draft = drafts[item.id] ?? item.home;
+    setSavingId(item.id);
+    setMessage('idle');
+
+    try {
+      const payload = await adminFetch<HomeLayoutPayload>('/api/admin/home-layout.php', {
+        method: 'POST',
+        headers: { 'X-CSRF-Token': csrfToken },
+        body: JSON.stringify({
+          postId: item.id,
+          slot: draft.slot,
+          rank: draft.rank,
+          until: draft.until,
+        }),
+      });
+
+      if (!payload.ok || !payload.data) throw new Error('home_layout_save_invalid');
+
+      setData(payload.data);
+      setDrafts(Object.fromEntries(payload.data.items.map((row) => [row.id, row.home])));
+      setMessage('saved');
+    } catch {
+      setMessage('error');
+    } finally {
+      setSavingId(0);
+    }
+  }
+
+  return (
+    <>
+      <AdminPageHeader
+        eyebrow="Edição de capa"
+        title="Capa do site"
+        description="Escolha a manchete principal e os destaques da página inicial."
+      />
+
+      {message === 'saved' && (
+        <div className="admin-save-feedback admin-save-feedback--success" role="status">
+          Capa atualizada.
+        </div>
+      )}
+      {message === 'error' && (
+        <div className="admin-save-feedback admin-save-feedback--error" role="alert">
+          Não foi possível atualizar a capa. Tente novamente.
+        </div>
+      )}
+
+      <section className="admin-home-preview">
+        <div className="admin-home-preview__hero">
+          <span>Manchete principal</span>
+          {activeHero ? (
+            <article>
+              {activeHero.imageUrl && <img src={activeHero.imageUrl} alt="" />}
+              <div>
+                <strong>{activeHero.title}</strong>
+                <a href={activeHero.publicUrl} target="_blank" rel="noopener noreferrer">Ver notícia ↗</a>
+              </div>
+            </article>
+          ) : (
+            <p>Seleção automática pela editoria Capa ou pela notícia mais recente.</p>
+          )}
+        </div>
+
+        <div className="admin-home-preview__featured">
+          <span>Destaques fixados</span>
+          <strong>{featured.length}</strong>
+          <small>Entram antes do fluxo automático de últimas notícias.</small>
+        </div>
+      </section>
+
+      <section className="admin-home-list" aria-label="Composição da capa">
+        {data.items.map((item) => {
+          const draft = drafts[item.id] ?? item.home;
+          const changed = JSON.stringify(draft) !== JSON.stringify(item.home);
+
+          return (
+            <article className="admin-home-item" key={item.id}>
+              <a className="admin-home-item__image" href={'/sistema/noticias/' + item.id}>
+                {item.imageUrl ? <img src={item.imageUrl} alt="" /> : <span>Sem imagem</span>}
+              </a>
+
+              <div className="admin-home-item__content">
+                <span>{formatAdminDate(item.publishedAt)}</span>
+                <h2><a href={'/sistema/noticias/' + item.id}>{item.title}</a></h2>
+                <small>{item.author}</small>
+              </div>
+
+              <div className="admin-home-item__controls">
+                <label>
+                  <span>Posição</span>
+                  <select
+                    value={draft.slot}
+                    onChange={(event) => updateDraft(item.id, {
+                      slot: event.target.value as HomeLayoutItem['home']['slot'],
+                    })}
+                  >
+                    <option value="automatic">Automático</option>
+                    <option value="hero">Manchete principal</option>
+                    <option value="featured">Destaque</option>
+                  </select>
+                </label>
+
+                <label>
+                  <span>Ordem</span>
+                  <input
+                    type="number"
+                    min="0"
+                    max="99"
+                    value={draft.rank}
+                    disabled={draft.slot === 'automatic'}
+                    onChange={(event) => updateDraft(item.id, {
+                      rank: Math.max(0, Math.min(99, Number(event.target.value) || 0)),
+                    })}
+                  />
+                </label>
+
+                <label>
+                  <span>Fixar até</span>
+                  <input
+                    type="datetime-local"
+                    value={draft.until}
+                    disabled={draft.slot === 'automatic'}
+                    onChange={(event) => updateDraft(item.id, { until: event.target.value })}
+                  />
+                </label>
+
+                <button
+                  type="button"
+                  disabled={!changed || savingId === item.id}
+                  onClick={() => void savePlacement(item)}
+                >
+                  {savingId === item.id ? 'Salvando…' : 'Salvar'}
+                </button>
+              </div>
+            </article>
+          );
+        })}
+      </section>
+    </>
+  );
+}
+
+function AgendaView({ csrfToken }: { csrfToken: string }) {
+  const [data, setData] = useState<AgendaPayload['data']>();
+  const [title, setTitle] = useState('');
+  const [eventKind, setEventKind] = useState<'coverage' | 'interview' | 'meeting' | 'deadline' | 'event'>('coverage');
+  const [start, setStart] = useState('');
+  const [end, setEnd] = useState('');
+  const [location, setLocation] = useState('');
+  const [note, setNote] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<'idle' | 'saved' | 'error'>('idle');
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    void adminFetch<AgendaPayload>('/api/admin/agenda.php')
+      .then((payload) => {
+        if (!payload.ok || !payload.data) throw new Error('agenda_invalid');
+        setData(payload.data);
+      })
+      .catch(() => setError(true));
+  }, []);
+
+  if (error) return <AdminError />;
+  if (!data) return <AdminLoading />;
+
+  async function createEvent() {
+    if (!title.trim() || !start || saving) return;
+
+    setSaving(true);
+    setMessage('idle');
+
+    try {
+      const payload = await adminFetch<AgendaPayload>('/api/admin/agenda.php', {
+        method: 'POST',
+        headers: { 'X-CSRF-Token': csrfToken },
+        body: JSON.stringify({
+          action: 'save',
+          title,
+          eventKind,
+          start,
+          end,
+          location,
+          note,
+        }),
+      });
+
+      if (!payload.ok || !payload.data) throw new Error('agenda_save_invalid');
+
+      setData(payload.data);
+      setTitle('');
+      setStart('');
+      setEnd('');
+      setLocation('');
+      setNote('');
+      setEventKind('coverage');
+      setMessage('saved');
+    } catch {
+      setMessage('error');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function deleteEvent(eventId: number) {
+    if (!window.confirm('Remover este compromisso da agenda?')) return;
+
+    try {
+      const payload = await adminFetch<AgendaPayload>('/api/admin/agenda.php', {
+        method: 'POST',
+        headers: { 'X-CSRF-Token': csrfToken },
+        body: JSON.stringify({ action: 'delete', eventId }),
+      });
+      if (!payload.ok || !payload.data) throw new Error('agenda_delete_invalid');
+      setData(payload.data);
+    } catch {
+      setMessage('error');
+    }
+  }
+
+  const grouped = data.items.reduce<Record<string, AgendaItem[]>>((acc, item) => {
+    const date = new Date(item.start);
+    const key = Number.isNaN(date.getTime())
+      ? item.start.slice(0, 10)
+      : new Intl.DateTimeFormat('sv-SE', {
+          timeZone: 'America/Sao_Paulo',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+        }).format(date);
+
+    (acc[key] ??= []).push(item);
+    return acc;
+  }, {});
+
+  return (
+    <>
+      <AdminPageHeader
+        eyebrow="Planejamento"
+        title="Agenda editorial"
+        description="Prazos, publicações agendadas, entrevistas, reuniões e coberturas."
+      />
+
+      {message === 'saved' && (
+        <div className="admin-save-feedback admin-save-feedback--success" role="status">
+          Compromisso adicionado à agenda.
+        </div>
+      )}
+      {message === 'error' && (
+        <div className="admin-save-feedback admin-save-feedback--error" role="alert">
+          Não foi possível atualizar a agenda.
+        </div>
+      )}
+
+      <div className="admin-agenda-layout">
+        <section className="admin-agenda-timeline">
+          {Object.entries(grouped).map(([day, items]) => {
+            const date = new Date(day + 'T12:00:00');
+            const dayLabel = Number.isNaN(date.getTime())
+              ? day
+              : new Intl.DateTimeFormat('pt-BR', {
+                  weekday: 'long',
+                  day: '2-digit',
+                  month: 'long',
+                  year: 'numeric',
+                  timeZone: 'America/Sao_Paulo',
+                }).format(date);
+
+            return (
+              <section className="admin-agenda-day" key={day}>
+                <header>{dayLabel}</header>
+                {items.map((item) => (
+                  <article className={'admin-agenda-item admin-agenda-item--' + item.kind} key={item.id}>
+                    <div className="admin-agenda-item__time">
+                      {new Intl.DateTimeFormat('pt-BR', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        timeZone: 'America/Sao_Paulo',
+                      }).format(new Date(item.start))}
+                    </div>
+                    <div className="admin-agenda-item__body">
+                      <span>
+                        {item.kind === 'publication'
+                          ? 'Publicação'
+                          : item.kind === 'deadline'
+                            ? 'Prazo editorial'
+                            : 'Cobertura'}
+                      </span>
+                      <h2>
+                        {item.adminUrl ? <a href={item.adminUrl}>{item.title}</a> : item.title}
+                      </h2>
+                      <p>
+                        {item.location && <>{item.location} • </>}
+                        {item.assignee}
+                      </p>
+                      {item.note && <small>{item.note}</small>}
+                    </div>
+                    {item.kind === 'event' && item.eventId && (
+                      <button
+                        type="button"
+                        className="admin-agenda-item__delete"
+                        onClick={() => void deleteEvent(item.eventId!)}
+                      >
+                        Remover
+                      </button>
+                    )}
+                  </article>
+                ))}
+              </section>
+            );
+          })}
+
+          {data.items.length === 0 && (
+            <div className="admin-empty-state">Nenhum compromisso editorial agendado.</div>
+          )}
+        </section>
+
+        <aside className="admin-agenda-create">
+          <div className="admin-editor-card">
+            <div className="admin-editor-card__head">
+              <span>Redação</span>
+              <strong>Novo compromisso</strong>
+            </div>
+            <div className="admin-editor-card__body admin-editor-card__body--fields">
+              <label className="admin-editor-field">
+                <span>Título</span>
+                <input value={title} onChange={(event) => setTitle(event.target.value)} />
+              </label>
+
+              <label className="admin-editor-field">
+                <span>Tipo</span>
+                <select value={eventKind} onChange={(event) => setEventKind(event.target.value as typeof eventKind)}>
+                  <option value="coverage">Cobertura</option>
+                  <option value="interview">Entrevista</option>
+                  <option value="meeting">Reunião</option>
+                  <option value="event">Evento</option>
+                  <option value="deadline">Prazo</option>
+                </select>
+              </label>
+
+              <label className="admin-editor-field">
+                <span>Início</span>
+                <input type="datetime-local" value={start} onChange={(event) => setStart(event.target.value)} />
+              </label>
+
+              <label className="admin-editor-field">
+                <span>Fim</span>
+                <input type="datetime-local" value={end} onChange={(event) => setEnd(event.target.value)} />
+              </label>
+
+              <label className="admin-editor-field">
+                <span>Local</span>
+                <input value={location} onChange={(event) => setLocation(event.target.value)} />
+              </label>
+
+              <label className="admin-editor-field">
+                <span>Observações</span>
+                <textarea rows={5} value={note} onChange={(event) => setNote(event.target.value)} />
+              </label>
+
+              <button
+                type="button"
+                className="admin-button--primary admin-agenda-create__button"
+                disabled={!title.trim() || !start || saving}
+                onClick={() => void createEvent()}
+              >
+                {saving ? 'Salvando…' : 'Adicionar à agenda'}
+              </button>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </>
+  );
+}
+
 function PostsView({
   user,
   csrfToken,
