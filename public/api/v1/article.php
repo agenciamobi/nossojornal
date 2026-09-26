@@ -42,17 +42,70 @@ SELECT meta_key, meta_value
 FROM {$postmeta}
 WHERE
     post_id = :post_id
-    AND meta_key IN ('_yoast_wpseo_title', '_yoast_wpseo_metadesc')
+    AND meta_key IN (
+        '_yoast_wpseo_title',
+        '_yoast_wpseo_metadesc',
+        '_nj_article_type',
+        '_nj_kicker',
+        '_nj_standfirst',
+        '_nj_dateline',
+        '_nj_coauthors',
+        '_nj_image_credit',
+        '_nj_image_caption',
+        '_nj_original_source_url',
+        '_nj_canonical_url',
+        '_nj_social_title',
+        '_nj_social_description'
+    )
+ORDER BY meta_id DESC
 SQL);
     $metaStatement->execute(['post_id' => $article['id']]);
 
-    $seo = ['title' => '', 'description' => ''];
+    $metaValues = [];
     foreach ($metaStatement->fetchAll() as $meta) {
-        if ($meta['meta_key'] === '_yoast_wpseo_title') {
-            $seo['title'] = trim((string) $meta['meta_value']);
+        $key = (string) $meta['meta_key'];
+        if (!array_key_exists($key, $metaValues)) {
+            $metaValues[$key] = trim((string) $meta['meta_value']);
         }
-        if ($meta['meta_key'] === '_yoast_wpseo_metadesc') {
-            $seo['description'] = trim((string) $meta['meta_value']);
+    }
+
+    $seo = [
+        'title' => (string) ($metaValues['_yoast_wpseo_title'] ?? ''),
+        'description' => (string) ($metaValues['_yoast_wpseo_metadesc'] ?? ''),
+    ];
+
+    $articleType = (string) ($metaValues['_nj_article_type'] ?? 'news');
+    if (!in_array($articleType, ['news', 'analysis', 'opinion', 'interview', 'service', 'live'], true)) {
+        $articleType = 'news';
+    }
+
+    $coauthorIds = [];
+    $decodedCoauthors = json_decode((string) ($metaValues['_nj_coauthors'] ?? '[]'), true);
+    if (is_array($decodedCoauthors)) {
+        $coauthorIds = array_values(array_unique(array_filter(
+            array_map('intval', $decodedCoauthors),
+            static fn (int $id): bool => $id > 0
+        )));
+    }
+
+    $coauthors = [];
+    if ($coauthorIds !== []) {
+        $placeholders = implode(',', array_fill(0, count($coauthorIds), '?'));
+        $coauthorStatement = $pdo->prepare(
+            "SELECT ID, user_login, display_name
+             FROM {$users}
+             WHERE ID IN ({$placeholders})
+             ORDER BY display_name ASC, user_login ASC"
+        );
+        $coauthorStatement->execute($coauthorIds);
+
+        foreach ($coauthorStatement->fetchAll() as $coauthor) {
+            $coauthors[] = [
+                'id' => (int) $coauthor['ID'],
+                'name' => trim((string) $coauthor['display_name']) !== ''
+                    ? (string) $coauthor['display_name']
+                    : (string) $coauthor['user_login'],
+            ];
         }
     }
 
@@ -129,14 +182,34 @@ SQL);
         ? nj_content_excerpt($seo['description'], '', 240)
         : $article['excerpt'];
 
+    $canonical = (string) ($metaValues['_nj_canonical_url'] ?? '');
+    if ($canonical === '' || !filter_var($canonical, FILTER_VALIDATE_URL)) {
+        $canonical = $article['url'];
+    }
+
+    $socialTitle = nj_content_clean_text_source((string) ($metaValues['_nj_social_title'] ?? ''));
+    $socialDescription = nj_content_clean_text_source((string) ($metaValues['_nj_social_description'] ?? ''));
+
     return [
         'article' => $article,
         'related' => $related,
         'corrections' => $corrections,
+        'editorial' => [
+            'articleType' => $articleType,
+            'kicker' => nj_content_clean_text_source((string) ($metaValues['_nj_kicker'] ?? '')),
+            'standfirst' => nj_content_clean_text_source((string) ($metaValues['_nj_standfirst'] ?? '')),
+            'dateline' => nj_content_clean_text_source((string) ($metaValues['_nj_dateline'] ?? '')),
+            'coauthors' => $coauthors,
+            'imageCredit' => nj_content_clean_text_source((string) ($metaValues['_nj_image_credit'] ?? '')),
+            'imageCaption' => nj_content_clean_text_source((string) ($metaValues['_nj_image_caption'] ?? '')),
+            'originalSourceUrl' => (string) ($metaValues['_nj_original_source_url'] ?? ''),
+        ],
         'seo' => [
             'title' => $seo['title'] !== '' ? nj_content_clean_text_source($seo['title']) : $article['title'],
             'description' => $seoDescription,
-            'canonical' => $article['url'],
+            'canonical' => $canonical,
+            'socialTitle' => $socialTitle,
+            'socialDescription' => $socialDescription,
         ],
     ];
 }, 'public, max-age=60, stale-while-revalidate=300');
