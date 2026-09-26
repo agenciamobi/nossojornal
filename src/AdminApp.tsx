@@ -12,6 +12,8 @@ type AdminUser = {
   permissions: {
     editPosts: boolean;
     publishPosts: boolean;
+    editPages: boolean;
+    publishPages: boolean;
     manageCategories: boolean;
     uploadFiles: boolean;
     listUsers: boolean;
@@ -115,6 +117,44 @@ type PostDetailPayload = {
       parentId: number | null;
       color: string;
     }>;
+  };
+};
+
+type PagesPayload = {
+  ok: boolean;
+  data?: {
+    items: AdminPost[];
+    query: string;
+    status: string;
+    pagination: {
+      page: number;
+      perPage: number;
+      total: number;
+      totalPages: number;
+    };
+  };
+};
+
+type PageDetailPayload = {
+  ok: boolean;
+  data?: {
+    page: {
+      id: number;
+      title: string;
+      slug: string;
+      slugLocked: boolean;
+      excerpt: string;
+      content: string;
+      status: string;
+      publishedAt: string;
+      modifiedAt: string;
+      author: { id: number; name: string };
+      seo: {
+        title: string;
+        description: string;
+      };
+      publicUrl: string | null;
+    };
   };
 };
 
@@ -301,13 +341,15 @@ type PautasPayload = {
   };
 };
 
-type AdminView = 'dashboard' | 'posts' | 'post' | 'categories' | 'category' | 'categoryNew' | 'media' | 'mediaItem' | 'comments' | 'users' | 'user' | 'settings' | 'pautas';
+type AdminView = 'dashboard' | 'posts' | 'post' | 'pages' | 'page' | 'categories' | 'category' | 'categoryNew' | 'media' | 'mediaItem' | 'comments' | 'users' | 'user' | 'settings' | 'pautas';
 
 function resolveAdminView(pathname: string): AdminView {
   const clean = pathname.replace(/\/+$/, '');
 
   if (clean === '/sistema/noticias') return 'posts';
   if (/^\/sistema\/noticias\/\d+$/.test(clean)) return 'post';
+  if (clean === '/sistema/paginas') return 'pages';
+  if (/^\/sistema\/paginas\/\d+$/.test(clean)) return 'page';
   if (clean === '/sistema/categorias') return 'categories';
   if (clean === '/sistema/categorias/nova') return 'categoryNew';
   if (/^\/sistema\/categorias\/\d+$/.test(clean)) return 'category';
@@ -495,6 +537,7 @@ function AdminLogin({
 type AdminIconName =
   | 'dashboard'
   | 'news'
+  | 'pages'
   | 'categories'
   | 'media'
   | 'comments'
@@ -532,6 +575,15 @@ function AdminIcon({ name }: { name: AdminIconName }) {
         <path d="M4 4.5h11.5v15H4z" />
         <path d="M15.5 7H20v10.5a2 2 0 0 1-2 2h-2.5" />
         <path d="M7 8h5.5M7 11h5.5M7 14h5.5M7 17h3.5" />
+      </svg>
+    );
+  }
+
+  if (name === 'pages') {
+    return (
+      <svg {...common}>
+        <path d="M6 3h8l4 4v14H6z" />
+        <path d="M14 3v5h5M9 12h6M9 15h6M9 18h4" />
       </svg>
     );
   }
@@ -604,6 +656,9 @@ function AdminNav({ user, view }: { user: AdminUser; view: AdminView }) {
     ...(user.permissions.editPosts
       ? [{ key: 'posts' as const, label: 'Notícias', href: '/sistema/noticias', icon: 'news' as const, group: 'content' as const }]
       : []),
+    ...(user.permissions.editPages
+      ? [{ key: 'pages' as const, label: 'Páginas', href: '/sistema/paginas', icon: 'pages' as const, group: 'content' as const }]
+      : []),
     ...(user.permissions.manageCategories
       ? [{ key: 'categories' as const, label: 'Categorias', href: '/sistema/categorias', icon: 'categories' as const, group: 'content' as const }]
       : []),
@@ -653,6 +708,7 @@ function AdminNav({ user, view }: { user: AdminUser; view: AdminView }) {
                   className={
                     view === entry.key
                       || (view === 'post' && entry.key === 'posts')
+                      || (view === 'page' && entry.key === 'pages')
                       || ((view === 'category' || view === 'categoryNew') && entry.key === 'categories')
                       || (view === 'mediaItem' && entry.key === 'media')
                       || (view === 'user' && entry.key === 'users')
@@ -662,6 +718,7 @@ function AdminNav({ user, view }: { user: AdminUser; view: AdminView }) {
                   aria-current={
                     view === entry.key
                       || (view === 'post' && entry.key === 'posts')
+                      || (view === 'page' && entry.key === 'pages')
                       || ((view === 'category' || view === 'categoryNew') && entry.key === 'categories')
                       || (view === 'mediaItem' && entry.key === 'media')
                       || (view === 'user' && entry.key === 'users')
