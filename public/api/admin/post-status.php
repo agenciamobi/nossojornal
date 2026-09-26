@@ -157,6 +157,13 @@ SQL);
             ]);
         }
 
+        $editorialStage = match ($targetStatus) {
+            'publish' => 'published',
+            'future' => 'scheduled',
+            default => 'writing',
+        };
+        nj_admin_upsert_postmeta($pdo, $postId, '_nj_editorial_stage', $editorialStage);
+
         $taxonomyStatement = $pdo->prepare(<<<SQL
 SELECT tr.term_taxonomy_id
 FROM {$relationships} tr
