@@ -3,63 +3,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/_admin.php';
 
-function nj_redirect_normalize_source(string $value): string
-{
-    $value = trim($value);
-
-    if ($value === '') {
-        throw new NjApiHttpException(422, 'redirect_source_required');
-    }
-
-    if (strlen($value) > 512 || preg_match('/[\x00-\x1F\x7F]/', $value)) {
-        throw new NjApiHttpException(422, 'redirect_source_invalid');
-    }
-
-    $path = parse_url($value, PHP_URL_PATH);
-    $value = is_string($path) ? $path : '';
-
-    $value = '/' . ltrim($value, '/');
-    $value = preg_replace('#/+#', '/', $value) ?? $value;
-
-    if ($value !== '/') {
-        $value = rtrim($value, '/');
-    }
-
-    if ($value === '' || str_starts_with($value, '/api/') || str_starts_with($value, '/sistema')) {
-        throw new NjApiHttpException(422, 'redirect_source_reserved');
-    }
-
-    return $value;
-}
-
-function nj_redirect_normalize_destination(string $value, int $status): string
-{
-    $value = trim($value);
-
-    if ($status === 410) {
-        return '';
-    }
-
-    if ($value === '' || strlen($value) > 1000 || preg_match('/[\x00-\x1F\x7F]/', $value)) {
-        throw new NjApiHttpException(422, 'redirect_destination_invalid');
-    }
-
-    if (str_starts_with($value, '/')) {
-        $normalized = '/' . ltrim($value, '/');
-        return preg_replace('#/+#', '/', $normalized) ?? $normalized;
-    }
-
-    if (!preg_match('#^https?://#i', $value)) {
-        throw new NjApiHttpException(422, 'redirect_destination_invalid');
-    }
-
-    $parts = parse_url($value);
-    if (!is_array($parts) || empty($parts['host'])) {
-        throw new NjApiHttpException(422, 'redirect_destination_invalid');
-    }
-
-    return $value;
-}
+require_once __DIR__ . '/_redirects.php';
 
 function nj_redirect_payload(array $row): array
 {
