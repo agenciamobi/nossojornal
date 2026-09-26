@@ -1486,3 +1486,137 @@ Esse arquivo é a referência para:
 - fluxo de deploy.
 
 As seções históricas deste `EVOLUTION.md` registram a ordem das mudanças. Em caso de divergência sobre o estado atual do painel, consultar primeiro `docs/ADMIN_MVP.md`.
+
+
+## 24. /sistema como painel gerenciável
+
+O painel deixa de se apresentar como ambiente de desenvolvimento e passa a assumir linguagem e capacidades de CMS.
+
+A referência canônica atual passa a ser:
+
+```text
+docs/SISTEMA_ADMIN.md
+```
+
+`docs/ADMIN_MVP.md` permanece apenas como ponte histórica para a documentação atual.
+
+### Limpeza da interface
+
+Foram removidos da experiência administrativa termos internos como:
+
+- MVP;
+- read-only;
+- runtime MySQL;
+- write canário;
+- read-back;
+- fallback;
+- nomes de tabela;
+- meta keys;
+- mensagens de homologação.
+
+Os gates técnicos permanecem no backend, sem aparecer ao usuário.
+
+### Notícias
+
+O editor administrativo passa a suportar:
+
+- título;
+- slug;
+- resumo;
+- conteúdo;
+- categorias;
+- categoria principal;
+- SEO;
+- imagem destacada;
+- salvar sem alterar status;
+- publicar;
+- mover para rascunho;
+- agendar.
+
+Novos endpoints:
+
+```text
+POST /api/admin/post-save.php
+POST /api/admin/post-status.php
+POST /api/admin/post-featured-image.php
+```
+
+### Categorias
+
+O painel passa a suportar:
+
+- criar categoria;
+- editar nome;
+- editar slug;
+- editar descrição;
+- editar parent;
+- editar cor editorial.
+
+Novos endpoints:
+
+```text
+POST /api/admin/category-create.php
+POST /api/admin/category-save.php
+```
+
+### Mídia
+
+A Biblioteca de Mídia passa a aceitar upload seguro de imagens para:
+
+```text
+/wp-content/uploads/YYYY/MM/
+```
+
+Endpoint:
+
+```text
+POST /api/admin/media-upload.php
+```
+
+### Usuários
+
+Foi criada a rota:
+
+```text
+/sistema/usuarios/:id
+```
+
+Ela permite editar nome de exibição, e-mail e função conforme capabilities.
+
+A conta `agenciamobi` é protegida contra alteração de função pelo editor comum.
+
+Endpoints:
+
+```text
+GET  /api/admin/user.php
+POST /api/admin/user-save.php
+```
+
+### Configurações
+
+Configurações passam a ter formulário de edição allowlisted para nome do site, descrição, e-mail, paginação, fuso e formatos de data/hora.
+
+Endpoint:
+
+```text
+POST /api/admin/settings-save.php
+```
+
+URLs e estrutura de permalink permanecem protegidas.
+
+### Segurança
+
+Todas as mutations novas preservam:
+
+- sessão autenticada;
+- capability check;
+- CSRF;
+- validação de entrada;
+- transação quando aplicável;
+- read-back interno;
+- rollback em falha;
+- ausência de secrets na resposta.
+
+### Homologação
+
+As capacidades de escrita estão implementadas na `main`, mas só devem ser tratadas como validadas após deploy e testes controlados no ambiente real.
