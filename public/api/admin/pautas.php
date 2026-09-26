@@ -85,6 +85,206 @@ function nj_pautas_assignees(PDO $pdo): array
     return $result;
 }
 
+function nj_pautas_fetch_feed(string $url): string
+{
+    if (function_exists('curl_init')) {
+        $curl = curl_init($url);
+        if ($curl === false) {
+            throw new NjApiHttpException(502, 'feed_fetch_failed');
+        }
+
+        curl_setopt_array($curl, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_MAXREDIRS => 3,
+            CURLOPT_CONNECTTIMEOUT => 5,
+            CURLOPT_TIMEOUT => 10,
+            CURLOPT_USERAGENT => 'NossoJornalEditorial/1.0',
+            CURLOPT_HTTPHEADER => ['Accept: application/rss+xml, application/atom+xml, application/xml, text/xml'],
+        ]);
+
+        $body = curl_exec($curl);
+        $status = (int) curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
+        $error = curl_error($curl);
+        curl_close($curl);
+
+        if (!is_string($body) || $body === '' || $status < 200 || $status >= 400) {
+            error_log('[nossojornal-pautas] feed=' . $url . ' status=' . $status . ' error=' . $error);
+            throw new NjApiHttpException(502, 'feed_fetch_failed');
+        }
+
+        return $body;
+    }
+
+    $context = stream_context_create([
+        'http' => [
+            'timeout' => 10,
+            'user_agent' => 'NossoJornalEditorial/1.0',
+            'header' => "Accept: application/rss+xml, application/atom+xml, application/xml, text/xml\r\n",
+        ],
+    ]);
+
+    $body = @file_get_contents($url, false, $context);
+
+    if (!is_string($body) || $body === '') {
+        throw new NjApiHttpException(502, 'feed_fetch_failed');
+    }
+
+    return $body;
+}
+
+function nj_pautas_parse_feed(string $xmlBody): array
+{
+    if (!function_exists('simplexml_load_string')) {
+        throw new NjApiHttpException(500, 'feed_parser_unavailable');
+    }
+
+    $previous = libxml_use_internal_errors(true);
+    $xml = simplexml_load_string($xmlBody, SimpleXMLElement::class, LIBXML_NOCDATA);
+    libxml_clear_errors();
+    libxml_use_internal_errors($previous);
+
+    if (!$xml instanceof SimpleXMLElement) {
+        throw new NjApiHttpException(422, 'invalid_feed');
+    }
+
+    $items = [];
+
+    if (isset($xml->channel->item)) {
+        foreach ($xml->channel->item as $item) {
+            $title = trim((string) $item->title);
+            $link = trim((string) $item->link);
+            $description = trim((string) $item->description);
+
+            if ($link === '' && isset($item->guid)) {
+                $guid = trim((string) $item->guid);
+                if (filter_var($guid, FILTER_VALIDATE_URL)) {
+                    $link = $guid;
+                }
+            }
+
+            if ($title === '' || !filter_var($link, FILTER_VALIDATE_URL)) {
+                continue;
+            }
+
+            $items[] = [
+                'title' => html_entity_decode(strip_tags($title), ENT_QUOTES | ENT_HTML5, 'UTF-8'),
+                'link' => $link,
+                'description' => trim(html_entity_decode(strip_tags($description), ENT_QUOTES | ENT_HTML5, 'UTF-8')),
+            ];
+
+            if (count($items) >= 12) {
+                break;
+            }
+        }
+    } else {
+        $namespaces = $xml->getNamespaces(true);
+        $entries = $xml->entry ?? [];
+
+        foreach ($entries as $entry) {
+            $title = trim((string) $entry->title);
+            $link = '';
+
+            foreach ($entry->link as $linkNode) {
+                $attributes = $linkNode->attributes();
+                $candidate = trim((string) ($attributes['href'] ?? ''));
+                $rel = trim((string) ($attributes['rel'] ?? 'alternate'));
+
+                if ($candidate !== '' && ($rel === '' || $rel === 'alternate')) {
+                    $link = $candidate;
+                    break;
+                }
+            }
+
+            $summary = trim((string) ($entry->summary ?? $entry->content ?? ''));
+
+            if ($title === '' || !filter_var($link, FILTER_VALIDATE_URL)) {
+                continue;
+            }
+
+            $items[] = [
+                'title' => html_entity_decode(strip_tags($title), ENT_QUOTES | ENT_HTML5, 'UTF-8'),
+                'link' => $link,
+                'description' => trim(html_entity_decode(strip_tags($summary), ENT_QUOTES | ENT_HTML5, 'UTF-8')),
+            ];
+
+            if (count($items) >= 12) {
+                break;
+            }
+        }
+    }
+
+    return $items;
+}
+
+function nj_pautas_capture(PDO $pdo, array $user, array $source): int
+{
+    $posts = nj_table('posts');
+    $postmeta = nj_table('postmeta');
+    $feedItems = nj_pautas_parse_feed(nj_pautas_fetch_feed((string) $source['feedUrl']));
+    $captured = 0;
+
+    $duplicate = $pdo->prepare(<<<SQL
+SELECT p.ID
+FROM {$posts} p
+INNER JOIN {$postmeta} pm
+    ON pm.post_id = p.ID
+    AND pm.meta_key = '_nj_pauta_source_url'
+    AND pm.meta_value = :source_url
+WHERE p.post_type = 'nj_pauta'
+LIMIT 1
+SQL);
+
+    $insert = $pdo->prepare(<<<SQL
+INSERT INTO {$posts} (
+    post_author, post_date, post_date_gmt, post_content, post_title, post_excerpt,
+    post_status, comment_status, ping_status, post_password, post_name, to_ping,
+    pinged, post_modified, post_modified_gmt, post_content_filtered, post_parent,
+    guid, menu_order, post_type, post_mime_type, comment_count
+) VALUES (
+    :author_id, NOW(), UTC_TIMESTAMP(), :notes, :title, '', 'private', 'closed',
+    'closed', '', '', '', '', NOW(), UTC_TIMESTAMP(), '', 0, '', 0,
+    'nj_pauta', '', 0
+)
+SQL);
+
+    $numericPriority = (int) ($source['priority'] ?? 70);
+    $priority = $numericPriority >= 95
+        ? 'urgent'
+        : ($numericPriority >= 80 ? 'high' : ($numericPriority >= 60 ? 'normal' : 'low'));
+
+    foreach ($feedItems as $feedItem) {
+        $duplicate->execute(['source_url' => $feedItem['link']]);
+
+        if ($duplicate->fetchColumn()) {
+            continue;
+        }
+
+        $insert->execute([
+            'author_id' => (int) $user['id'],
+            'notes' => substr((string) $feedItem['description'], 0, 6000),
+            'title' => substr((string) $feedItem['title'], 0, 500),
+        ]);
+
+        $pautaId = (int) $pdo->lastInsertId();
+
+        if ($pautaId <= 0) {
+            continue;
+        }
+
+        nj_admin_upsert_postmeta($pdo, $pautaId, NJ_PAUTA_META_STAGE, 'inbox');
+        nj_admin_upsert_postmeta($pdo, $pautaId, NJ_PAUTA_META_PRIORITY, $priority);
+        nj_admin_upsert_postmeta($pdo, $pautaId, NJ_PAUTA_META_TOPIC, (string) $source['category']);
+        nj_admin_upsert_postmeta($pdo, $pautaId, NJ_PAUTA_META_SOURCE_NAME, (string) $source['name']);
+        nj_admin_upsert_postmeta($pdo, $pautaId, NJ_PAUTA_META_SOURCE_URL, (string) $feedItem['link']);
+        nj_admin_upsert_postmeta($pdo, $pautaId, NJ_PAUTA_META_ASSIGNEE, (string) $user['id']);
+
+        $captured++;
+    }
+
+    return $captured;
+}
+
 function nj_pautas_items(PDO $pdo): array
 {
     $posts = nj_table('posts');
@@ -222,11 +422,53 @@ nj_admin_run(['GET', 'POST'], static function (string $method): array {
     $action = trim((string) ($body['action'] ?? 'save'));
     $posts = nj_table('posts');
 
-    if (!in_array($action, ['save', 'trash', 'to_draft'], true)) {
+    if (!in_array($action, ['save', 'trash', 'to_draft', 'capture'], true)) {
         throw new NjApiHttpException(422, 'invalid_pauta_action');
     }
 
     $pautaId = max(0, (int) ($body['pautaId'] ?? 0));
+
+    if ($action === 'capture') {
+        $feedUrl = trim((string) ($body['feedUrl'] ?? ''));
+        $sources = nj_pautas_sources();
+        $selectedSources = [];
+
+        if ($feedUrl === '') {
+            $selectedSources = $sources;
+        } else {
+            foreach ($sources as $source) {
+                if (hash_equals((string) $source['feedUrl'], $feedUrl)) {
+                    $selectedSources[] = $source;
+                    break;
+                }
+            }
+        }
+
+        if ($selectedSources === []) {
+            throw new NjApiHttpException(422, 'feed_not_allowed');
+        }
+
+        $captured = 0;
+        $failures = 0;
+
+        foreach ($selectedSources as $source) {
+            try {
+                $captured += nj_pautas_capture($pdo, $user, $source);
+            } catch (NjApiHttpException $error) {
+                $failures++;
+                if (count($selectedSources) === 1) {
+                    throw $error;
+                }
+            }
+        }
+
+        return [
+            'items' => nj_pautas_items($pdo),
+            'captured' => $captured,
+            'captureFailures' => $failures,
+            'draft' => null,
+        ];
+    }
 
     if ($action === 'trash') {
         if ($pautaId <= 0) {
