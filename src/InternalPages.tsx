@@ -56,6 +56,12 @@ type ArticlePayload = {
   data?: {
     article: Article;
     related: Article[];
+    corrections: Array<{
+      type: 'update' | 'correction';
+      text: string;
+      createdAt: string;
+      modifiedAt: string;
+    }>;
     seo: {
       title: string;
       description: string;
@@ -716,6 +722,27 @@ function ArticlePage({ slug }: { slug: string }) {
                 className="article-body"
                 dangerouslySetInnerHTML={{ __html: article.contentHtml ?? '' }}
               />
+
+              {(payload?.corrections ?? []).length > 0 && (
+                <section className="article-corrections" aria-labelledby="article-corrections-title">
+                  <div className="article-corrections__heading">
+                    <span className="internal-kicker">Transparência editorial</span>
+                    <h2 id="article-corrections-title">Correções e atualizações</h2>
+                  </div>
+
+                  <div className="article-corrections__list">
+                    {payload?.corrections.map((item, index) => (
+                      <article key={item.createdAt + '-' + index}>
+                        <div>
+                          <strong>{item.type === 'correction' ? 'Correção' : 'Atualização'}</strong>
+                          <time dateTime={item.createdAt}>{formatDate(item.createdAt)}</time>
+                        </div>
+                        <p>{item.text}</p>
+                      </article>
+                    ))}
+                  </div>
+                </section>
+              )}
             </div>
 
             <aside className="article-detail__aside" aria-label="Navegação da matéria">
