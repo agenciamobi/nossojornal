@@ -2427,3 +2427,79 @@ A edição de usuários ganha um bloco de Perfil público. Ele grava somente met
 A biografia WordPress legada em `description` funciona como fallback, sem ser apagada.
 
 Próximo ponto de maior valor: comentários públicos e moderação de discussão, mas somente se houver decisão editorial explícita para abrir participação dos leitores. Antes disso, proveniência/importação de conteúdo externo pode gerar mais valor operacional sem aumentar superfície de moderação.
+
+## 44. Proveniência editorial e importação rastreável
+
+A Mesa de Pautas passa a preservar uma trilha de origem estruturada desde a captura RSS/Atom até o draft editorial.
+
+### Captura
+
+Cada item capturado pode armazenar:
+
+```text
+feed URL
+URL da origem
+ID externo / GUID
+data publicada pela origem
+data de captura
+fingerprint SHA-256
+publicador / fonte
+```
+
+A deduplicação deixa de depender apenas da URL. O capturador verifica:
+
+```text
+source URL
+external ID
+source hash
+```
+
+Isso reduz entradas repetidas quando um feed muda a URL de apresentação mas preserva GUID, ou quando a mesma entrada reaparece com estrutura equivalente.
+
+### Conversão para draft
+
+Ao converter uma pauta capturada em notícia, o Sistema copia a trilha para postmeta `_nj_provenance_*` e mantém a origem também no Caderno de Apuração.
+
+A provenance inicial é:
+
+```text
+original
+adapted
+republished
+```
+
+Itens vindos de feed externo entram como `adapted` por padrão. O editor pode mudar o tratamento editorial explicitamente.
+
+### Canonical
+
+Capturar ou adaptar uma pauta externa não altera automaticamente o canonical da notícia.
+
+A URL original é preservada como atribuição, enquanto o canonical continua apontando para o Nosso Jornal salvo decisão editorial explícita. Isso evita transformar coleta de pauta em republicação técnica acidental.
+
+### Interface
+
+O editor passa a mostrar um bloco de Proveniência editorial com:
+
+- tratamento editorial;
+- publicador/fonte;
+- URL capturada;
+- publicação na origem;
+- momento da captura;
+- ID externo;
+- fingerprint;
+- feed;
+- vínculo com a pauta original.
+
+### Delivery público
+
+Quando existe origem declarada, a matéria pode exibir a referência ao leitor com rótulo coerente ao tratamento editorial.
+
+O contrato público expõe apenas a parcela de provenance necessária à atribuição. Fingerprints, IDs internos e detalhes operacionais permanecem no Sistema.
+
+### SEO e schema
+
+A camada de metadata diferencia conteúdo próprio, adaptado e republicado. Proveniência e canonical são decisões separadas.
+
+A implementação segue o princípio observado no 10up Distributor: conteúdo distribuído deve manter conexão explícita com sua origem, sem transformar essa conexão em autoridade paralela ao conteúdo local.
+
+Próximo ponto de maior valor: amadurecer a Mesa de Pautas com estado por fonte, health de feeds, horário da última captura e filtros de triagem inspirados em FreshRSS/Miniflux, mantendo a redação humana como autoridade de publicação.
