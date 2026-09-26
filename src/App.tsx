@@ -3,6 +3,7 @@ import type { CSSProperties } from 'react';
 import { SiteHeader } from './Header';
 import { InternalPage, resolvePublicRoute } from './InternalPages';
 import { SiteFooter } from './SiteFooter';
+import { SystemPage } from './SystemPage';
 import { cleanLegacyText } from './contentText';
 import './home.css';
 
@@ -158,6 +159,9 @@ function HomeSkeleton() {
 }
 
 export function App() {
+  const isSystemRoute =
+    window.location.pathname === '/sistema'
+    || window.location.pathname.startsWith('/sistema/');
   const route = resolvePublicRoute(window.location.pathname);
   const [data, setData] = useState<HomePayload['data']>();
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
@@ -202,6 +206,10 @@ export function App() {
   const sections = data?.sections ?? [];
 
   const heroSide = useMemo(() => latest.slice(0, 4), [latest]);
+
+  if (isSystemRoute) {
+    return <SystemPage />;
+  }
 
   if (route.kind !== 'home') {
     return (
