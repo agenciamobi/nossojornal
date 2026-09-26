@@ -2814,3 +2814,81 @@ Cadastro de categoria, Central de Fontes e Mesa de Pautas também passam a prote
 A implementação reaproveita o princípio do `useUnsavedChangesGuard` do `agenciamobi/mobicms`: dirty state explícito, proteção de beforeunload e navegação interna, adaptado para o runtime sem router do Nosso Jornal.
 
 Próximo ponto: completar a experiência de cadastro com criação nativa de usuários e depois uniformizar validação de campos nos formulários menores.
+
+## 50. Cadastro nativo de usuários e gestão de senha
+
+A área de Usuários passa a cobrir também criação de contas e redefinição de senha sem carregar `wp-load.php`.
+
+### Fonte de verdade
+
+O Sistema continua reutilizando:
+
+```text
+users
+usermeta
+{prefix}_user_roles
+{prefix}_capabilities
+{prefix}_user_level
+```
+
+Nenhuma tabela paralela de identidade foi criada.
+
+### Cadastro
+
+Nova rota:
+
+```text
+/sistema/usuarios/novo
+POST /api/admin/user-create.php
+```
+
+O cadastro exige as capabilities WordPress-native:
+
+```text
+create_users
+promote_users
+```
+
+e grava login, e-mail, nome de exibição, função e senha inicial dentro de uma transação com readback.
+
+O login também é usado como `user_nicename` inicial, garantindo um slug público previsível para o futuro perfil de autor.
+
+### Senha
+
+Senhas novas usam o formato moderno compatível com o verificador nativo do projeto:
+
+```text
+$wp$2y$...
+```
+
+A senha é pré-processada com HMAC-SHA384 antes do bcrypt, seguindo o contrato já suportado pela autenticação do Sistema.
+
+O endpoint nunca devolve hash nem senha.
+
+A tela de criação mantém a senha apenas em memória no browser para permitir copiar as credenciais imediatamente após o cadastro. Ao sair da tela, ela não pode ser recuperada pelo painel.
+
+### Edição
+
+O editor de usuários passa a permitir redefinir senha com:
+
+- mínimo de 12 caracteres;
+- confirmação;
+- gerador local usando `crypto.getRandomValues`;
+- aplicação somente no save explícito.
+
+### Diretório
+
+A listagem de usuários recebe:
+
+- busca por nome, login e e-mail;
+- filtro por função;
+- estado vazio;
+- ação de novo usuário apenas quando a sessão possui permissão.
+
+### Segurança
+
+Criar usuário continua separado de autenticação pública. O browser chama apenas a API administrativa autenticada por sessão + CSRF.
+
+Criar outro administrador exige também `manage_options`.
+
+Próximo ponto: polir cadastros menores com validação de campo contextual e ações de duplicação/cópia quando fizer sentido, evitando transformar o painel em CRUD genérico.
