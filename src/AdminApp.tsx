@@ -6,6 +6,7 @@ import {
   type EditorialRelatedStory,
 } from './AdminEditorialConnections';
 import { AdminWordPressTools } from './AdminWordPressTools';
+import { useAdminEditorGuard } from './admin/useAdminEditorGuard';
 import './admin.css';
 
 type AdminUser = {
@@ -790,6 +791,45 @@ function resolveAdminView(pathname: string): AdminView {
   if (clean === '/sistema/pautas') return 'pautas';
 
   return 'dashboard';
+}
+
+function AdminEditorGuard({
+  dirty,
+  saving,
+  onSave,
+}: {
+  dirty: boolean;
+  saving: boolean;
+  onSave?: () => void | Promise<void>;
+}) {
+  useAdminEditorGuard({ dirty, saving, onSave });
+  return null;
+}
+
+function AdminEditorSaveIndicator({
+  dirty,
+  state,
+}: {
+  dirty: boolean;
+  state: 'idle' | 'saving' | 'saved' | 'error';
+}) {
+  if (state === 'saving') {
+    return <span className="admin-editor-save-indicator is-saving">Salvando…</span>;
+  }
+
+  if (state === 'error') {
+    return <span className="admin-editor-save-indicator is-error">Falha ao salvar</span>;
+  }
+
+  if (dirty) {
+    return <span className="admin-editor-save-indicator is-dirty">Não salvo</span>;
+  }
+
+  if (state === 'saved') {
+    return <span className="admin-editor-save-indicator is-saved">Salvo</span>;
+  }
+
+  return <span className="admin-editor-save-indicator">Sem alterações</span>;
 }
 
 function formatAdminDate(value: string) {
@@ -3242,6 +3282,11 @@ function PostEditorView({
 
   return (
     <>
+      <AdminEditorGuard
+        dirty={changed}
+        saving={saveState === 'saving'}
+        onSave={savePost}
+      />
       <header className="admin-editor-header">
         <div>
           <a href="/sistema/noticias" className="admin-editor-header__back">← Notícias</a>
@@ -3255,6 +3300,7 @@ function PostEditorView({
         </div>
 
         <div className="admin-editor-header__actions">
+          <AdminEditorSaveIndicator dirty={changed} state={saveState} />
           {post.publicUrl && post.status === 'publish' && (
             <a href={post.publicUrl} target="_blank" rel="noopener noreferrer">
               Ver no site ↗
@@ -4831,6 +4877,11 @@ function PageEditorView({
 
   return (
     <>
+      <AdminEditorGuard
+        dirty={changed}
+        saving={saveState === 'saving'}
+        onSave={savePage}
+      />
       <header className="admin-editor-header">
         <div>
           <a href="/sistema/paginas" className="admin-editor-header__back">← Páginas</a>
@@ -4844,6 +4895,7 @@ function PageEditorView({
         </div>
 
         <div className="admin-editor-header__actions">
+          <AdminEditorSaveIndicator dirty={changed} state={saveState} />
           {item.publicUrl && item.status === 'publish' && (
             <a href={item.publicUrl} target="_blank" rel="noopener noreferrer">Ver no site ↗</a>
           )}
@@ -5373,6 +5425,11 @@ function CategoryEditorView({ csrfToken }: { csrfToken: string }) {
 
   return (
     <>
+      <AdminEditorGuard
+        dirty={changed}
+        saving={saveState === 'saving'}
+        onSave={saveCategory}
+      />
       <header className="admin-editor-header">
         <div>
           <a href="/sistema/categorias" className="admin-editor-header__back">← Categorias</a>
@@ -5388,6 +5445,7 @@ function CategoryEditorView({ csrfToken }: { csrfToken: string }) {
         </div>
 
         <div className="admin-editor-header__actions">
+          <AdminEditorSaveIndicator dirty={changed} state={saveState} />
           <a href={category.publicUrl} target="_blank" rel="noopener noreferrer">
             Ver editoria ↗
           </a>
@@ -6249,6 +6307,11 @@ function UserEditorView({
 
   return (
     <>
+      <AdminEditorGuard
+        dirty={changed}
+        saving={saveState === 'saving'}
+        onSave={saveUser}
+      />
       <header className="admin-editor-header">
         <div>
           <a href="/sistema/usuarios" className="admin-editor-header__back">← Usuários</a>
@@ -6260,6 +6323,7 @@ function UserEditorView({
         </div>
 
         <div className="admin-editor-header__actions">
+          <AdminEditorSaveIndicator dirty={changed} state={saveState} />
           <button
             type="button"
             className="admin-button--primary"
@@ -6760,6 +6824,11 @@ function MediaItemView({ csrfToken }: { csrfToken: string }) {
 
   return (
     <>
+      <AdminEditorGuard
+        dirty={changed}
+        saving={saveState === 'saving'}
+        onSave={saveMedia}
+      />
       <header className="admin-editor-header">
         <div>
           <a href="/sistema/midia" className="admin-editor-header__back">← Mídia</a>
@@ -6770,6 +6839,7 @@ function MediaItemView({ csrfToken }: { csrfToken: string }) {
         </div>
 
         <div className="admin-editor-header__actions">
+          <AdminEditorSaveIndicator dirty={changed} state={saveState} />
           <a href={media.url} target="_blank" rel="noopener noreferrer">Abrir arquivo ↗</a>
           <button
             type="button"
@@ -7033,6 +7103,11 @@ function SettingsView({ csrfToken }: { csrfToken: string }) {
 
   return (
     <>
+      <AdminEditorGuard
+        dirty={changed}
+        saving={saveState === 'saving'}
+        onSave={saveSettings}
+      />
       <div className="admin-page-heading-row">
         <AdminPageHeader
           eyebrow="Site"
@@ -7040,14 +7115,17 @@ function SettingsView({ csrfToken }: { csrfToken: string }) {
           description="Informações gerais e preferências do site."
         />
 
-        <button
+        <div className="admin-page-heading-row__actions">
+          <AdminEditorSaveIndicator dirty={changed} state={saveState} />
+          <button
           type="button"
           className="admin-create-button"
           disabled={!canEdit || !changed || saveState === 'saving'}
           onClick={() => void saveSettings()}
         >
           {saveState === 'saving' ? 'Salvando…' : 'Salvar alterações'}
-        </button>
+          </button>
+        </div>
       </div>
 
       {saveState === 'saved' && (
