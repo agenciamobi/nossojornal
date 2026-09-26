@@ -20,10 +20,7 @@ nj_run(static function (): array {
     $query = trim((string) ($_GET['q'] ?? ''));
 
     if ($categorySlug !== '' && !preg_match('/^[a-z0-9-]+$/', $categorySlug)) {
-        nj_json_response(400, [
-            'ok' => false,
-            'error' => ['code' => 'invalid_category'],
-        ]);
+        throw new NjApiHttpException(400, 'invalid_category');
     }
 
     if (function_exists('mb_substr')) {
@@ -69,10 +66,7 @@ SQL);
         $categoryRow = $categoryStatement->fetch();
 
         if (!$categoryRow) {
-            nj_json_response(404, [
-                'ok' => false,
-                'error' => ['code' => 'category_not_found'],
-            ]);
+            throw new NjApiHttpException(404, 'category_not_found');
         }
 
         $category = [
