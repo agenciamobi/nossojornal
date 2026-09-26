@@ -90,6 +90,12 @@ type ArticlePayload = {
       imageCredit: string;
       imageCaption: string;
       originalSourceUrl: string;
+      provenance: {
+        mode: 'original' | 'adapted' | 'republished';
+        sourceName: string;
+        sourceUrl: string;
+        sourcePublishedAt: string;
+      };
       series: {
         name: string;
         slug: string;
@@ -685,6 +691,11 @@ function ArticlePage({ slug }: { slug: string }) {
           datePublished: article.publishedAt,
           dateModified: article.modifiedAt,
           mainEntityOfPage: articleUrl,
+          isBasedOn:
+            payload?.editorial.provenance.mode !== 'original'
+            && payload?.editorial.originalSourceUrl
+              ? payload.editorial.originalSourceUrl
+              : undefined,
           image: article.featuredImage
             ? [new URL(article.featuredImage.url, window.location.origin).toString()]
             : undefined,
@@ -760,6 +771,8 @@ function ArticlePage({ slug }: { slug: string }) {
     payload?.editorial.series.name,
     payload?.editorial.series.url,
     payload?.editorial.standfirst,
+    payload?.editorial.originalSourceUrl,
+    payload?.editorial.provenance.mode,
     payload?.seo.canonical,
   ]);
 
@@ -1018,17 +1031,31 @@ function ArticlePage({ slug }: { slug: string }) {
                 </div>
               )}
 
-              {payload?.editorial.originalSourceUrl && (
-                <div className="article-detail__aside-section">
-                  <span className="internal-kicker">Referência</span>
+              {(payload?.editorial.originalSourceUrl || payload?.editorial.provenance.sourceUrl) && (
+                <div className="article-detail__aside-section article-provenance">
+                  <span className="internal-kicker">
+                    {payload.editorial.provenance.mode === 'republished'
+                      ? 'Publicado originalmente por'
+                      : payload.editorial.provenance.mode === 'adapted'
+                        ? 'Origem da pauta'
+                        : 'Referência'}
+                  </span>
+                  {payload.editorial.provenance.sourceName && (
+                    <strong>{payload.editorial.provenance.sourceName}</strong>
+                  )}
                   <a
                     className="article-original-source"
-                    href={payload.editorial.originalSourceUrl}
+                    href={payload.editorial.originalSourceUrl || payload.editorial.provenance.sourceUrl}
                     target="_blank"
-                    rel="noopener noreferrer"
+                    rel="noopener noreferrer external"
                   >
                     Consultar fonte original ↗
                   </a>
+                  {payload.editorial.provenance.sourcePublishedAt && (
+                    <small>
+                      Publicado na origem em {formatDate(payload.editorial.provenance.sourcePublishedAt)}
+                    </small>
+                  )}
                 </div>
               )}
 

@@ -568,6 +568,17 @@ type EditorialWorkflow = {
     canonicalUrl: string;
     socialTitle: string;
     socialDescription: string;
+    provenance: {
+      mode: 'original' | 'adapted' | 'republished';
+      sourceName: string;
+      sourceUrl: string;
+      externalId: string;
+      feedUrl: string;
+      capturedAt: string;
+      sourcePublishedAt: string;
+      sourceHash: string;
+      pautaId: number;
+    };
   };
   connections: {
     related: EditorialRelatedStory[];
@@ -2765,6 +2776,8 @@ function PostEditorView({
         imageCaption: editorial.identity.imageCaption,
         originalSourceUrl: editorial.distribution.originalSourceUrl,
         canonicalUrl: editorial.distribution.canonicalUrl,
+        provenanceMode: editorial.distribution.provenance.mode,
+        provenanceSourceName: editorial.distribution.provenance.sourceName,
         socialTitle: editorial.distribution.socialTitle,
         socialDescription: editorial.distribution.socialDescription,
         relatedPostIds: editorial.connections.related.map((item) => item.id),
@@ -3761,6 +3774,124 @@ function PostEditorView({
             </div>
 
             <div className="admin-editor-card__body admin-editor-card__body--fields">
+              <div className="admin-provenance-card">
+                <div className="admin-provenance-card__head">
+                  <div>
+                    <span>Proveniência editorial</span>
+                    <strong>
+                      {{
+                        original: 'Conteúdo original',
+                        adapted: 'Adaptado de fonte externa',
+                        republished: 'Republicado',
+                      }[editorial.distribution.provenance.mode]}
+                    </strong>
+                  </div>
+                  {editorial.distribution.provenance.pautaId > 0 && (
+                    <a href="/sistema/pautas">Pauta #{editorial.distribution.provenance.pautaId}</a>
+                  )}
+                </div>
+
+                <div className="admin-editorial-field-grid admin-editorial-field-grid--two">
+                  <label className="admin-editor-field">
+                    <span>Tratamento editorial</span>
+                    <select
+                      value={editorial.distribution.provenance.mode}
+                      disabled={!canEdit}
+                      onChange={(event) => patchDistribution({
+                        provenance: {
+                          ...editorial.distribution.provenance,
+                          mode: event.target.value as EditorialWorkflow['distribution']['provenance']['mode'],
+                        },
+                      })}
+                    >
+                      <option value="original">Original do Nosso Jornal</option>
+                      <option value="adapted">Adaptado de outra fonte</option>
+                      <option value="republished">Republicado</option>
+                    </select>
+                  </label>
+
+                  <label className="admin-editor-field">
+                    <span>Publicador / fonte de origem</span>
+                    <input
+                      value={editorial.distribution.provenance.sourceName}
+                      disabled={!canEdit}
+                      maxLength={250}
+                      placeholder="Ex.: NASA, OpenAI, Jornal Tradição"
+                      onChange={(event) => patchDistribution({
+                        provenance: {
+                          ...editorial.distribution.provenance,
+                          sourceName: event.target.value,
+                        },
+                      })}
+                    />
+                  </label>
+                </div>
+
+                {(editorial.distribution.provenance.sourceUrl
+                  || editorial.distribution.provenance.externalId
+                  || editorial.distribution.provenance.capturedAt
+                  || editorial.distribution.provenance.sourceHash) && (
+                  <dl className="admin-provenance-card__trace">
+                    {editorial.distribution.provenance.sourceUrl && (
+                      <div>
+                        <dt>URL capturada</dt>
+                        <dd>
+                          <a
+                            href={editorial.distribution.provenance.sourceUrl}
+                            target="_blank"
+                            rel="noopener noreferrer external"
+                          >
+                            Abrir origem ↗
+                          </a>
+                        </dd>
+                      </div>
+                    )}
+                    {editorial.distribution.provenance.sourcePublishedAt && (
+                      <div>
+                        <dt>Publicação na origem</dt>
+                        <dd>{formatAdminDate(editorial.distribution.provenance.sourcePublishedAt)}</dd>
+                      </div>
+                    )}
+                    {editorial.distribution.provenance.capturedAt && (
+                      <div>
+                        <dt>Capturado em</dt>
+                        <dd>{formatAdminDate(editorial.distribution.provenance.capturedAt)}</dd>
+                      </div>
+                    )}
+                    {editorial.distribution.provenance.externalId && (
+                      <div>
+                        <dt>ID externo</dt>
+                        <dd><code>{editorial.distribution.provenance.externalId}</code></dd>
+                      </div>
+                    )}
+                    {editorial.distribution.provenance.sourceHash && (
+                      <div>
+                        <dt>Fingerprint</dt>
+                        <dd>
+                          <code title={editorial.distribution.provenance.sourceHash}>
+                            {editorial.distribution.provenance.sourceHash.slice(0, 16)}…
+                          </code>
+                        </dd>
+                      </div>
+                    )}
+                    {editorial.distribution.provenance.feedUrl && (
+                      <div>
+                        <dt>Feed</dt>
+                        <dd>
+                          <a
+                            href={editorial.distribution.provenance.feedUrl}
+                            target="_blank"
+                            rel="noopener noreferrer external"
+                          >
+                            Ver feed ↗
+                          </a>
+                        </dd>
+                      </div>
+                    )}
+                  </dl>
+                )}
+              </div>
+
               <div className="admin-editorial-field-grid admin-editorial-field-grid--two">
                 <label className="admin-editor-field">
                   <span>Fonte original</span>
@@ -3771,7 +3902,9 @@ function PostEditorView({
                     placeholder="https://..."
                     onChange={(event) => patchDistribution({ originalSourceUrl: event.target.value })}
                   />
-                  <small className="admin-field-help">Use quando a matéria nasceu de comunicado, agência, documento ou fonte publicada.</small>
+                  <small className="admin-field-help">
+                    A captura RSS preenche este campo automaticamente. Alterar a URL de atribuição não apaga o rastro técnico da captura.
+                  </small>
                 </label>
 
                 <label className="admin-editor-field">

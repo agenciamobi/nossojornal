@@ -60,6 +60,15 @@ function nj_editorial_meta_map(PDO $pdo, int $postId): array
         NJ_EDITORIAL_META_SERIES_NAME,
         NJ_EDITORIAL_META_SERIES_SLUG,
         NJ_EDITORIAL_META_SERIES_ORDER,
+        NJ_PROVENANCE_META_MODE,
+        NJ_PROVENANCE_META_SOURCE_NAME,
+        NJ_PROVENANCE_META_SOURCE_URL,
+        NJ_PROVENANCE_META_EXTERNAL_ID,
+        NJ_PROVENANCE_META_FEED_URL,
+        NJ_PROVENANCE_META_CAPTURED_AT,
+        NJ_PROVENANCE_META_SOURCE_PUBLISHED_AT,
+        NJ_PROVENANCE_META_SOURCE_HASH,
+        NJ_PROVENANCE_META_PAUTA_ID,
     ];
     $placeholders = implode(',', array_fill(0, count($keys), '?'));
 
@@ -276,6 +285,11 @@ function nj_editorial_payload(PDO $pdo, array $post, array $meta): array
         $articleType = 'news';
     }
 
+    $provenanceMode = (string) ($meta[NJ_PROVENANCE_META_MODE] ?? 'original');
+    if (!in_array($provenanceMode, ['original', 'adapted', 'republished'], true)) {
+        $provenanceMode = 'original';
+    }
+
     $coauthorIds = array_values(array_unique(array_filter(array_map(
         'intval',
         nj_editorial_json_array((string) ($meta[NJ_EDITORIAL_META_COAUTHORS] ?? ''))
@@ -346,6 +360,17 @@ function nj_editorial_payload(PDO $pdo, array $post, array $meta): array
             'canonicalUrl' => (string) ($meta[NJ_EDITORIAL_META_CANONICAL_URL] ?? ''),
             'socialTitle' => (string) ($meta[NJ_EDITORIAL_META_SOCIAL_TITLE] ?? ''),
             'socialDescription' => (string) ($meta[NJ_EDITORIAL_META_SOCIAL_DESCRIPTION] ?? ''),
+            'provenance' => [
+                'mode' => $provenanceMode,
+                'sourceName' => (string) ($meta[NJ_PROVENANCE_META_SOURCE_NAME] ?? ''),
+                'sourceUrl' => (string) ($meta[NJ_PROVENANCE_META_SOURCE_URL] ?? ''),
+                'externalId' => (string) ($meta[NJ_PROVENANCE_META_EXTERNAL_ID] ?? ''),
+                'feedUrl' => (string) ($meta[NJ_PROVENANCE_META_FEED_URL] ?? ''),
+                'capturedAt' => (string) ($meta[NJ_PROVENANCE_META_CAPTURED_AT] ?? ''),
+                'sourcePublishedAt' => (string) ($meta[NJ_PROVENANCE_META_SOURCE_PUBLISHED_AT] ?? ''),
+                'sourceHash' => (string) ($meta[NJ_PROVENANCE_META_SOURCE_HASH] ?? ''),
+                'pautaId' => max(0, (int) ($meta[NJ_PROVENANCE_META_PAUTA_ID] ?? 0)),
+            ],
         ],
         'connections' => [
             'related' => $related,
@@ -396,6 +421,7 @@ nj_admin_run(['GET', 'POST'], static function (string $method): array {
     }
 
     $post = nj_editorial_require_post_access($pdo, $user, $postId);
+    $existingMeta = nj_editorial_meta_map($pdo, $postId);
 
     $stage = trim((string) ($body['stage'] ?? 'writing'));
     if (!in_array($stage, ['idea', 'reporting', 'writing', 'review', 'ready', 'scheduled', 'published'], true)) {
@@ -504,6 +530,8 @@ nj_admin_run(['GET', 'POST'], static function (string $method): array {
     $imageCaption = trim((string) ($body['imageCaption'] ?? ''));
     $originalSourceUrl = trim((string) ($body['originalSourceUrl'] ?? ''));
     $canonicalUrl = trim((string) ($body['canonicalUrl'] ?? ''));
+    $provenanceMode = trim((string) ($body['provenanceMode'] ?? 'original'));
+    $provenanceSourceName = trim((string) ($body['provenanceSourceName'] ?? ''));
     $socialTitle = trim((string) ($body['socialTitle'] ?? ''));
     $socialDescription = trim((string) ($body['socialDescription'] ?? ''));
 
@@ -513,6 +541,7 @@ nj_admin_run(['GET', 'POST'], static function (string $method): array {
         'dateline' => [$dateline, 160],
         'imageCredit' => [$imageCredit, 300],
         'imageCaption' => [$imageCaption, 1200],
+        'provenanceSourceName' => [$provenanceSourceName, 250],
         'socialTitle' => [$socialTitle, 300],
         'socialDescription' => [$socialDescription, 1000],
     ];
@@ -522,6 +551,10 @@ nj_admin_run(['GET', 'POST'], static function (string $method): array {
         if ($length > $limit) {
             throw new NjApiHttpException(422, 'editorial_' . $field . '_too_large');
         }
+    }
+
+    if (!in_array($provenanceMode, ['original', 'adapted', 'republished'], true)) {
+        throw new NjApiHttpException(422, 'invalid_provenance_mode');
     }
 
     foreach ([
@@ -653,6 +686,8 @@ nj_admin_run(['GET', 'POST'], static function (string $method): array {
         nj_admin_upsert_postmeta($pdo, $postId, NJ_EDITORIAL_META_IMAGE_CAPTION, $imageCaption);
         nj_admin_upsert_postmeta($pdo, $postId, NJ_EDITORIAL_META_ORIGINAL_SOURCE_URL, $originalSourceUrl);
         nj_admin_upsert_postmeta($pdo, $postId, NJ_EDITORIAL_META_CANONICAL_URL, $canonicalUrl);
+        nj_admin_upsert_postmeta($pdo, $postId, NJ_PROVENANCE_META_MODE, $provenanceMode);
+        nj_admin_upsert_postmeta($pdo, $postId, NJ_PROVENANCE_META_SOURCE_NAME, $provenanceSourceName);
         nj_admin_upsert_postmeta($pdo, $postId, NJ_EDITORIAL_META_SOCIAL_TITLE, $socialTitle);
         nj_admin_upsert_postmeta($pdo, $postId, NJ_EDITORIAL_META_SOCIAL_DESCRIPTION, $socialDescription);
 
@@ -676,6 +711,8 @@ nj_admin_run(['GET', 'POST'], static function (string $method): array {
                 'coauthorCount' => count($coauthorIds),
                 'hasCanonical' => $canonicalUrl !== '',
                 'hasOriginalSource' => $originalSourceUrl !== '',
+                'provenanceMode' => $provenanceMode,
+                'hasCapturedProvenance' => trim((string) ($existingMeta[NJ_PROVENANCE_META_SOURCE_HASH] ?? '')) !== '',
                 'relatedCount' => count($relatedPostIds),
                 'seriesSlug' => $seriesSlug,
             ]

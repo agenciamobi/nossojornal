@@ -54,6 +54,10 @@ WHERE
         '_nj_image_caption',
         '_nj_original_source_url',
         '_nj_canonical_url',
+        '_nj_provenance_mode',
+        '_nj_provenance_source_name',
+        '_nj_provenance_source_url',
+        '_nj_provenance_source_published_at',
         '_nj_social_title',
         '_nj_social_description',
         '_nj_related_post_ids',
@@ -81,6 +85,11 @@ SQL);
     $articleType = (string) ($metaValues['_nj_article_type'] ?? 'news');
     if (!in_array($articleType, ['news', 'analysis', 'opinion', 'interview', 'service', 'live'], true)) {
         $articleType = 'news';
+    }
+
+    $provenanceMode = (string) ($metaValues['_nj_provenance_mode'] ?? 'original');
+    if (!in_array($provenanceMode, ['original', 'adapted', 'republished'], true)) {
+        $provenanceMode = 'original';
     }
 
     $coauthorIds = [];
@@ -258,6 +267,12 @@ SQL);
             'imageCredit' => nj_content_clean_text_source((string) ($metaValues['_nj_image_credit'] ?? '')),
             'imageCaption' => nj_content_clean_text_source((string) ($metaValues['_nj_image_caption'] ?? '')),
             'originalSourceUrl' => (string) ($metaValues['_nj_original_source_url'] ?? ''),
+            'provenance' => [
+                'mode' => $provenanceMode,
+                'sourceName' => nj_content_clean_text_source((string) ($metaValues['_nj_provenance_source_name'] ?? '')),
+                'sourceUrl' => (string) ($metaValues['_nj_provenance_source_url'] ?? ''),
+                'sourcePublishedAt' => (string) ($metaValues['_nj_provenance_source_published_at'] ?? ''),
+            ],
             'series' => [
                 'name' => nj_content_clean_text_source((string) ($metaValues['_nj_series_name'] ?? '')),
                 'slug' => (string) ($metaValues['_nj_series_slug'] ?? ''),

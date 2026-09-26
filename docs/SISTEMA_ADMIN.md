@@ -1808,3 +1808,27 @@ Quando o usuário possui ao menos uma matéria publicada como autor ou coautor, 
 Credenciais, e-mail, roles e capabilities nunca fazem parte da API pública do perfil.
 
 A biografia antiga do WordPress pode aparecer como fallback. Ao salvar uma versão no bloco público, o Sistema passa a usar `_nj_public_bio` sem apagar a descrição histórica.
+
+## Proveniência editorial
+
+Pautas capturadas por RSS/Atom preservam a origem quando viram draft.
+
+No editor de Notícias, a seção Distribuição mostra a Proveniência editorial:
+
+```text
+tratamento
+publicador
+URL capturada
+data da origem
+captura
+ID externo
+fingerprint
+feed
+pauta de origem
+```
+
+Os campos técnicos de captura são somente leitura. O editor pode alterar o tratamento entre original, adaptado e republicado e também informar a fonte original/canonical pelos campos editoriais existentes.
+
+A regra de segurança é simples: ter uma origem externa não muda o canonical automaticamente.
+
+A Mesa também usa URL, ID externo e fingerprint para evitar capturas repetidas.
