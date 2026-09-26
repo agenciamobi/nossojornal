@@ -114,6 +114,56 @@ function nj_content_youtube_ids(string $html): array
     return array_keys($ids);
 }
 
+function nj_content_sanitize_inline_style(string $style): string
+{
+    $safe = [];
+
+    foreach (explode(';', $style) as $declaration) {
+        $parts = explode(':', $declaration, 2);
+        if (count($parts) !== 2) {
+            continue;
+        }
+
+        $property = strtolower(trim($parts[0]));
+        $value = trim($parts[1]);
+
+        if ($property === 'text-align' && preg_match('/^(left|right|center|justify)$/i', $value)) {
+            $safe[] = 'text-align:' . strtolower($value);
+            continue;
+        }
+
+        if (
+            in_array($property, ['color', 'background-color'], true)
+            && (
+                preg_match('/^#[0-9a-f]{3,8}$/i', $value)
+                || preg_match('/^rgba?\(\s*[0-9.]+%?\s*,\s*[0-9.]+%?\s*,\s*[0-9.]+%?(?:\s*,\s*(?:0|1|0?\.\d+))?\s*\)$/i', $value)
+            )
+        ) {
+            $safe[] = $property . ':' . $value;
+            continue;
+        }
+
+        if ($property === 'font-weight' && preg_match('/^(normal|bold|bolder|[1-9]00)$/i', $value)) {
+            $safe[] = 'font-weight:' . strtolower($value);
+            continue;
+        }
+
+        if ($property === 'font-style' && preg_match('/^(normal|italic)$/i', $value)) {
+            $safe[] = 'font-style:' . strtolower($value);
+            continue;
+        }
+
+        if (
+            $property === 'text-decoration'
+            && preg_match('/^(none|underline|line-through|underline line-through|line-through underline)$/i', $value)
+        ) {
+            $safe[] = 'text-decoration:' . strtolower($value);
+        }
+    }
+
+    return implode(';', $safe);
+}
+
 function nj_content_sanitize_html(string $html): string
 {
     if (trim($html) === '') {
@@ -123,7 +173,17 @@ function nj_content_sanitize_html(string $html): string
     $html = preg_replace('#<(script|style|form|input|button|textarea|select|object|embed|iframe|svg)[^>]*>.*?</\1>#is', '', $html) ?? $html;
     $html = preg_replace('#<(script|style|form|input|button|textarea|select|object|embed|iframe|svg)[^>]*/?>#is', '', $html) ?? $html;
     $html = preg_replace('/\son[a-z]+\s*=\s*("[^"]*"|\'[^\']*\'|[^\s>]+)/i', '', $html) ?? $html;
-    $html = preg_replace('/\sstyle\s*=\s*("[^"]*"|\'[^\']*\')/i', '', $html) ?? $html;
+    $html = preg_replace_callback(
+        '/\sstyle\s*=\s*(["\'])(.*?)\1/i',
+        static function (array $matches): string {
+            $safeStyle = nj_content_sanitize_inline_style((string) $matches[2]);
+
+            return $safeStyle !== ''
+                ? ' style="' . htmlspecialchars($safeStyle, ENT_QUOTES | ENT_HTML5, 'UTF-8') . '"'
+                : '';
+        },
+        $html
+    ) ?? $html;
     $html = preg_replace('/\s(?:data-elementor-[a-z0-9_-]+|data-e-[a-z0-9_-]+)\s*=\s*("[^"]*"|\'[^\']*\')/i', '', $html) ?? $html;
     $html = preg_replace_callback(
         '/\s(href|src)\s*=\s*(["\'])(.*?)\2/i',
