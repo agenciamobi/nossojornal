@@ -1910,6 +1910,7 @@ function HomeLayoutView({ csrfToken }: { csrfToken: string }) {
 
 function AgendaView({ csrfToken }: { csrfToken: string }) {
   const [data, setData] = useState<AgendaPayload['data']>();
+  const [editingEventId, setEditingEventId] = useState(0);
   const [title, setTitle] = useState('');
   const [eventKind, setEventKind] = useState<'coverage' | 'interview' | 'meeting' | 'deadline' | 'event'>('coverage');
   const [start, setStart] = useState('');
@@ -1917,7 +1918,9 @@ function AgendaView({ csrfToken }: { csrfToken: string }) {
   const [location, setLocation] = useState('');
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState(0);
   const [message, setMessage] = useState<'idle' | 'saved' | 'error'>('idle');
+  const [successMessage, setSuccessMessage] = useState('');
   const [error, setError] = useState(false);
 
   useEffect(() => {
@@ -1932,11 +1935,95 @@ function AgendaView({ csrfToken }: { csrfToken: string }) {
   if (error) return <AdminError />;
   if (!data) return <AdminLoading />;
 
-  async function createEvent() {
-    if (!title.trim() || !start || saving) return;
+  const editingEvent = editingEventId > 0
+    ? data.items.find((item) => item.kind === 'event' && item.eventId === editingEventId) ?? null
+    : null;
 
+  const eventDirty = editingEvent
+    ? title !== editingEvent.title
+      || eventKind !== (editingEvent.eventKind ?? 'coverage')
+      || start !== editingEvent.start
+      || end !== (editingEvent.end ?? '')
+      || location !== (editingEvent.location ?? '')
+      || note !== (editingEvent.note ?? '')
+    : title.trim() !== ''
+      || eventKind !== 'coverage'
+      || start !== ''
+      || end !== ''
+      || location.trim() !== ''
+      || note.trim() !== '';
+
+  const endBeforeStart = Boolean(start && end && end < start);
+  const canSaveEvent = (
+    title.trim() !== ''
+    && start !== ''
+    && !endBeforeStart
+    && eventDirty
+    && !saving
+  );
+
+  function eventKindLabel(kind: AgendaItem['eventKind']) {
+    const labels: Record<NonNullable<AgendaItem['eventKind']>, string> = {
+      coverage: 'Cobertura',
+      interview: 'Entrevista',
+      meeting: 'Reunião',
+      deadline: 'Prazo',
+      event: 'Evento',
+    };
+
+    return kind ? labels[kind] : 'Compromisso';
+  }
+
+  function clearForm() {
+    setEditingEventId(0);
+    setTitle('');
+    setEventKind('coverage');
+    setStart('');
+    setEnd('');
+    setLocation('');
+    setNote('');
+  }
+
+  function startNewEvent() {
+    clearForm();
+    setMessage('idle');
+    setSuccessMessage('');
+    window.requestAnimationFrame(() => {
+      document.getElementById('admin-agenda-editor')?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
+    });
+  }
+
+  function editEvent(item: AgendaItem) {
+    if (item.kind !== 'event' || !item.eventId) return;
+
+    setEditingEventId(item.eventId);
+    setTitle(item.title);
+    setEventKind(item.eventKind ?? 'coverage');
+    setStart(item.start);
+    setEnd(item.end ?? '');
+    setLocation(item.location ?? '');
+    setNote(item.note ?? '');
+    setMessage('idle');
+    setSuccessMessage('');
+
+    window.requestAnimationFrame(() => {
+      document.getElementById('admin-agenda-editor')?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
+    });
+  }
+
+  async function saveEvent() {
+    if (!canSaveEvent) return;
+
+    const wasEditing = editingEventId > 0;
     setSaving(true);
     setMessage('idle');
+    setSuccessMessage('');
 
     try {
       const payload = await adminFetch<AgendaPayload>('/api/admin/agenda.php', {
@@ -1944,24 +2031,24 @@ function AgendaView({ csrfToken }: { csrfToken: string }) {
         headers: { 'X-CSRF-Token': csrfToken },
         body: JSON.stringify({
           action: 'save',
-          title,
+          eventId: editingEventId || 0,
+          title: title.trim(),
           eventKind,
           start,
           end,
-          location,
-          note,
+          location: location.trim(),
+          note: note.trim(),
         }),
       });
 
       if (!payload.ok || !payload.data) throw new Error('agenda_save_invalid');
 
       setData(payload.data);
-      setTitle('');
-      setStart('');
-      setEnd('');
-      setLocation('');
-      setNote('');
-      setEventKind('coverage');
+      clearForm();
+      setSuccessMessage(wasEditing
+        ? 'Compromisso atualizado.'
+        : 'Compromisso adicionado à agenda.'
+      );
       setMessage('saved');
     } catch {
       setMessage('error');
@@ -1971,7 +2058,11 @@ function AgendaView({ csrfToken }: { csrfToken: string }) {
   }
 
   async function deleteEvent(eventId: number) {
-    if (!window.confirm('Remover este compromisso da agenda?')) return;
+    if (deletingId > 0 || !window.confirm('Remover este compromisso da agenda?')) return;
+
+    setDeletingId(eventId);
+    setMessage('idle');
+    setSuccessMessage('');
 
     try {
       const payload = await adminFetch<AgendaPayload>('/api/admin/agenda.php', {
@@ -1979,10 +2070,19 @@ function AgendaView({ csrfToken }: { csrfToken: string }) {
         headers: { 'X-CSRF-Token': csrfToken },
         body: JSON.stringify({ action: 'delete', eventId }),
       });
+
       if (!payload.ok || !payload.data) throw new Error('agenda_delete_invalid');
+
       setData(payload.data);
+      if (editingEventId === eventId) {
+        clearForm();
+      }
+      setSuccessMessage('Compromisso removido da agenda.');
+      setMessage('saved');
     } catch {
       setMessage('error');
+    } finally {
+      setDeletingId(0);
     }
   }
 
@@ -2003,20 +2103,35 @@ function AgendaView({ csrfToken }: { csrfToken: string }) {
 
   return (
     <>
-      <AdminPageHeader
-        eyebrow="Planejamento"
-        title="Agenda editorial"
-        description="Prazos, publicações agendadas, entrevistas, reuniões e coberturas."
+      <AdminEditorGuard
+        dirty={eventDirty}
+        saving={saving}
+        onSave={saveEvent}
       />
+
+      <div className="admin-page-heading-row">
+        <AdminPageHeader
+          eyebrow="Planejamento"
+          title="Agenda editorial"
+          description="Prazos, publicações agendadas, entrevistas, reuniões e coberturas."
+        />
+        <button
+          type="button"
+          className="admin-create-button"
+          onClick={startNewEvent}
+        >
+          + Novo compromisso
+        </button>
+      </div>
 
       {message === 'saved' && (
         <div className="admin-save-feedback admin-save-feedback--success" role="status">
-          Compromisso adicionado à agenda.
+          {successMessage || 'Agenda atualizada.'}
         </div>
       )}
       {message === 'error' && (
         <div className="admin-save-feedback admin-save-feedback--error" role="alert">
-          Não foi possível atualizar a agenda.
+          Não foi possível atualizar a agenda. Revise os campos e tente novamente.
         </div>
       )}
 
@@ -2038,7 +2153,13 @@ function AgendaView({ csrfToken }: { csrfToken: string }) {
               <section className="admin-agenda-day" key={day}>
                 <header>{dayLabel}</header>
                 {items.map((item) => (
-                  <article className={'admin-agenda-item admin-agenda-item--' + item.kind} key={item.id}>
+                  <article
+                    className={
+                      'admin-agenda-item admin-agenda-item--' + item.kind
+                      + (item.eventId === editingEventId ? ' admin-agenda-item--active' : '')
+                    }
+                    key={item.id}
+                  >
                     <div className="admin-agenda-item__time">
                       {new Intl.DateTimeFormat('pt-BR', {
                         hour: '2-digit',
@@ -2052,7 +2173,7 @@ function AgendaView({ csrfToken }: { csrfToken: string }) {
                           ? 'Publicação'
                           : item.kind === 'deadline'
                             ? 'Prazo editorial'
-                            : 'Cobertura'}
+                            : eventKindLabel(item.eventKind)}
                       </span>
                       <h2>
                         {item.adminUrl ? <a href={item.adminUrl}>{item.title}</a> : item.title}
@@ -2061,16 +2182,30 @@ function AgendaView({ csrfToken }: { csrfToken: string }) {
                         {item.location && <>{item.location} • </>}
                         {item.assignee}
                       </p>
+                      {item.end && (
+                        <small>Até {formatAdminDate(item.end)}</small>
+                      )}
                       {item.note && <small>{item.note}</small>}
                     </div>
+
                     {item.kind === 'event' && item.eventId && (
-                      <button
-                        type="button"
-                        className="admin-agenda-item__delete"
-                        onClick={() => void deleteEvent(item.eventId!)}
-                      >
-                        Remover
-                      </button>
+                      <div className="admin-agenda-item__actions">
+                        <button
+                          type="button"
+                          disabled={saving || deletingId > 0}
+                          onClick={() => editEvent(item)}
+                        >
+                          Editar
+                        </button>
+                        <button
+                          type="button"
+                          className="danger"
+                          disabled={saving || deletingId > 0}
+                          onClick={() => void deleteEvent(item.eventId!)}
+                        >
+                          {deletingId === item.eventId ? 'Removendo…' : 'Remover'}
+                        </button>
+                      </div>
                     )}
                   </article>
                 ))}
@@ -2083,21 +2218,42 @@ function AgendaView({ csrfToken }: { csrfToken: string }) {
           )}
         </section>
 
-        <aside className="admin-agenda-create">
+        <aside className="admin-agenda-create" id="admin-agenda-editor">
           <div className="admin-editor-card">
             <div className="admin-editor-card__head">
-              <span>Redação</span>
-              <strong>Novo compromisso</strong>
+              <div>
+                <span>{editingEventId ? 'Editar' : 'Redação'}</span>
+                <strong>{editingEventId ? 'Compromisso #' + editingEventId : 'Novo compromisso'}</strong>
+              </div>
+              <AdminEditorSaveIndicator
+                dirty={eventDirty}
+                state={saving ? 'saving' : message === 'error' ? 'error' : message === 'saved' ? 'saved' : 'idle'}
+              />
             </div>
+
             <div className="admin-editor-card__body admin-editor-card__body--fields">
               <label className="admin-editor-field">
                 <span>Título</span>
-                <input value={title} onChange={(event) => setTitle(event.target.value)} />
+                <input
+                  value={title}
+                  autoFocus={editingEventId === 0}
+                  maxLength={500}
+                  onChange={(event) => {
+                    setTitle(event.target.value);
+                    setMessage('idle');
+                  }}
+                />
               </label>
 
               <label className="admin-editor-field">
                 <span>Tipo</span>
-                <select value={eventKind} onChange={(event) => setEventKind(event.target.value as typeof eventKind)}>
+                <select
+                  value={eventKind}
+                  onChange={(event) => {
+                    setEventKind(event.target.value as typeof eventKind);
+                    setMessage('idle');
+                  }}
+                >
                   <option value="coverage">Cobertura</option>
                   <option value="interview">Entrevista</option>
                   <option value="meeting">Reunião</option>
@@ -2106,34 +2262,91 @@ function AgendaView({ csrfToken }: { csrfToken: string }) {
                 </select>
               </label>
 
-              <label className="admin-editor-field">
-                <span>Início</span>
-                <input type="datetime-local" value={start} onChange={(event) => setStart(event.target.value)} />
-              </label>
+              <div className="admin-agenda-create__row">
+                <label className="admin-editor-field">
+                  <span>Início</span>
+                  <input
+                    type="datetime-local"
+                    value={start}
+                    onChange={(event) => {
+                      setStart(event.target.value);
+                      setMessage('idle');
+                    }}
+                  />
+                </label>
 
-              <label className="admin-editor-field">
-                <span>Fim</span>
-                <input type="datetime-local" value={end} onChange={(event) => setEnd(event.target.value)} />
-              </label>
+                <label className="admin-editor-field">
+                  <span>Fim</span>
+                  <input
+                    type="datetime-local"
+                    value={end}
+                    min={start || undefined}
+                    aria-invalid={endBeforeStart}
+                    onChange={(event) => {
+                      setEnd(event.target.value);
+                      setMessage('idle');
+                    }}
+                  />
+                  {endBeforeStart && (
+                    <small className="admin-field-error">O fim precisa ser posterior ao início.</small>
+                  )}
+                </label>
+              </div>
 
               <label className="admin-editor-field">
                 <span>Local</span>
-                <input value={location} onChange={(event) => setLocation(event.target.value)} />
+                <input
+                  value={location}
+                  maxLength={500}
+                  onChange={(event) => {
+                    setLocation(event.target.value);
+                    setMessage('idle');
+                  }}
+                />
               </label>
 
               <label className="admin-editor-field">
                 <span>Observações</span>
-                <textarea rows={5} value={note} onChange={(event) => setNote(event.target.value)} />
+                <textarea
+                  rows={5}
+                  value={note}
+                  onChange={(event) => {
+                    setNote(event.target.value);
+                    setMessage('idle');
+                  }}
+                />
               </label>
 
-              <button
-                type="button"
-                className="admin-button--primary admin-agenda-create__button"
-                disabled={!title.trim() || !start || saving}
-                onClick={() => void createEvent()}
-              >
-                {saving ? 'Salvando…' : 'Adicionar à agenda'}
-              </button>
+              <div className="admin-agenda-create__actions">
+                {editingEventId > 0 && (
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => {
+                      clearForm();
+                      setMessage('idle');
+                      setSuccessMessage('');
+                    }}
+                  >
+                    Cancelar edição
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="admin-button--primary admin-agenda-create__button"
+                  disabled={!canSaveEvent}
+                  onClick={() => void saveEvent()}
+                >
+                  {saving
+                    ? 'Salvando…'
+                    : editingEventId
+                      ? 'Salvar compromisso'
+                      : 'Adicionar à agenda'}
+                </button>
+              </div>
+              <small className="admin-field-help">
+                Ctrl+S ou Cmd+S salva este compromisso quando houver alterações válidas.
+              </small>
             </div>
           </div>
         </aside>
