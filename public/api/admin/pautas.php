@@ -95,8 +95,8 @@ function nj_pautas_fetch_feed(string $url): string
 
         curl_setopt_array($curl, [
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_MAXREDIRS => 3,
+            CURLOPT_FOLLOWLOCATION => false,
+            CURLOPT_MAXREDIRS => 0,
             CURLOPT_CONNECTTIMEOUT => 5,
             CURLOPT_TIMEOUT => 10,
             CURLOPT_USERAGENT => 'NossoJornalEditorial/1.0',
@@ -119,6 +119,8 @@ function nj_pautas_fetch_feed(string $url): string
     $context = stream_context_create([
         'http' => [
             'timeout' => 10,
+            'follow_location' => 0,
+            'max_redirects' => 0,
             'user_agent' => 'NossoJornalEditorial/1.0',
             'header' => "Accept: application/rss+xml, application/atom+xml, application/xml, text/xml\r\n",
         ],
