@@ -71,9 +71,26 @@
   line-height: 1.4;
 }
 
-.home-story-meta span + span {
+.home-story-meta a {
+  color: inherit;
+  font-weight: 700;
+}
+
+.home-story-meta a:hover,
+.home-story-meta a:focus-visible {
+  color: var(--editorial-color, var(--blue));
+}
+
+.home-story-meta span + span,
+.home-story-meta span + a,
+.home-story-meta a + span,
+.home-story-meta a + a {
   position: relative;
 }
+
+.home-story-meta span + a::before,
+.home-story-meta a + span::before,
+.home-story-meta a + a::before,
 
 .home-story-meta span + span::before {
   content: "•";
