@@ -95,8 +95,15 @@ SQL);
     }
 
     if ($query !== '') {
-        $where[] = "(p.post_title LIKE :search OR p.post_excerpt LIKE :search OR p.post_content LIKE :search)";
-        $params['search'] = '%' . $query . '%';
+        $where[] = "(
+            p.post_title LIKE :search_title
+            OR p.post_excerpt LIKE :search_excerpt
+            OR p.post_content LIKE :search_content
+        )";
+        $searchValue = '%' . $query . '%';
+        $params['search_title'] = $searchValue;
+        $params['search_excerpt'] = $searchValue;
+        $params['search_content'] = $searchValue;
     }
 
     $whereSql = implode("\n    AND ", $where);
