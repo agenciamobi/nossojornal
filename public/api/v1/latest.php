@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require __DIR__ . '/_bootstrap.php';
+require __DIR__ . '/_content.php';
 
 nj_run(static function (): array {
     $pdo = nj_db();
@@ -58,8 +59,8 @@ SQL;
             'title' => $title,
             'slug' => $slug,
             'url' => '/noticia/' . rawurlencode($slug),
-            'publishedAt' => (string) $row['published_at'],
-            'modifiedAt' => (string) $row['modified_at'],
+            'publishedAt' => nj_content_iso8601((string) $row['published_at']),
+            'modifiedAt' => nj_content_iso8601((string) $row['modified_at']),
         ];
     }
 
@@ -68,4 +69,4 @@ SQL;
         'count' => count($items),
         'limit' => $limit,
     ];
-}, 'public, max-age=30, stale-while-revalidate=120');
+}, 'public, max-age=10, stale-while-revalidate=30');
