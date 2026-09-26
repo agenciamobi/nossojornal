@@ -148,6 +148,10 @@ SQL;
     $categoryStatement = $pdo->prepare($categorySql);
     $categoryStatement->execute($postIds);
     $categoryRows = $categoryStatement->fetchAll();
+    $colorOverrides = nj_category_color_overrides(
+        $pdo,
+        array_map(static fn (array $row): int => (int) $row['id'], $categoryRows)
+    );
 
     $categoriesByPost = [];
     $categoryById = [];
@@ -161,6 +165,11 @@ SQL;
             'slug' => (string) $row['slug'],
             'parentId' => (int) $row['parent_id'] > 0 ? (int) $row['parent_id'] : null,
             'url' => '/categoria/' . rawurlencode((string) $row['slug']),
+            'color' => nj_category_color_for(
+                (int) $row['id'],
+                (string) $row['slug'],
+                $colorOverrides
+            ),
         ];
 
         $postId = (int) $row['post_id'];
