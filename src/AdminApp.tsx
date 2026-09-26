@@ -5159,6 +5159,12 @@ function NewCategoryView({ csrfToken }: { csrfToken: string }) {
   if (!data) return <AdminLoading />;
 
   const canCreate = true;
+  const changed =
+    name.trim() !== ''
+    || slug.trim() !== ''
+    || description.trim() !== ''
+    || parentId !== null
+    || color.toUpperCase() !== '#0B57D0';
 
   async function createCategory() {
     if (!canCreate || name.trim() === '' || saveState === 'saving') return;
@@ -5198,6 +5204,11 @@ function NewCategoryView({ csrfToken }: { csrfToken: string }) {
 
   return (
     <>
+      <AdminEditorGuard
+        dirty={changed}
+        saving={saveState === 'saving'}
+        onSave={createCategory}
+      />
       <header className="admin-editor-header">
         <div>
           <a href="/sistema/categorias" className="admin-editor-header__back">← Categorias</a>
@@ -5860,6 +5871,37 @@ function SourcesView({ csrfToken }: { csrfToken: string }) {
   if (error) return <AdminError />;
   if (!data) return <AdminLoading />;
 
+  const editingSource = editingId > 0
+    ? data.items.find((item) => item.id === editingId) ?? null
+    : null;
+  const normalizedTopics = topics
+    .split(/[,;\n]+/)
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const sourceDirty = editingSource
+    ? name !== editingSource.name
+      || organization !== editingSource.organization
+      || role !== editingSource.role
+      || phone !== editingSource.phone
+      || whatsapp !== editingSource.whatsapp
+      || email !== editingSource.email
+      || city !== editingSource.city
+      || JSON.stringify(normalizedTopics) !== JSON.stringify(editingSource.topics)
+      || url !== editingSource.url
+      || notes !== editingSource.notes
+    : [
+        name,
+        organization,
+        role,
+        phone,
+        whatsapp,
+        email,
+        city,
+        topics,
+        url,
+        notes,
+      ].some((value) => value.trim() !== '');
+
   function resetForm() {
     setEditingId(0);
     setName('');
@@ -5948,6 +5990,11 @@ function SourcesView({ csrfToken }: { csrfToken: string }) {
 
   return (
     <>
+      <AdminEditorGuard
+        dirty={sourceDirty}
+        saving={saving}
+        onSave={() => mutateSource('save')}
+      />
       <AdminPageHeader
         eyebrow="Apuração"
         title="Fontes"
@@ -5969,8 +6016,14 @@ function SourcesView({ csrfToken }: { csrfToken: string }) {
         <aside className="admin-source-editor">
           <section className="admin-editor-card">
             <div className="admin-editor-card__head">
-              <span>{editingId ? 'Editar' : 'Nova'}</span>
-              <strong>{editingId ? 'Fonte #' + editingId : 'Cadastrar fonte'}</strong>
+              <div>
+                <span>{editingId ? 'Editar' : 'Nova'}</span>
+                <strong>{editingId ? 'Fonte #' + editingId : 'Cadastrar fonte'}</strong>
+              </div>
+              <AdminEditorSaveIndicator
+                dirty={sourceDirty}
+                state={saving ? 'saving' : message === 'error' ? 'error' : message === 'saved' ? 'saved' : 'idle'}
+              />
             </div>
 
             <div className="admin-editor-card__body admin-editor-card__body--fields">
@@ -7297,6 +7350,54 @@ function PautasView({ csrfToken }: { csrfToken: string }) {
     urgent: 'Urgente',
   };
 
+  const editingPauta = editingId > 0
+    ? data.items.find((item) => item.id === editingId) ?? null
+    : null;
+  const pautaDirty = editingPauta
+    ? title !== editingPauta.title
+      || notes !== editingPauta.notes
+      || stage !== editingPauta.stage
+      || priority !== editingPauta.priority
+      || topic !== editingPauta.topic
+      || sourceName !== editingPauta.sourceName
+      || sourceUrl !== editingPauta.sourceUrl
+      || deadline !== editingPauta.deadline
+      || assigneeId !== editingPauta.assigneeId
+    : [
+        title,
+        notes,
+        topic,
+        sourceName,
+        sourceUrl,
+        deadline,
+      ].some((value) => value.trim() !== '')
+      || stage !== 'inbox'
+      || priority !== 'normal'
+      || assigneeId !== 0;
+
+  const editingFeed = feedEditingId
+    ? data.sources?.find((source) => source.id === feedEditingId) ?? null
+    : null;
+  const feedDirty = feedEditorOpen && (
+    editingFeed
+      ? feedName !== editingFeed.name
+        || feedCategory !== editingFeed.category
+        || feedUrl !== editingFeed.feedUrl
+        || feedKind !== editingFeed.kind
+        || feedPriority !== editingFeed.priority
+        || feedRefreshMinutes !== editingFeed.refreshMinutes
+        || feedMaxItems !== editingFeed.maxItems
+        || feedEnabled !== editingFeed.enabled
+      : feedName.trim() !== ''
+        || feedCategory.trim() !== ''
+        || feedUrl.trim() !== ''
+        || feedKind !== 'jornalística'
+        || feedPriority !== 70
+        || feedRefreshMinutes !== 180
+        || feedMaxItems !== 12
+        || feedEnabled !== true
+  );
+
   function resetForm() {
     setEditingId(0);
     setTitle('');
@@ -7802,6 +7903,11 @@ function PautasView({ csrfToken }: { csrfToken: string }) {
 
   return (
     <>
+      <AdminEditorGuard
+        dirty={pautaDirty || feedDirty}
+        saving={saving || feedSaving}
+        onSave={feedEditorOpen ? () => saveFeed() : () => mutatePauta('save')}
+      />
       <AdminPageHeader
         eyebrow="Planejamento editorial"
         title="Mesa de Pautas"
