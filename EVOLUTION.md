@@ -3186,3 +3186,40 @@ O destaque principal da capa continua usando o tratamento próprio sobre fotogra
 Estados ativos continuam usando `aria-current`, texto e geometria de linha. A cor não é o único sinal.
 
 Transições novas no menu respeitam `prefers-reduced-motion`.
+
+
+## 57. Hierarquia visual dos cards editoriais
+
+As seções de editoria da homepage deixam de tratar as quatro matérias com o mesmo peso visual.
+
+A composição passa a seguir três níveis claros:
+
+```text
+principal
+secundária | secundária
+última / continuidade da editoria
+```
+
+### Desktop
+
+- a matéria principal ocupa metade da largura e recebe a maior manchete da seção;
+- duas secundárias dividem o topo da metade direita;
+- a quarta matéria usa um card horizontal mais compacto, funcionando como continuação da leitura;
+- a cor da editoria aparece em filetes, acentos e estados de interação, sem transformar grandes superfícies em blocos cromáticos;
+- o badge continua podendo refletir a categoria primária própria da matéria.
+
+### Tablet
+
+A matéria principal abre a seção em largura total, seguida por duas secundárias lado a lado e pelo card horizontal final.
+
+### Mobile
+
+O ritmo muda para leitura vertical:
+
+- principal com imagem ampla e manchete dominante;
+- secundárias com thumbnail quadrada e texto ao lado;
+- última matéria ainda mais compacta;
+- metadados reduzem discretamente de escala;
+- proporções de imagem e tamanhos tipográficos deixam de repetir o desktop.
+
+A mudança é puramente de apresentação. O contrato da API e a ordem editorial das matérias permanecem inalterados.
