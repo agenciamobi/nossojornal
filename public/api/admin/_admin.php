@@ -237,10 +237,13 @@ SELECT
 FROM {$users}
 WHERE
     user_status = 0
-    AND (user_login = :identity OR user_email = :identity)
+    AND (user_login = :identity_login OR user_email = :identity_email)
 LIMIT 1
 SQL);
-    $statement->execute(['identity' => $identity]);
+    $statement->execute([
+        'identity_login' => $identity,
+        'identity_email' => $identity,
+    ]);
     $row = $statement->fetch();
 
     return $row ?: null;
