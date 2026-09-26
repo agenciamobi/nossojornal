@@ -2892,3 +2892,47 @@ Criar usuário continua separado de autenticação pública. O browser chama ape
 Criar outro administrador exige também `manage_options`.
 
 Próximo ponto: polir cadastros menores com validação de campo contextual e ações de duplicação/cópia quando fizer sentido, evitando transformar o painel em CRUD genérico.
+
+## 51. Edição completa da Agenda editorial
+
+A Agenda passa a permitir editar os compromissos manuais que já eram persistidos como `nj_agenda_event`.
+
+### Fluxo
+
+Compromissos próprios da redação agora possuem:
+
+```text
+Editar
+Remover
+```
+
+Ao editar, o formulário lateral é preenchido com:
+
+- título;
+- tipo;
+- início;
+- fim;
+- local;
+- observações.
+
+O backend já possuía update por `eventId`; esta rodada conecta a interface ao mesmo contrato em vez de criar outra mutation.
+
+### Confiabilidade
+
+O formulário passa a usar o guard administrativo comum:
+
+- alterações não salvas são protegidas;
+- trocar de compromisso pede confirmação quando há rascunho local;
+- iniciar um novo compromisso não descarta silenciosamente uma edição;
+- `Ctrl+S` / `Cmd+S` salva o compromisso;
+- o cabeçalho mostra o estado do save.
+
+O fim do compromisso também é validado no browser antes da mutation e não pode ser anterior ao início.
+
+### Polimento
+
+A timeline diferencia Cobertura, Entrevista, Reunião, Evento e Prazo usando o `eventKind` já persistido.
+
+O item em edição recebe destaque visual e as ações de editar/remover passam a funcionar melhor em desktop e mobile.
+
+Próximo ponto de maior valor: polir Categorias e cadastros auxiliares, especialmente geração de slug, busca e feedback contextual de validação.
