@@ -62,6 +62,30 @@
   text-transform: uppercase;
 }
 
+.home-category-card .home-eyebrow,
+.home-story-card .home-eyebrow,
+.home-most-read .home-eyebrow,
+.home-compact-story .home-eyebrow {
+  min-height: 22px;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0 7px;
+  background: color-mix(in srgb, var(--editorial-color, var(--blue)) 9%, #fff);
+  text-decoration: none;
+}
+
+.home-category-card .home-eyebrow:hover,
+.home-category-card .home-eyebrow:focus-visible,
+.home-story-card .home-eyebrow:hover,
+.home-story-card .home-eyebrow:focus-visible,
+.home-most-read .home-eyebrow:hover,
+.home-most-read .home-eyebrow:focus-visible,
+.home-compact-story .home-eyebrow:hover,
+.home-compact-story .home-eyebrow:focus-visible {
+  background: var(--editorial-color, var(--blue));
+  color: var(--editorial-contrast, #fff);
+}
+
 .home-story-meta {
   display: flex;
   flex-wrap: wrap;
