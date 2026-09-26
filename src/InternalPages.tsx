@@ -55,6 +55,8 @@ type Article = {
   author: {
     id: number;
     name: string;
+    slug: string;
+    url: string | null;
   };
   featuredImage: FeaturedImage | null;
   views: number;
@@ -79,7 +81,12 @@ type ArticlePayload = {
       kicker: string;
       standfirst: string;
       dateline: string;
-      coauthors: Array<{ id: number; name: string }>;
+      coauthors: Array<{
+        id: number;
+        name: string;
+        slug: string;
+        url: string | null;
+      }>;
       imageCredit: string;
       imageCaption: string;
       originalSourceUrl: string;
@@ -139,6 +146,41 @@ type SeriesPayload = {
   };
 };
 
+type PublicAuthor = {
+  id: number;
+  name: string;
+  slug: string;
+  url: string;
+  bio: string;
+  role: string;
+  website: string;
+  social: Array<{
+    service: 'instagram' | 'facebook' | 'linkedin' | 'x';
+    label: string;
+    url: string;
+  }>;
+  avatar: FeaturedImage | null;
+  publishedCount: number;
+  latestPublishedAt: string;
+};
+
+type AuthorPayload = {
+  ok: boolean;
+  data?: {
+    author: PublicAuthor;
+    items: Article[];
+    pagination: {
+      page: number;
+      perPage: number;
+      total: number;
+      totalPages: number;
+      hasPrevious: boolean;
+      hasNext: boolean;
+    };
+  };
+};
+
+
 type StaticPagePayload = {
   ok: boolean;
   data?: {
@@ -166,6 +208,7 @@ export type PublicRoute =
   | { kind: 'category'; slug: string }
   | { kind: 'tag'; slug: string }
   | { kind: 'series'; slug: string }
+  | { kind: 'author'; slug: string }
   | { kind: 'latest' }
   | { kind: 'search' }
   | { kind: 'static'; slug: 'sobre' | 'contato' }
@@ -195,6 +238,9 @@ export function resolvePublicRoute(pathname: string): PublicRoute {
 
   const series = clean.match(/^\/dossie\/([^/]+)$/);
   if (series) return { kind: 'series', slug: decodeURIComponent(series[1]) };
+
+  const author = clean.match(/^\/autor\/([^/]+)$/);
+  if (author) return { kind: 'author', slug: decodeURIComponent(author[1]) };
 
   const legacyArticle = clean.match(/^\/([^/]+)$/);
   if (legacyArticle) return { kind: 'article', slug: decodeURIComponent(legacyArticle[1]) };
@@ -434,7 +480,11 @@ function ArticleCard({ article }: { article: Article }) {
         {cleanLegacyText(article.excerpt) && <p>{cleanLegacyText(article.excerpt)}</p>}
         <div className="archive-card__meta">
           <span>{formatDate(article.publishedAt)}</span>
-          {article.author.name && <span>{article.author.name}</span>}
+          {article.author.name && (
+            article.author.url
+              ? <a href={article.author.url}>{article.author.name}</a>
+              : <span>{article.author.name}</span>
+          )}
         </div>
       </div>
     </article>
@@ -639,7 +689,22 @@ function ArticlePage({ slug }: { slug: string }) {
             ? [new URL(article.featuredImage.url, window.location.origin).toString()]
             : undefined,
           author: article.author.name
-            ? { '@type': 'Person', name: article.author.name }
+            ? [
+                {
+                  '@type': 'Person',
+                  name: article.author.name,
+                  url: article.author.url
+                    ? new URL(article.author.url, window.location.origin).toString()
+                    : undefined,
+                },
+                ...(payload?.editorial.coauthors ?? []).map((coauthor) => ({
+                  '@type': 'Person',
+                  name: coauthor.name,
+                  url: coauthor.url
+                    ? new URL(coauthor.url, window.location.origin).toString()
+                    : undefined,
+                })),
+              ]
             : { '@type': 'Organization', name: 'Nosso Jornal' },
           publisher: {
             '@type': 'Organization',
@@ -795,10 +860,20 @@ function ArticlePage({ slug }: { slug: string }) {
                   <span className="article-detail__dateline">{payload.editorial.dateline}</span>
                 )}
                 <span className="article-detail__byline-label">Por</span>
-                <strong>
-                  {[article.author.name || 'Nosso Jornal', ...(payload?.editorial.coauthors ?? []).map((item) => item.name)]
-                    .filter(Boolean)
-                    .join(', ')}
+                <strong className="article-detail__authors">
+                  {[
+                    article.author,
+                    ...(payload?.editorial.coauthors ?? []),
+                  ]
+                    .filter((item) => item.name)
+                    .map((item, index) => (
+                      <span key={item.id + '-' + item.name}>
+                        {index > 0 ? ', ' : ''}
+                        {item.url
+                          ? <a href={item.url}>{item.name}</a>
+                          : item.name}
+                      </span>
+                    ))}
                 </strong>
                 <span>Publicado em {formatDate(article.publishedAt)}</span>
                 {article.modifiedAt !== article.publishedAt && (
@@ -1148,6 +1223,188 @@ function ArchivePage({
   );
 }
 
+function AuthorPage({ slug }: { slug: string }) {
+  const params = new URLSearchParams(window.location.search);
+  const currentPage = Math.max(1, Number.parseInt(params.get('page') ?? '1', 10) || 1);
+  const [payload, setPayload] = useState<AuthorPayload['data']>();
+  const [state, setState] = useState<'loading' | 'ready' | 'error' | 'not-found'>('loading');
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const query = new URLSearchParams({
+      slug,
+      page: String(currentPage),
+      per_page: '12',
+    });
+
+    fetch('/api/v1/author.php?' + query.toString(), {
+      headers: { Accept: 'application/json' },
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        if (response.status === 404) {
+          setState('not-found');
+          return null;
+        }
+        if (!response.ok) throw new Error('author_request_failed');
+        return response.json() as Promise<AuthorPayload>;
+      })
+      .then((response) => {
+        if (!response) return;
+        if (!response.ok || !response.data) throw new Error('author_invalid_payload');
+        setPayload(response.data);
+        setState('ready');
+      })
+      .catch((error) => {
+        if (error instanceof DOMException && error.name === 'AbortError') return;
+        setState('error');
+      });
+
+    return () => controller.abort();
+  }, [currentPage, slug]);
+
+  const author = payload?.author;
+  const description = author
+    ? author.bio || `Notícias e reportagens assinadas por ${author.name} no Nosso Jornal.`
+    : '';
+
+  usePageMeta(author?.name ?? '', description, '/autor/' + slug, {
+    image: author?.avatar?.url,
+    imageAlt: author?.avatar?.alt,
+  });
+
+  const jsonLd = useMemo(() => {
+    if (!author) return '';
+
+    return JSON.stringify({
+      '@context': 'https://schema.org',
+      '@type': 'Person',
+      '@id': new URL(author.url + '#person', window.location.origin).toString(),
+      name: author.name,
+      url: new URL(author.url, window.location.origin).toString(),
+      description: author.bio || undefined,
+      jobTitle: author.role || undefined,
+      image: author.avatar
+        ? new URL(author.avatar.url, window.location.origin).toString()
+        : undefined,
+      sameAs: [
+        ...(author.website ? [author.website] : []),
+        ...author.social.map((item) => item.url),
+      ],
+      worksFor: {
+        '@type': 'Organization',
+        name: 'Nosso Jornal',
+        url: window.location.origin,
+      },
+    });
+  }, [author]);
+
+  if (state === 'loading') return <LoadingState label="Carregando perfil do autor" />;
+  if (state === 'not-found') return <ErrorState title="Autor não encontrado" />;
+  if (state === 'error' || !payload || !author) return <ErrorState />;
+
+  return (
+    <main className="internal-main archive-page author-page">
+      {jsonLd && (
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd }} />
+      )}
+
+      <div className="container">
+        <Breadcrumbs
+          items={[
+            { label: 'Capa', href: '/' },
+            { label: author.name },
+          ]}
+        />
+
+        <header className="author-profile">
+          <div className="author-profile__identity">
+            {author.avatar ? (
+              <img
+                className="author-profile__avatar"
+                src={author.avatar.url}
+                srcSet={author.avatar.srcSet || undefined}
+                sizes={author.avatar.srcSet ? '128px' : undefined}
+                width={author.avatar.width ?? undefined}
+                height={author.avatar.height ?? undefined}
+                alt={author.avatar.alt || `Foto de ${author.name}`}
+              />
+            ) : (
+              <div className="author-profile__avatar author-profile__avatar--fallback" aria-hidden="true">
+                {author.name.charAt(0).toUpperCase()}
+              </div>
+            )}
+
+            <div>
+              <span className="internal-kicker">Autor</span>
+              <h1>{author.name}</h1>
+              {author.role && <strong>{author.role}</strong>}
+              {author.bio && <p>{author.bio}</p>}
+
+              {(author.website || author.social.length > 0) && (
+                <div className="author-profile__links" aria-label={`Links de ${author.name}`}>
+                  {author.website && (
+                    <a href={author.website} target="_blank" rel="noopener noreferrer external">
+                      Site ↗
+                    </a>
+                  )}
+                  {author.social.map((item) => (
+                    <a
+                      key={item.service}
+                      href={item.url}
+                      target="_blank"
+                      rel="noopener noreferrer external"
+                    >
+                      {item.label} ↗
+                    </a>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="author-profile__stats" aria-label="Produção editorial">
+            <div>
+              <strong>{author.publishedCount.toLocaleString('pt-BR')}</strong>
+              <span>{author.publishedCount === 1 ? 'publicação' : 'publicações'}</span>
+            </div>
+            {author.latestPublishedAt && (
+              <div>
+                <strong>{formatDate(author.latestPublishedAt, false)}</strong>
+                <span>publicação mais recente</span>
+              </div>
+            )}
+          </div>
+        </header>
+
+        <section className="author-articles" aria-labelledby="author-articles-title">
+          <div className="internal-section-heading">
+            <span>Arquivo</span>
+            <h2 id="author-articles-title">Publicações de {author.name}</h2>
+          </div>
+
+          {payload.items.length > 0 ? (
+            <>
+              <div className="archive-grid">
+                {payload.items.map((article) => (
+                  <ArticleCard article={article} key={article.id} />
+                ))}
+              </div>
+              <Pagination {...payload.pagination} />
+            </>
+          ) : (
+            <div className="archive-empty">
+              <strong>Nenhuma publicação disponível.</strong>
+              <p>Este perfil ainda não possui matérias públicas no novo portal.</p>
+              <a href="/ultimas">Ver últimas notícias</a>
+            </div>
+          )}
+        </section>
+      </div>
+    </main>
+  );
+}
+
 function SeriesPage({ slug }: { slug: string }) {
   const params = new URLSearchParams(window.location.search);
   const currentPage = Math.max(1, Number.parseInt(params.get('page') ?? '1', 10) || 1);
@@ -1458,6 +1715,7 @@ export function InternalPage({ route }: { route: Exclude<PublicRoute, { kind: 'h
   if (route.kind === 'category') return <ArchivePage mode="category" categorySlug={route.slug} />;
   if (route.kind === 'tag') return <ArchivePage mode="tag" tagSlug={route.slug} />;
   if (route.kind === 'series') return <SeriesPage slug={route.slug} />;
+  if (route.kind === 'author') return <AuthorPage slug={route.slug} />;
   if (route.kind === 'latest') return <ArchivePage mode="latest" />;
   if (route.kind === 'search') {
     const query = new URLSearchParams(window.location.search).get('q')?.trim() ?? '';
