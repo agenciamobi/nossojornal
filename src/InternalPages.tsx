@@ -241,6 +241,7 @@ function formatDate(value: string, includeTime = true) {
     month: 'long',
     year: 'numeric',
     ...(includeTime ? { hour: '2-digit', minute: '2-digit' } : {}),
+    timeZone: 'America/Sao_Paulo',
   }).format(date);
 }
 
