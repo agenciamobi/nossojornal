@@ -779,3 +779,45 @@ URLs sociais são validadas por protocolo e host esperado antes da gravação.
 Perfis sem foto usam fallback visual por inicial.
 
 Usuários sem publicações continuam existentes no Sistema, mas não ganham página pública. A camada pública nunca usa e-mail para avatar ou identidade.
+
+## Rodada 11 — proveniência e distribuição
+
+A capacidade de proveniência deixa de ser apenas um item de roadmap e passa a existir no fluxo RSS → pauta → draft → matéria.
+
+### Metadados do draft
+
+O post WordPress continua sendo a autoridade do conteúdo. A trilha adicional usa somente postmeta controlado:
+
+```text
+_nj_provenance_mode
+_nj_provenance_source_name
+_nj_provenance_source_url
+_nj_provenance_external_id
+_nj_provenance_feed_url
+_nj_provenance_captured_at
+_nj_provenance_source_published_at
+_nj_provenance_source_hash
+_nj_provenance_pauta_id
+```
+
+Não há tabela paralela de conteúdo importado.
+
+### Modos
+
+```text
+original
+adapted
+republished
+```
+
+`adapted` é o default ao converter uma pauta capturada de fonte externa. A escolha pode ser alterada pelo editor.
+
+### Deduplicação de captura
+
+A Mesa verifica URL, ID externo e hash do conteúdo de origem. Isso complementa o identificador de feed sem confiar cegamente em um único campo.
+
+### Segurança e exposição
+
+A API pública não expõe o hash, ID externo, feed interno nem ID da pauta. Esses dados existem para rastreabilidade editorial e operação.
+
+Canonical e provenance permanecem independentes. Uma fonte externa registrada não muda canonical automaticamente.
