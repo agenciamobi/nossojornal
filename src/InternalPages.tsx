@@ -62,10 +62,22 @@ type ArticlePayload = {
       createdAt: string;
       modifiedAt: string;
     }>;
+    editorial: {
+      articleType: 'news' | 'analysis' | 'opinion' | 'interview' | 'service' | 'live';
+      kicker: string;
+      standfirst: string;
+      dateline: string;
+      coauthors: Array<{ id: number; name: string }>;
+      imageCredit: string;
+      imageCaption: string;
+      originalSourceUrl: string;
+    };
     seo: {
       title: string;
       description: string;
       canonical: string;
+      socialTitle: string;
+      socialDescription: string;
     };
   };
 };
@@ -183,6 +195,8 @@ function usePageMeta(
     publishedAt?: string;
     modifiedAt?: string;
     section?: string;
+    socialTitle?: string;
+    socialDescription?: string;
   },
 ) {
   const type = options?.type ?? 'website';
@@ -191,21 +205,27 @@ function usePageMeta(
   const publishedAt = options?.publishedAt ?? '';
   const modifiedAt = options?.modifiedAt ?? '';
   const section = options?.section ?? '';
+  const socialTitle = options?.socialTitle ?? '';
+  const socialDescription = options?.socialDescription ?? '';
 
   useEffect(() => {
     if (!title) return;
 
     const fullTitle = title.includes('Nosso Jornal') ? title : `${title} | Nosso Jornal`;
+    const socialFullTitle = socialTitle
+      ? (socialTitle.includes('Nosso Jornal') ? socialTitle : `${socialTitle} | Nosso Jornal`)
+      : fullTitle;
+    const socialText = socialDescription || description;
     document.title = fullTitle;
     ensureMeta('description', description);
-    ensurePropertyMeta('og:title', fullTitle);
-    ensurePropertyMeta('og:description', description);
+    ensurePropertyMeta('og:title', socialFullTitle);
+    ensurePropertyMeta('og:description', socialText);
     ensurePropertyMeta('og:url', new URL(canonicalPath, window.location.origin).toString());
     ensurePropertyMeta('og:type', type);
     ensurePropertyMeta('og:site_name', 'Nosso Jornal');
     ensureMeta('twitter:card', image ? 'summary_large_image' : 'summary');
-    ensureMeta('twitter:title', fullTitle);
-    ensureMeta('twitter:description', description);
+    ensureMeta('twitter:title', socialFullTitle);
+    ensureMeta('twitter:description', socialText);
 
     if (image) {
       const imageUrl = new URL(image, window.location.origin).toString();
@@ -532,13 +552,15 @@ function ArticlePage({ slug }: { slug: string }) {
       publishedAt: article?.publishedAt,
       modifiedAt: article?.modifiedAt,
       section: article?.primaryCategory?.name,
+      socialTitle: payload?.seo.socialTitle,
+      socialDescription: payload?.seo.socialDescription,
     },
   );
 
   const jsonLd = useMemo(() => {
     if (!article) return '';
 
-    const articleUrl = new URL(article.url, window.location.origin).toString();
+    const articleUrl = new URL(payload?.seo.canonical || article.url, window.location.origin).toString();
     const categoryUrl = article.primaryCategory
       ? new URL(article.primaryCategory.url, window.location.origin).toString()
       : null;
@@ -600,7 +622,7 @@ function ArticlePage({ slug }: { slug: string }) {
         },
       ],
     });
-  }, [article]);
+  }, [article, payload?.seo.canonical]);
 
   if (state === 'loading') return <LoadingState label="Carregando matéria" />;
   if (state === 'not-found') return <ErrorState title="Matéria não encontrada" description="A notícia pode ter mudado de endereço ou não estar mais publicada." />;
@@ -662,21 +684,45 @@ function ArticlePage({ slug }: { slug: string }) {
 
         <article className="article-detail">
           <header className="article-detail__header">
-            {article.primaryCategory && (
-              <a className="internal-kicker" href={article.primaryCategory.url}>
-                {article.primaryCategory.name}
-              </a>
-            )}
+            <div className="article-detail__eyebrow-row">
+              {payload?.editorial.kicker ? (
+                <span className="internal-kicker">{payload.editorial.kicker}</span>
+              ) : article.primaryCategory ? (
+                <a className="internal-kicker" href={article.primaryCategory.url}>
+                  {article.primaryCategory.name}
+                </a>
+              ) : null}
+              {payload?.editorial.articleType !== 'news' && (
+                <span className="article-type-badge">
+                  {{
+                    analysis: 'Análise',
+                    opinion: 'Opinião',
+                    interview: 'Entrevista',
+                    service: 'Serviço',
+                    live: 'Ao vivo',
+                  }[payload?.editorial.articleType ?? 'news']}
+                </span>
+              )}
+            </div>
 
             <h1>{article.title}</h1>
-            {cleanLegacyText(article.excerpt) && (
-              <p className="article-detail__deck">{cleanLegacyText(article.excerpt)}</p>
+            {cleanLegacyText(payload?.editorial.standfirst || article.excerpt) && (
+              <p className="article-detail__deck">
+                {cleanLegacyText(payload?.editorial.standfirst || article.excerpt)}
+              </p>
             )}
 
             <div className="article-detail__meta-row">
               <div className="article-detail__byline">
+                {payload?.editorial.dateline && (
+                  <span className="article-detail__dateline">{payload.editorial.dateline}</span>
+                )}
                 <span className="article-detail__byline-label">Por</span>
-                <strong>{article.author.name || 'Nosso Jornal'}</strong>
+                <strong>
+                  {[article.author.name || 'Nosso Jornal', ...(payload?.editorial.coauthors ?? []).map((item) => item.name)]
+                    .filter(Boolean)
+                    .join(', ')}
+                </strong>
                 <span>Publicado em {formatDate(article.publishedAt)}</span>
                 {article.modifiedAt !== article.publishedAt && (
                   <span>Atualizado em {formatDate(article.modifiedAt)}</span>
@@ -710,6 +756,12 @@ function ArticlePage({ slug }: { slug: string }) {
           {article.featuredImage && (
             <figure className="article-detail__hero">
               <img src={article.featuredImage.url} alt={article.featuredImage.alt} />
+              {(payload?.editorial.imageCaption || payload?.editorial.imageCredit) && (
+                <figcaption>
+                  {payload?.editorial.imageCaption && <span>{payload.editorial.imageCaption}</span>}
+                  {payload?.editorial.imageCredit && <small>{payload.editorial.imageCredit}</small>}
+                </figcaption>
+              )}
             </figure>
           )}
 
@@ -767,6 +819,20 @@ function ArticlePage({ slug }: { slug: string }) {
                   ))}
                 </div>
               </div>
+
+              {payload?.editorial.originalSourceUrl && (
+                <div className="article-detail__aside-section">
+                  <span className="internal-kicker">Referência</span>
+                  <a
+                    className="article-original-source"
+                    href={payload.editorial.originalSourceUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Consultar fonte original ↗
+                  </a>
+                </div>
+              )}
 
               {article.primaryCategory && (
                 <a className="article-detail__back-category" href={article.primaryCategory.url}>
