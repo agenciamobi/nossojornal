@@ -18,6 +18,7 @@ nj_admin_run(['POST'], static function (): array {
     $displayName = trim((string) ($body['displayName'] ?? ''));
     $email = trim((string) ($body['email'] ?? ''));
     $requestedRole = trim((string) ($body['role'] ?? ''));
+    $newPassword = (string) ($body['password'] ?? '');
     $publicBio = trim((string) ($body['publicBio'] ?? ''));
     $publicRole = trim((string) ($body['publicRole'] ?? ''));
     $websiteInput = trim((string) ($body['website'] ?? ''));
@@ -36,6 +37,10 @@ nj_admin_run(['POST'], static function (): array {
 
     if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
         throw new NjApiHttpException(422, 'invalid_user_email');
+    }
+
+    if ($newPassword !== '' && (strlen($newPassword) < 12 || strlen($newPassword) > 4096)) {
+        throw new NjApiHttpException(422, 'invalid_user_password');
     }
 
     if ((function_exists('mb_strlen') ? mb_strlen($publicBio, 'UTF-8') : strlen($publicBio)) > 3000) {
@@ -166,6 +171,19 @@ SQL);
             'id' => $id,
         ]);
 
+        if ($newPassword !== '') {
+            $passwordUpdate = $pdo->prepare(
+                "UPDATE {$users}
+                 SET user_pass = :password_hash
+                 WHERE ID = :id
+                 LIMIT 1"
+            );
+            $passwordUpdate->execute([
+                'password_hash' => nj_admin_hash_wp_password($newPassword),
+                'id' => $id,
+            ]);
+        }
+
         nj_admin_upsert_usermeta($pdo, $id, '_nj_public_bio', $publicBio);
         nj_admin_upsert_usermeta($pdo, $id, '_nj_public_role', $publicRole);
         nj_admin_upsert_usermeta($pdo, $id, '_nj_public_instagram', $socialUrls['instagram']);
@@ -248,6 +266,7 @@ SELECT
     user_status,
     user_nicename,
     user_url,
+    user_pass,
     display_name
 FROM {$users}
 WHERE ID = :id
@@ -263,6 +282,13 @@ SQL);
             || (string) $persisted['user_url'] !== $website
         ) {
             throw new RuntimeException('user_readback_mismatch');
+        }
+
+        if (
+            $newPassword !== ''
+            && !nj_admin_verify_wp_password($newPassword, (string) ($persisted['user_pass'] ?? ''))
+        ) {
+            throw new RuntimeException('user_password_readback_mismatch');
         }
 
         if ($role !== $currentRole) {

@@ -1953,3 +1953,21 @@ Falha ao salvar
 Nos editores com save explícito, `Ctrl+S` no Windows/Linux e `Cmd+S` no macOS executam o mesmo salvamento do botão da tela.
 
 A proteção também cobre formulários em andamento da Central de Fontes, Mesa de Pautas e criação de categorias.
+
+## Cadastro e segurança de usuários
+
+A área `/sistema/usuarios` possui busca por nome, login ou e-mail e filtro por função.
+
+Contas com `create_users` + `promote_users` recebem a ação:
+
+```text
++ Novo usuário
+```
+
+O cadastro informa nome de exibição, login, e-mail, função e senha inicial.
+
+O Sistema pode gerar uma senha forte localmente. Depois do cadastro, a tela permite copiar as credenciais antes de sair. A senha não volta da API e não fica disponível para consulta posterior.
+
+O editor de um usuário existente também possui o bloco `Redefinir senha`. Deixar os campos vazios preserva a senha atual.
+
+Alterações de função continuam respeitando capabilities e a proteção especial do usuário proprietário da Mesa de Pautas.

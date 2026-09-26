@@ -821,3 +821,15 @@ A Mesa verifica URL, ID externo e hash do conteúdo de origem. Isso complementa 
 A API pública não expõe o hash, ID externo, feed interno nem ID da pauta. Esses dados existem para rastreabilidade editorial e operação.
 
 Canonical e provenance permanecem independentes. Uma fonte externa registrada não muda canonical automaticamente.
+
+## Usuários — criação e senha nativas
+
+A administração passa a criar usuários diretamente nas tabelas WordPress preservadas, sem depender do runtime WordPress.
+
+O cadastro reutiliza `users`, `usermeta`, roles e capabilities existentes.
+
+A senha é gravada em formato `$wp$2y$` compatível com o verificador já implementado no Sistema. Hashes nunca são expostos pela API.
+
+As mutations exigem sessão administrativa, CSRF e capabilities específicas de usuários. A criação de administrador possui gate adicional por `manage_options`.
+
+O editor existente também pode redefinir senha sem alterar perfil público, autoria ou metadados editoriais.
