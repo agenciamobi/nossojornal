@@ -216,17 +216,6 @@ type WriteReadinessPayload = {
       insert: { available: boolean; reason: string | null };
       update: { available: boolean; reason: string | null };
       delete: { available: boolean; reason: string | null };
-      runtimeWriteReady: boolean;
-    };
-    nextCapabilities: {
-      categoryColorWrite: boolean;
-      draftPostWrite: boolean;
-      publishPostWrite: boolean;
-      mediaUploadWrite: boolean;
-    };
-    probe: {
-      mutatedRows: number;
-      transactionRolledBack: boolean;
     };
   };
 };
@@ -822,7 +811,7 @@ function PostsView({ csrfToken }: { csrfToken: string }) {
         if (payload.ok && payload.data) setWriteReadiness(payload.data);
       })
       .catch(() => {
-        // A listagem continua funcional em modo leitura.
+        // A listagem continua funcional.
       });
   }, [page, query, status]);
 
