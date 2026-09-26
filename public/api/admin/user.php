@@ -57,6 +57,7 @@ SQL);
     $usermeta = nj_table('usermeta');
     $posts = nj_table('posts');
     $profileKeys = [
+        'description',
         '_nj_public_bio',
         '_nj_public_role',
         '_nj_public_instagram',
@@ -103,7 +104,12 @@ SQL);
                 ? '/autor/' . rawurlencode($publicSlug)
                 : null,
             'publishedCount' => $publishedCount,
-            'bio' => (string) ($profileMeta['_nj_public_bio'] ?? ''),
+            'bio' => trim((string) ($profileMeta['_nj_public_bio'] ?? '')) !== ''
+                ? (string) $profileMeta['_nj_public_bio']
+                : (string) ($profileMeta['description'] ?? ''),
+            'bioSource' => trim((string) ($profileMeta['_nj_public_bio'] ?? '')) !== ''
+                ? 'nossojornal'
+                : (isset($profileMeta['description']) ? 'wordpress' : 'empty'),
             'role' => (string) ($profileMeta['_nj_public_role'] ?? ''),
             'website' => (string) ($row['user_url'] ?? ''),
             'instagram' => (string) ($profileMeta['_nj_public_instagram'] ?? ''),
