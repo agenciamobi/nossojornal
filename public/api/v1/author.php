@@ -38,7 +38,39 @@ nj_run(static function (): array {
     $statement = $pdo->prepare($select . <<<SQL
 
 WHERE
-    p.post_author = :author_id
+    (
+        p.post_author = :primary_author_id
+        OR EXISTS (
+            SELECT 1
+            FROM {$postmeta} coauthor_meta
+            WHERE
+                coauthor_meta.post_id = p.ID
+                AND coauthor_meta.meta_key = '_nj_coauthors'
+                AND FIND_IN_SET(
+                    CAST(:coauthor_id AS CHAR),
+                    REPLACE(
+                        REPLACE(
+                            REPLACE(
+                                REPLACE(
+                                    REPLACE(
+                                        REPLACE(coauthor_meta.meta_value, '[', ''),
+                                        ']', ''
+                                    ),
+                                    ' ',
+                                    ''
+                                ),
+                                CHAR(10),
+                                ''
+                            ),
+                            CHAR(13),
+                            ''
+                        ),
+                        CHAR(9),
+                        ''
+                    )
+                ) > 0
+        )
+    )
     AND p.post_type = 'post'
     AND p.post_status = 'publish'
     AND p.post_password = ''
@@ -47,7 +79,10 @@ WHERE
 ORDER BY p.post_date DESC, p.ID DESC
 LIMIT {$perPage} OFFSET {$offset}
 SQL);
-    $statement->execute(['author_id' => (int) $profile['id']]);
+    $statement->execute([
+        'primary_author_id' => (int) $profile['id'],
+        'coauthor_id' => (int) $profile['id'],
+    ]);
     $items = nj_content_hydrate_articles($pdo, $statement->fetchAll());
 
     $total = (int) $profile['publishedCount'];
