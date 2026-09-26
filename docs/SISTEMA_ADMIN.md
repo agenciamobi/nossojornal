@@ -524,13 +524,26 @@ POST /api/admin/user-save.php
 POST /api/admin/settings-save.php
 ```
 
-### Verificação interna de disponibilidade
+### Diagnóstico de banco
 
 ```text
 GET /api/admin/write-readiness.php
 ```
 
-Esse endpoint é usado silenciosamente como feature gate e não aparece como diagnóstico na interface.
+Esse endpoint permanece disponível apenas para diagnóstico técnico.
+
+Ele **não controla mais a habilitação da interface administrativa**.
+
+A regra do painel é:
+
+```text
+capability do usuário
+→ interface habilitada
+→ endpoint executa a mutation
+→ sucesso ou erro da operação
+```
+
+Uma falha de diagnóstico nunca deve transformar o CMS inteiro em somente leitura.
 
 ## 15. Experiência da interface
 
@@ -902,3 +915,26 @@ Implementado na `main`, ainda dependente de deploy e homologação controlada:
 - edição de páginas institucionais.
 
 A primeira validação deve continuar usando conteúdo descartável ou de teste para qualquer mutation.
+
+
+## 25. Correção do bloqueio global de edição
+
+Foi removida a dependência do frontend em `write-readiness.php` para habilitar campos e botões.
+
+O comportamento anterior tinha um efeito indesejado: uma falha no probe de banco deixava o painel inteiro sem edição, incluindo Notícias, Páginas, Categorias, Mídia, Usuários e Configurações.
+
+A partir desta revisão:
+
+- Notícias usam as capabilities editoriais do usuário;
+- Publicar e Agendar usam `publish_posts`;
+- Páginas usam `edit_pages` e capabilities relacionadas;
+- Categorias são gerenciadas por `manage_categories`;
+- Mídia usa `upload_files`;
+- Usuários usam `edit_users` e `promote_users`;
+- Configurações usam `manage_options`;
+- Lixeira usa capabilities de delete;
+- Comentários usam `moderate_comments`.
+
+Os endpoints continuam validando sessão, capability, CSRF, entrada e persistência.
+
+Se uma mutation não puder ser executada no banco, somente aquela ação falha e a interface informa o problema. O restante do painel continua gerenciável.
