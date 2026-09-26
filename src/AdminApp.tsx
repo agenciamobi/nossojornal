@@ -17,6 +17,7 @@ type AdminUser = {
     listUsers: boolean;
     editUsers: boolean;
     manageOptions: boolean;
+    moderateComments: boolean;
     managePautas: boolean;
   };
 };
@@ -201,6 +202,67 @@ type MediaPayload = {
   };
 };
 
+type MediaDetailPayload = {
+  ok: boolean;
+  data?: {
+    media: {
+      id: number;
+      authorId: number;
+      title: string;
+      caption: string;
+      description: string;
+      mimeType: string;
+      url: string;
+      alt: string;
+      attachedFile: string;
+      createdAt: string;
+      modifiedAt: string;
+      parentId: number;
+      usedBy: Array<{
+        id: number;
+        title: string;
+        status: string;
+        adminUrl: string;
+        publicUrl: string | null;
+      }>;
+    };
+  };
+};
+
+type CommentsPayload = {
+  ok: boolean;
+  data?: {
+    items: Array<{
+      id: number;
+      postId: number;
+      postTitle: string;
+      postUrl: string | null;
+      author: string;
+      email: string;
+      authorUrl: string;
+      content: string;
+      createdAt: string;
+      status: 'pending' | 'approved' | 'spam' | 'trash';
+      parentId: number;
+      userId: number;
+    }>;
+    query: string;
+    status: string;
+    counts: {
+      pending: number;
+      approved: number;
+      spam: number;
+      trash: number;
+    };
+    pagination: {
+      page: number;
+      perPage: number;
+      total: number;
+      totalPages: number;
+    };
+  };
+};
+
 type SettingsPayload = {
   ok: boolean;
   data?: {
@@ -238,7 +300,7 @@ type PautasPayload = {
   };
 };
 
-type AdminView = 'dashboard' | 'posts' | 'post' | 'categories' | 'category' | 'categoryNew' | 'media' | 'users' | 'user' | 'settings' | 'pautas';
+type AdminView = 'dashboard' | 'posts' | 'post' | 'categories' | 'category' | 'categoryNew' | 'media' | 'mediaItem' | 'comments' | 'users' | 'user' | 'settings' | 'pautas';
 
 function resolveAdminView(pathname: string): AdminView {
   const clean = pathname.replace(/\/+$/, '');
@@ -249,6 +311,8 @@ function resolveAdminView(pathname: string): AdminView {
   if (clean === '/sistema/categorias/nova') return 'categoryNew';
   if (/^\/sistema\/categorias\/\d+$/.test(clean)) return 'category';
   if (clean === '/sistema/midia') return 'media';
+  if (/^\/sistema\/midia\/\d+$/.test(clean)) return 'mediaItem';
+  if (clean === '/sistema/comentarios') return 'comments';
   if (clean === '/sistema/usuarios') return 'users';
   if (/^\/sistema\/usuarios\/\d+$/.test(clean)) return 'user';
   if (clean === '/sistema/configuracoes') return 'settings';
@@ -302,6 +366,17 @@ function statusLabel(status: string) {
     pending: 'Pendente',
     future: 'Agendado',
     private: 'Privado',
+    trash: 'Lixeira',
+  };
+
+  return labels[status] ?? status;
+}
+
+function commentStatusLabel(status: string) {
+  const labels: Record<string, string> = {
+    pending: 'Pendente',
+    approved: 'Aprovado',
+    spam: 'Spam',
     trash: 'Lixeira',
   };
 
@@ -421,6 +496,7 @@ type AdminIconName =
   | 'news'
   | 'categories'
   | 'media'
+  | 'comments'
   | 'users'
   | 'pautas'
   | 'settings';
@@ -478,6 +554,15 @@ function AdminIcon({ name }: { name: AdminIconName }) {
     );
   }
 
+  if (name === 'comments') {
+    return (
+      <svg {...common}>
+        <path d="M4 5h16v11H9l-5 4z" />
+        <path d="M8 9h8M8 12h5" />
+      </svg>
+    );
+  }
+
   if (name === 'users') {
     return (
       <svg {...common}>
@@ -524,6 +609,9 @@ function AdminNav({ user, view }: { user: AdminUser; view: AdminView }) {
     ...(user.permissions.uploadFiles
       ? [{ key: 'media' as const, label: 'Mídia', href: '/sistema/midia', icon: 'media' as const, group: 'content' as const }]
       : []),
+    ...(user.permissions.moderateComments
+      ? [{ key: 'comments' as const, label: 'Comentários', href: '/sistema/comentarios', icon: 'comments' as const, group: 'content' as const }]
+      : []),
     ...(user.permissions.listUsers
       ? [{ key: 'users' as const, label: 'Usuários', href: '/sistema/usuarios', icon: 'users' as const, group: 'management' as const }]
       : []),
@@ -565,6 +653,7 @@ function AdminNav({ user, view }: { user: AdminUser; view: AdminView }) {
                     view === entry.key
                       || (view === 'post' && entry.key === 'posts')
                       || ((view === 'category' || view === 'categoryNew') && entry.key === 'categories')
+                      || (view === 'mediaItem' && entry.key === 'media')
                       || (view === 'user' && entry.key === 'users')
                       ? 'admin-nav__item admin-nav__item--active'
                       : 'admin-nav__item'
@@ -573,6 +662,7 @@ function AdminNav({ user, view }: { user: AdminUser; view: AdminView }) {
                     view === entry.key
                       || (view === 'post' && entry.key === 'posts')
                       || ((view === 'category' || view === 'categoryNew') && entry.key === 'categories')
+                      || (view === 'mediaItem' && entry.key === 'media')
                       || (view === 'user' && entry.key === 'users')
                       ? 'page'
                       : undefined
