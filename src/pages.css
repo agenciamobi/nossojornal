@@ -5,7 +5,7 @@
 
 .internal-kicker {
   display: inline-flex;
-  color: var(--blue);
+  color: var(--card-accent, var(--editorial-color, var(--blue)));
   font-size: 10px;
   font-weight: 900;
   letter-spacing: .13em;
@@ -390,7 +390,7 @@
 .article-body > p:first-of-type::first-letter {
   float: left;
   margin: .08em .11em 0 0;
-  color: var(--blue);
+  color: var(--editorial-color, var(--blue));
   font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
   font-size: 3.45em;
   font-weight: 600;
@@ -416,7 +416,7 @@
 }
 
 .article-body a {
-  color: var(--blue);
+  color: var(--editorial-color, var(--blue));
   text-decoration: underline;
   text-underline-offset: 3px;
 }
@@ -444,7 +444,7 @@
 .article-body blockquote {
   margin: 34px 0;
   padding: 8px 0 8px 24px;
-  border-left: 4px solid var(--blue);
+  border-left: 4px solid var(--editorial-color, var(--blue));
   color: #34425a;
   font-size: 22px;
   line-height: 1.55;
@@ -496,7 +496,7 @@
 
 .article-toc a:hover,
 .article-toc a:focus-visible {
-  color: var(--blue);
+  color: var(--editorial-color, var(--blue));
 }
 
 .article-detail__aside-section {
@@ -521,7 +521,7 @@
 
 .article-detail__categories a:hover,
 .article-detail__categories a:focus-visible {
-  color: var(--blue);
+  color: var(--editorial-color, var(--blue));
 }
 
 .article-detail__back-category {
@@ -529,7 +529,7 @@
   margin-top: 22px;
   padding-top: 16px;
   border-top: 1px solid var(--line);
-  color: var(--blue);
+  color: var(--editorial-color, var(--blue));
   font-size: 11px;
   font-weight: 900;
 }
@@ -574,6 +574,26 @@
 .archive-header {
   max-width: 880px;
   padding-block: 46px 34px;
+}
+
+.archive-page--category .archive-header {
+  position: relative;
+  padding-top: 58px;
+}
+
+.archive-page--category .archive-header::before {
+  content: "";
+  position: absolute;
+  top: 38px;
+  left: 0;
+  width: 72px;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--editorial-color, var(--blue));
+}
+
+.archive-page--category .archive-grid {
+  border-top-color: var(--editorial-color, var(--ink));
 }
 
 .archive-header h1 {
@@ -635,7 +655,7 @@
 
 .archive-card__body h2 a:hover,
 .archive-card__body h2 a:focus-visible {
-  color: var(--blue);
+  color: var(--card-accent, var(--blue));
 }
 
 .archive-card__body p {
