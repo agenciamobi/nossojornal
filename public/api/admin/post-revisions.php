@@ -18,6 +18,8 @@ function nj_revision_payload(array $row): array
     return [
         'id' => (int) $row['ID'],
         'kind' => (string) ($decoded['kind'] ?? 'save'),
+        'source' => 'nossojornal',
+        'restorable' => true,
         'createdAt' => nj_content_iso8601((string) $row['post_date']),
         'modifiedAt' => nj_content_iso8601((string) $row['post_modified']),
         'author' => [
@@ -28,6 +30,45 @@ function nj_revision_payload(array $row): array
             'title' => (string) ($snapshot['title'] ?? ''),
             'status' => (string) ($snapshot['status'] ?? ''),
             'words' => str_word_count(strip_tags((string) ($snapshot['content'] ?? ''))),
+        ],
+        'snapshot' => $snapshot,
+    ];
+}
+
+function nj_wordpress_revision_payload(array $row): array
+{
+    $postName = (string) ($row['post_name'] ?? '');
+    $isAutosave = str_contains($postName, 'autosave');
+
+    $snapshot = [
+        'title' => (string) ($row['post_title'] ?? ''),
+        'slug' => '',
+        'excerpt' => (string) ($row['post_excerpt'] ?? ''),
+        'content' => (string) ($row['post_content'] ?? ''),
+        'status' => 'historical',
+        'categoryIds' => [],
+        'seo' => [
+            'title' => '',
+            'description' => '',
+            'primaryCategoryId' => 0,
+        ],
+    ];
+
+    return [
+        'id' => (int) $row['ID'],
+        'kind' => $isAutosave ? 'wordpress_autosave' : 'wordpress_revision',
+        'source' => 'wordpress',
+        'restorable' => false,
+        'createdAt' => nj_content_iso8601((string) $row['post_date']),
+        'modifiedAt' => nj_content_iso8601((string) $row['post_modified']),
+        'author' => [
+            'id' => (int) $row['post_author'],
+            'name' => (string) ($row['author_name'] ?? ''),
+        ],
+        'summary' => [
+            'title' => (string) $snapshot['title'],
+            'status' => 'legacy',
+            'words' => str_word_count(strip_tags((string) $snapshot['content'])),
         ],
         'snapshot' => $snapshot,
     ];
@@ -66,11 +107,44 @@ ORDER BY r.post_modified DESC, r.ID DESC
 LIMIT 30
 SQL);
         $statement->execute(['post_id' => $postId]);
-
         $items = array_map('nj_revision_payload', $statement->fetchAll());
 
+        $wordpressStatement = $pdo->prepare(<<<SQL
+SELECT
+    r.ID,
+    r.post_author,
+    r.post_date,
+    r.post_modified,
+    r.post_title,
+    r.post_excerpt,
+    r.post_content,
+    r.post_name,
+    COALESCE(u.display_name, u.user_login, '') AS author_name
+FROM {$posts} r
+LEFT JOIN {$users} u ON u.ID = r.post_author
+WHERE
+    r.post_type = 'revision'
+    AND r.post_parent = :post_id
+    AND r.post_status = 'inherit'
+ORDER BY r.post_modified DESC, r.ID DESC
+LIMIT 30
+SQL);
+        $wordpressStatement->execute(['post_id' => $postId]);
+
+        $items = array_merge(
+            $items,
+            array_map('nj_wordpress_revision_payload', $wordpressStatement->fetchAll())
+        );
+
+        usort(
+            $items,
+            static fn (array $left, array $right): int =>
+                strcmp((string) $right['modifiedAt'], (string) $left['modifiedAt'])
+                ?: ((int) $right['id'] <=> (int) $left['id'])
+        );
+
         return [
-            'items' => $items,
+            'items' => array_slice($items, 0, 30),
         ];
     }
 

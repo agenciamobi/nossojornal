@@ -567,6 +567,8 @@ type PostRevisionsPayload = {
     items: Array<{
       id: number;
       kind: string;
+      source: 'nossojornal' | 'wordpress';
+      restorable: boolean;
       createdAt: string;
       modifiedAt: string;
       author: { id: number; name: string };
@@ -3361,22 +3363,48 @@ function PostEditorView({
               {revisions.length === 0 ? (
                 <p>Nenhuma versão anterior registrada ainda.</p>
               ) : (
-                revisions.slice(0, 8).map((revision) => (
-                  <article key={revision.id}>
-                    <div>
-                      <strong>{revision.kind === 'autosave' ? 'Autosave' : 'Versão salva'}</strong>
-                      <span>{revision.author.name || 'Redação'} • {formatAdminDate(revision.modifiedAt)}</span>
-                      <small>{revision.summary.words.toLocaleString('pt-BR')} palavras</small>
-                    </div>
-                    <button
-                      type="button"
-                      disabled={!canEdit}
-                      onClick={() => void restoreRevision(revision.id)}
-                    >
-                      Restaurar
-                    </button>
-                  </article>
-                ))
+                revisions.slice(0, 12).map((revision) => {
+                  const isWordPress = revision.source === 'wordpress';
+                  const label = isWordPress
+                    ? revision.kind === 'wordpress_autosave'
+                      ? 'Autosave do WordPress'
+                      : 'Revisão do WordPress'
+                    : revision.kind === 'autosave'
+                      ? 'Autosave'
+                      : 'Versão salva';
+
+                  return (
+                    <article key={revision.source + '-' + revision.id}>
+                      <div>
+                        <div className="admin-revision-list__title">
+                          <strong>{label}</strong>
+                          <em className={'admin-revision-source admin-revision-source--' + revision.source}>
+                            {isWordPress ? 'Acervo legado' : 'Nosso Jornal'}
+                          </em>
+                        </div>
+                        <span>{revision.author.name || 'Redação'} • {formatAdminDate(revision.modifiedAt)}</span>
+                        {revision.summary.title && (
+                          <small className="admin-revision-list__headline">{revision.summary.title}</small>
+                        )}
+                        <small>
+                          {revision.summary.words.toLocaleString('pt-BR')} palavras
+                          {isWordPress ? ' • preservada somente para consulta' : ''}
+                        </small>
+                      </div>
+                      {revision.restorable ? (
+                        <button
+                          type="button"
+                          disabled={!canEdit}
+                          onClick={() => void restoreRevision(revision.id)}
+                        >
+                          Restaurar
+                        </button>
+                      ) : (
+                        <span className="admin-revision-readonly">Somente leitura</span>
+                      )}
+                    </article>
+                  );
+                })
               )}
             </div>
           </section>
