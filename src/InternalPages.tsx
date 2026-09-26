@@ -589,6 +589,9 @@ function ArticlePage({ slug }: { slug: string }) {
   if (state === 'not-found') return <ErrorState title="Matéria não encontrada" description="A notícia pode ter mudado de endereço ou não estar mais publicada." />;
   if (state === 'error' || !article) return <ErrorState />;
 
+  const hasServerJsonLd = Boolean(
+    document.querySelector('script[data-nj-server-jsonld="true"]'),
+  );
   const shareUrl = new URL(article.url, window.location.origin).toString();
   const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(`${article.title} ${shareUrl}`)}`;
   const readingMinutes = estimateReadingMinutes(article.contentHtml ?? '');
@@ -622,7 +625,9 @@ function ArticlePage({ slug }: { slug: string }) {
 
   return (
     <main className="internal-main article-page">
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd }} />
+      {!hasServerJsonLd && (
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd }} />
+      )}
 
       <div className="container article-shell">
         <Breadcrumbs
