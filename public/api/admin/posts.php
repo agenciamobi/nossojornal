@@ -38,7 +38,9 @@ nj_admin_run(['GET'], static function (): array {
     $where = ["p.post_type = 'post'"];
     $params = [];
 
-    if ($status !== 'all') {
+    if ($status === 'all') {
+        $where[] = "p.post_status <> 'trash'";
+    } else {
         $where[] = 'p.post_status = :status';
         $params['status'] = $status;
     }
