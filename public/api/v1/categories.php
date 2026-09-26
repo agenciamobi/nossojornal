@@ -72,6 +72,10 @@ SQL;
                 (string) $row['slug'],
                 $colorOverrides
             ),
+            'colorSource' => nj_category_color_source_for(
+                (int) $row['id'],
+                $colorOverrides
+            ),
             'legacyCount' => (int) $row['legacy_count'],
             'publishedCount' => $publishedCount,
             'latestPublishedAt' => $row['latest_published_at'] !== null
