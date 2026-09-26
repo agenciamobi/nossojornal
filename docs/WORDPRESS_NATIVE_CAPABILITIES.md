@@ -400,7 +400,7 @@ Nenhum desses projetos deve ser copiado diretamente. A utilidade está nos padr�
 2. revisões nativas e restauração — concluída;
 3. menus WordPress → header/footer com fallback — concluída;
 4. mídia responsiva baseada em attachment metadata — primeira camada concluída;
-5. redirects automáticos ao alterar slug;
+5. redirects automáticos ao alterar slug — concluída;
 6. perfis públicos de autor;
 7. comentários públicos, se houver decisão editorial;
 8. proveniência/importação e sincronização;
@@ -591,3 +591,85 @@ Uploads novos continuam compatíveis mesmo antes de existir pipeline de geraçã
 Nenhuma miniatura é regenerada e nenhum arquivo histórico é movido.
 
 A rodada apenas consome os derivados já registrados no WordPress. Geração futura de novos tamanhos deve possuir política explícita de storage, formatos e retenção.
+
+## Rodada 9 — redirects automáticos ao alterar slug
+
+A troca de slug de uma notícia já publicada passa a preservar automaticamente a URL anterior.
+
+### Regra
+
+Quando `post-save.php` detecta:
+
+```text
+post_status = publish
+slug anterior != slug novo
+```
+
+o mesmo transaction boundary cria ou atualiza uma regra:
+
+```text
+/noticia/slug-antigo
+→ 301
+/noticia/slug-novo
+```
+
+A regra continua usando o modelo WordPress-backed existente:
+
+```text
+post_type = nj_redirect
+_nj_redirect_from
+_nj_redirect_to
+_nj_redirect_status
+```
+
+Metadados adicionais identificam proveniência:
+
+```text
+_nj_redirect_origin = auto_slug
+_nj_redirect_object_type
+_nj_redirect_object_id
+```
+
+### Cadeias e reversões
+
+O helper compartilhado `public/api/admin/_redirects.php` reduz cadeias automáticas.
+
+Exemplo:
+
+```text
+A → B
+B → C
+```
+
+vira:
+
+```text
+A → C
+B → C
+```
+
+Se a matéria retornar a um slug anterior, a regra automática que apontava para fora desse caminho é retirada antes da nova canonicalização, evitando loop reverso.
+
+### Autoridade manual
+
+Redirecionamentos criados ou editados explicitamente na tela de WordPress Tools são marcados como `manual`.
+
+Uma alteração automática de slug nunca sobrescreve uma regra manual com a mesma origem. Nesse caso:
+
+- o conteúdo é salvo;
+- a regra manual permanece;
+- a API retorna `manual_conflict`;
+- o editor exibe aviso ao operador.
+
+Editar uma regra automática pela interface a converte em manual, tornando a decisão humana a autoridade.
+
+### Restore de revisão
+
+Quando uma revisão `nj_revision` restaura um slug diferente em uma matéria publicada, a mesma preservação automática é aplicada.
+
+O restore WordPress em modo `content_merge` não altera slug, portanto não precisa criar redirect.
+
+### Páginas
+
+O suporte também foi conectado ao save de páginas quando uma rota pública mapeada puder mudar. Páginas estruturais atualmente protegidas continuam com slug bloqueado.
+
