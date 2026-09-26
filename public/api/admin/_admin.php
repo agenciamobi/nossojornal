@@ -352,6 +352,62 @@ function nj_admin_verify_wp_password(string $password, string $storedHash): bool
     return false;
 }
 
+function nj_admin_hash_wp_password(string $password): string
+{
+    if ($password === '' || strlen($password) > 4096) {
+        throw new InvalidArgumentException('invalid_password');
+    }
+
+    $prepared = base64_encode(hash_hmac('sha384', $password, 'wp-sha384', true));
+    $hash = password_hash($prepared, PASSWORD_BCRYPT);
+
+    if (!is_string($hash) || $hash === '') {
+        throw new RuntimeException('password_hash_failed');
+    }
+
+    return '$wp' . $hash;
+}
+
+function nj_admin_role_level(PDO $pdo, string $role): int
+{
+    $definitions = nj_admin_role_definitions($pdo);
+    $roleCapabilities = $definitions[$role]['capabilities'] ?? [];
+
+    if (!is_array($roleCapabilities)) {
+        return 0;
+    }
+
+    for ($candidate = 10; $candidate >= 0; $candidate--) {
+        if (($roleCapabilities['level_' . $candidate] ?? false) === true) {
+            return $candidate;
+        }
+    }
+
+    return 0;
+}
+
+function nj_admin_set_user_role(PDO $pdo, int $userId, string $role): void
+{
+    $definitions = nj_admin_role_definitions($pdo);
+    if (!isset($definitions[$role])) {
+        throw new NjApiHttpException(422, 'invalid_user_role');
+    }
+
+    $prefix = (string) nj_db_config()['table_prefix'];
+    nj_admin_upsert_usermeta(
+        $pdo,
+        $userId,
+        $prefix . 'capabilities',
+        serialize([$role => true])
+    );
+    nj_admin_upsert_usermeta(
+        $pdo,
+        $userId,
+        $prefix . 'user_level',
+        (string) nj_admin_role_level($pdo, $role)
+    );
+}
+
 function nj_admin_login(string $identity, string $password): array
 {
     $identity = trim($identity);
