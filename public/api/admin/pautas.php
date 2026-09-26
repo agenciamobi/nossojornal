@@ -17,6 +17,94 @@ const NJ_PAUTA_META_SOURCE_HASH = '_nj_pauta_source_hash';
 const NJ_PAUTA_META_DEADLINE = '_nj_pauta_deadline';
 const NJ_PAUTA_META_ASSIGNEE = '_nj_pauta_assignee';
 const NJ_PAUTA_META_DRAFT_ID = '_nj_pauta_draft_post_id';
+const NJ_PAUTA_FEED_STATE_OPTION = 'nj_pautas_feed_state';
+
+function nj_pautas_feed_state(PDO $pdo): array
+{
+    $options = nj_table('options');
+    $statement = $pdo->prepare(
+        "SELECT option_value
+         FROM {$options}
+         WHERE option_name = :name
+         LIMIT 1"
+    );
+    $statement->execute(['name' => NJ_PAUTA_FEED_STATE_OPTION]);
+    $raw = $statement->fetchColumn();
+
+    if (!is_string($raw) || trim($raw) === '') {
+        return [];
+    }
+
+    $decoded = json_decode($raw, true);
+    return is_array($decoded) ? $decoded : [];
+}
+
+function nj_pautas_save_feed_state(PDO $pdo, array $state): void
+{
+    $options = nj_table('options');
+    $encoded = json_encode(
+        $state,
+        JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE
+    );
+
+    if (!is_string($encoded)) {
+        throw new RuntimeException('feed_state_encode_failed');
+    }
+
+    $statement = $pdo->prepare(<<<SQL
+INSERT INTO {$options} (option_name, option_value, autoload)
+VALUES (:name, :value, 'no')
+ON DUPLICATE KEY UPDATE
+    option_value = VALUES(option_value),
+    autoload = 'no'
+SQL);
+    $statement->execute([
+        'name' => NJ_PAUTA_FEED_STATE_OPTION,
+        'value' => $encoded,
+    ]);
+}
+
+function nj_pautas_feed_state_key(string $feedUrl): string
+{
+    return hash('sha256', trim($feedUrl));
+}
+
+function nj_pautas_feed_state_public(array $source, array $state): array
+{
+    $entry = $state[nj_pautas_feed_state_key((string) $source['feedUrl'])] ?? [];
+    $lastAttemptAt = trim((string) ($entry['lastAttemptAt'] ?? ''));
+    $lastSuccessAt = trim((string) ($entry['lastSuccessAt'] ?? ''));
+    $consecutiveFailures = max(0, (int) ($entry['consecutiveFailures'] ?? 0));
+    $status = (string) ($entry['status'] ?? 'never');
+
+    if (!in_array($status, ['never', 'healthy', 'error'], true)) {
+        $status = 'never';
+    }
+
+    return [
+        'status' => $status,
+        'lastAttemptAt' => $lastAttemptAt,
+        'lastSuccessAt' => $lastSuccessAt,
+        'lastHttpStatus' => max(0, (int) ($entry['lastHttpStatus'] ?? 0)),
+        'lastDurationMs' => max(0, (int) ($entry['lastDurationMs'] ?? 0)),
+        'lastCaptured' => max(0, (int) ($entry['lastCaptured'] ?? 0)),
+        'totalCaptured' => max(0, (int) ($entry['totalCaptured'] ?? 0)),
+        'consecutiveFailures' => $consecutiveFailures,
+    ];
+}
+
+function nj_pautas_sources_with_health(PDO $pdo): array
+{
+    $state = nj_pautas_feed_state($pdo);
+
+    return array_map(
+        static function (array $source) use ($state): array {
+            $source['health'] = nj_pautas_feed_state_public($source, $state);
+            return $source;
+        },
+        nj_pautas_sources()
+    );
+}
 
 function nj_pautas_sources(): array
 {
@@ -90,7 +178,7 @@ function nj_pautas_assignees(PDO $pdo): array
     return $result;
 }
 
-function nj_pautas_fetch_feed(string $url): string
+function nj_pautas_fetch_feed(string $url): array
 {
     if (function_exists('curl_init')) {
         $curl = curl_init($url);
@@ -108,7 +196,9 @@ function nj_pautas_fetch_feed(string $url): string
             CURLOPT_HTTPHEADER => ['Accept: application/rss+xml, application/atom+xml, application/xml, text/xml'],
         ]);
 
+        $startedAt = microtime(true);
         $body = curl_exec($curl);
+        $durationMs = max(0, (int) round((microtime(true) - $startedAt) * 1000));
         $status = (int) curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
         $error = curl_error($curl);
         curl_close($curl);
@@ -118,7 +208,11 @@ function nj_pautas_fetch_feed(string $url): string
             throw new NjApiHttpException(502, 'feed_fetch_failed');
         }
 
-        return $body;
+        return [
+            'body' => $body,
+            'httpStatus' => $status,
+            'durationMs' => $durationMs,
+        ];
     }
 
     $context = stream_context_create([
@@ -131,13 +225,30 @@ function nj_pautas_fetch_feed(string $url): string
         ],
     ]);
 
+    $startedAt = microtime(true);
     $body = @file_get_contents($url, false, $context);
+    $durationMs = max(0, (int) round((microtime(true) - $startedAt) * 1000));
 
     if (!is_string($body) || $body === '') {
         throw new NjApiHttpException(502, 'feed_fetch_failed');
     }
 
-    return $body;
+    $status = 200;
+    foreach ($http_response_header ?? [] as $header) {
+        if (preg_match('#^HTTP/\S+\s+(\d{3})#i', (string) $header, $match) === 1) {
+            $status = (int) $match[1];
+        }
+    }
+
+    if ($status < 200 || $status >= 400) {
+        throw new NjApiHttpException(502, 'feed_fetch_failed');
+    }
+
+    return [
+        'body' => $body,
+        'httpStatus' => $status,
+        'durationMs' => $durationMs,
+    ];
 }
 
 function nj_pautas_feed_datetime(string $value): string
@@ -247,11 +358,12 @@ function nj_pautas_parse_feed(string $xmlBody): array
     return $items;
 }
 
-function nj_pautas_capture(PDO $pdo, array $user, array $source): int
+function nj_pautas_capture(PDO $pdo, array $user, array $source): array
 {
     $posts = nj_table('posts');
     $postmeta = nj_table('postmeta');
-    $feedItems = nj_pautas_parse_feed(nj_pautas_fetch_feed((string) $source['feedUrl']));
+    $feedResponse = nj_pautas_fetch_feed((string) $source['feedUrl']);
+    $feedItems = nj_pautas_parse_feed((string) $feedResponse['body']);
     $captured = 0;
 
     $duplicate = $pdo->prepare(<<<SQL
@@ -336,7 +448,11 @@ SQL);
         $captured++;
     }
 
-    return $captured;
+    return [
+        'captured' => $captured,
+        'httpStatus' => max(0, (int) ($feedResponse['httpStatus'] ?? 0)),
+        'durationMs' => max(0, (int) ($feedResponse['durationMs'] ?? 0)),
+    ];
 }
 
 function nj_pautas_items(PDO $pdo): array
@@ -465,7 +581,7 @@ nj_admin_run(['GET', 'POST'], static function (string $method): array {
         return [
             'owner' => ['login' => NJ_PAUTAS_OWNER_LOGIN, 'userId' => $user['id']],
             'pipeline' => ['Entrada', 'Selecionada', 'Apuração', 'Pronta', 'Em redação'],
-            'sources' => nj_pautas_sources(),
+            'sources' => nj_pautas_sources_with_health($pdo),
             'items' => nj_pautas_items($pdo),
             'assignees' => nj_pautas_assignees($pdo),
         ];
@@ -501,10 +617,45 @@ nj_admin_run(['GET', 'POST'], static function (string $method): array {
             throw new NjApiHttpException(422, 'feed_not_allowed');
         }
 
-        $captured = nj_pautas_capture($pdo, $user, $selectedSource);
+        $feedUrl = (string) $selectedSource['feedUrl'];
+        $state = nj_pautas_feed_state($pdo);
+        $stateKey = nj_pautas_feed_state_key($feedUrl);
+        $previous = is_array($state[$stateKey] ?? null) ? $state[$stateKey] : [];
+        $attemptAt = gmdate('c');
+
+        try {
+            $capture = nj_pautas_capture($pdo, $user, $selectedSource);
+            $captured = max(0, (int) ($capture['captured'] ?? 0));
+
+            $state[$stateKey] = [
+                'status' => 'healthy',
+                'lastAttemptAt' => $attemptAt,
+                'lastSuccessAt' => $attemptAt,
+                'lastHttpStatus' => max(0, (int) ($capture['httpStatus'] ?? 0)),
+                'lastDurationMs' => max(0, (int) ($capture['durationMs'] ?? 0)),
+                'lastCaptured' => $captured,
+                'totalCaptured' => max(0, (int) ($previous['totalCaptured'] ?? 0)) + $captured,
+                'consecutiveFailures' => 0,
+            ];
+            nj_pautas_save_feed_state($pdo, $state);
+        } catch (Throwable $error) {
+            $state[$stateKey] = [
+                'status' => 'error',
+                'lastAttemptAt' => $attemptAt,
+                'lastSuccessAt' => (string) ($previous['lastSuccessAt'] ?? ''),
+                'lastHttpStatus' => 0,
+                'lastDurationMs' => 0,
+                'lastCaptured' => 0,
+                'totalCaptured' => max(0, (int) ($previous['totalCaptured'] ?? 0)),
+                'consecutiveFailures' => max(0, (int) ($previous['consecutiveFailures'] ?? 0)) + 1,
+            ];
+            nj_pautas_save_feed_state($pdo, $state);
+            throw $error;
+        }
 
         return [
             'items' => nj_pautas_items($pdo),
+            'sources' => nj_pautas_sources_with_health($pdo),
             'captured' => $captured,
             'captureFailures' => 0,
             'draft' => null,
