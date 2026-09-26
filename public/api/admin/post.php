@@ -189,6 +189,5 @@ SQL);
                 : null,
         ],
         'categories' => $allCategories,
-        'mode' => 'read_only',
     ];
 });
