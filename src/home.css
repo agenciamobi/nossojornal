@@ -274,7 +274,7 @@
 .home-category-card h3 a:focus-visible,
 .home-most-read h3 a:hover,
 .home-most-read h3 a:focus-visible {
-  color: var(--blue);
+  color: var(--editorial-color, var(--blue));
 }
 
 .home-latest {
@@ -295,6 +295,11 @@
 
 .home-story-card {
   min-width: 0;
+  border-top: 3px solid transparent;
+}
+
+.home-story-card:hover {
+  border-top-color: var(--editorial-color, var(--blue));
 }
 
 .home-story-card__media {
@@ -412,6 +417,10 @@
 
 .home-category-card {
   min-width: 0;
+}
+
+.home-category-card .home-eyebrow {
+  color: var(--editorial-color, var(--blue));
 }
 
 .home-category-card__media {
