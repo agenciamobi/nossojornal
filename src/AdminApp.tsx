@@ -5066,6 +5066,23 @@ function PautasView({ csrfToken }: { csrfToken: string }) {
     }
   }
 
+  async function captureOneFeed(feedUrl: string) {
+    const payload = await adminFetch<PautasPayload>('/api/admin/pautas.php', {
+      method: 'POST',
+      headers: { 'X-CSRF-Token': csrfToken },
+      body: JSON.stringify({
+        action: 'capture',
+        feedUrl,
+      }),
+    });
+
+    if (!payload.ok || !payload.data) {
+      throw new Error('pauta_capture_invalid');
+    }
+
+    return payload.data;
+  }
+
   async function captureFeed(feedUrl = '') {
     if (capturing) return;
 
@@ -5074,36 +5091,64 @@ function PautasView({ csrfToken }: { csrfToken: string }) {
     setMessage('idle');
 
     try {
-      const payload = await adminFetch<PautasPayload>('/api/admin/pautas.php', {
-        method: 'POST',
-        headers: { 'X-CSRF-Token': csrfToken },
-        body: JSON.stringify({
-          action: 'capture',
-          feedUrl,
-        }),
-      });
+      if (feedUrl) {
+        const next = await captureOneFeed(feedUrl);
+        const captured = next.captured ?? 0;
 
-      if (!payload.ok || !payload.data) throw new Error('pauta_capture_invalid');
+        setData((current) => current
+          ? {
+              ...current,
+              ...next,
+              owner: next.owner ?? current.owner,
+              pipeline: next.pipeline ?? current.pipeline,
+              sources: next.sources ?? current.sources,
+              assignees: next.assignees ?? current.assignees,
+            }
+          : next
+        );
 
-      setData((current) => current
-        ? {
-            ...current,
-            ...payload.data,
-            owner: payload.data.owner ?? current.owner,
-            pipeline: payload.data.pipeline ?? current.pipeline,
-            sources: payload.data.sources ?? current.sources,
-            assignees: payload.data.assignees ?? current.assignees,
+        setCaptureResult(
+          captured > 0
+            ? captured + ' pauta' + (captured === 1 ? '' : 's') + ' nova' + (captured === 1 ? '' : 's') + ' adicionada' + (captured === 1 ? '' : 's') + '.'
+            : 'Nenhuma pauta nova encontrada nesse feed.',
+        );
+        return;
+      }
+
+      const sources = data.sources ?? [];
+      let cursor = 0;
+      let captured = 0;
+      let failures = 0;
+
+      async function worker() {
+        while (cursor < sources.length) {
+          const source = sources[cursor];
+          cursor += 1;
+
+          try {
+            const result = await captureOneFeed(source.feedUrl);
+            captured += result.captured ?? 0;
+          } catch {
+            failures += 1;
           }
-        : payload.data
-      );
+        }
+      }
 
-      const captured = payload.data.captured ?? 0;
-      const failures = payload.data.captureFailures ?? 0;
+      const workers = Math.min(4, Math.max(1, sources.length));
+      await Promise.all(Array.from({ length: workers }, () => worker()));
+
+      const refreshed = await adminFetch<PautasPayload>('/api/admin/pautas.php');
+      if (!refreshed.ok || !refreshed.data) {
+        throw new Error('pautas_refresh_invalid');
+      }
+
+      setData(refreshed.data);
       setCaptureResult(
         captured > 0
           ? captured + ' pauta' + (captured === 1 ? '' : 's') + ' nova' + (captured === 1 ? '' : 's') + ' adicionada' + (captured === 1 ? '' : 's') + '.'
+            + (failures > 0 ? ' ' + failures + ' feed' + (failures === 1 ? '' : 's') + ' não responderam.' : '')
           : failures > 0
-            ? 'Nenhuma pauta nova. Alguns feeds não responderam.'
+            ? 'Nenhuma pauta nova. ' + failures + ' feed' + (failures === 1 ? '' : 's') + ' não responderam.'
             : 'Nenhuma pauta nova encontrada.',
       );
     } catch {
