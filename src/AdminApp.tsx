@@ -461,6 +461,26 @@ type PautaItem = {
   draftAdminUrl: string | null;
 };
 
+type PautaFeedSource = {
+  id: string;
+  name: string;
+  category: string;
+  feedUrl: string;
+  kind: string;
+  priority: number;
+  enabled: boolean;
+  health: {
+        status: 'never' | 'healthy' | 'error';
+        lastAttemptAt: string;
+        lastSuccessAt: string;
+        lastHttpStatus: number;
+        lastDurationMs: number;
+        lastCaptured: number;
+        totalCaptured: number;
+    consecutiveFailures: number;
+  };
+};
+
 type PautasPayload = {
   ok: boolean;
   data?: {
@@ -469,23 +489,7 @@ type PautasPayload = {
       userId: number;
     };
     pipeline?: string[];
-    sources?: Array<{
-      name: string;
-      category: string;
-      feedUrl: string;
-      kind: string;
-      priority: number;
-      health: {
-        status: 'never' | 'healthy' | 'error';
-        lastAttemptAt: string;
-        lastSuccessAt: string;
-        lastHttpStatus: number;
-        lastDurationMs: number;
-        lastCaptured: number;
-        totalCaptured: number;
-        consecutiveFailures: number;
-      };
-    }>;
+    sources?: PautaFeedSource[];
     items: PautaItem[];
     lastReviewAt?: string;
     assignees?: Array<{
@@ -7164,6 +7168,15 @@ function PautasView({ csrfToken }: { csrfToken: string }) {
   const [newOnly, setNewOnly] = useState(false);
   const [sortMode, setSortMode] = useState<'recent' | 'priority'>('recent');
   const [reviewing, setReviewing] = useState(false);
+  const [feedEditorOpen, setFeedEditorOpen] = useState(false);
+  const [feedEditingId, setFeedEditingId] = useState('');
+  const [feedName, setFeedName] = useState('');
+  const [feedCategory, setFeedCategory] = useState('');
+  const [feedUrl, setFeedUrl] = useState('');
+  const [feedKind, setFeedKind] = useState('jornalística');
+  const [feedPriority, setFeedPriority] = useState(70);
+  const [feedEnabled, setFeedEnabled] = useState(true);
+  const [feedSaving, setFeedSaving] = useState(false);
 
   useEffect(() => {
     void adminFetch<PautasPayload>('/api/admin/pautas.php')
@@ -7290,6 +7303,119 @@ function PautasView({ csrfToken }: { csrfToken: string }) {
     }
   }
 
+  function resetFeedEditor() {
+    setFeedEditorOpen(false);
+    setFeedEditingId('');
+    setFeedName('');
+    setFeedCategory('');
+    setFeedUrl('');
+    setFeedKind('jornalística');
+    setFeedPriority(70);
+    setFeedEnabled(true);
+  }
+
+  function editFeed(source: PautaFeedSource) {
+    setFeedEditorOpen(true);
+    setFeedEditingId(source.id);
+    setFeedName(source.name);
+    setFeedCategory(source.category);
+    setFeedUrl(source.feedUrl);
+    setFeedKind(source.kind);
+    setFeedPriority(source.priority);
+    setFeedEnabled(source.enabled);
+    setMessage('idle');
+  }
+
+  async function saveFeed(event?: FormEvent) {
+    event?.preventDefault();
+    if (feedSaving || !feedName.trim() || !feedUrl.trim()) return;
+
+    setFeedSaving(true);
+    setMessage('idle');
+
+    try {
+      const payload = await adminFetch<PautasPayload>('/api/admin/pautas.php', {
+        method: 'POST',
+        headers: { 'X-CSRF-Token': csrfToken },
+        body: JSON.stringify({
+          action: 'feed_save',
+          feed: {
+            id: feedEditingId,
+            name: feedName,
+            category: feedCategory,
+            feedUrl,
+            kind: feedKind,
+            priority: feedPriority,
+            enabled: feedEnabled,
+          },
+        }),
+      });
+
+      if (!payload.ok || !payload.data) {
+        throw new Error('feed_save_invalid');
+      }
+
+      setData((current) => current
+        ? {
+            ...current,
+            ...payload.data,
+            assignees: payload.data?.assignees ?? current.assignees,
+          }
+        : payload.data
+      );
+      resetFeedEditor();
+      setMessage('saved');
+    } catch {
+      setMessage('error');
+    } finally {
+      setFeedSaving(false);
+    }
+  }
+
+  async function deleteFeed() {
+    if (!feedEditingId || feedSaving) return;
+
+    const source = data?.sources?.find((item) => item.id === feedEditingId);
+    if (!window.confirm(
+      'Remover ' + (source?.name || 'esta fonte') + ' do Radar? Pautas já capturadas serão preservadas.',
+    )) {
+      return;
+    }
+
+    setFeedSaving(true);
+    setMessage('idle');
+
+    try {
+      const payload = await adminFetch<PautasPayload>('/api/admin/pautas.php', {
+        method: 'POST',
+        headers: { 'X-CSRF-Token': csrfToken },
+        body: JSON.stringify({
+          action: 'feed_delete',
+          feedId: feedEditingId,
+        }),
+      });
+
+      if (!payload.ok || !payload.data) {
+        throw new Error('feed_delete_invalid');
+      }
+
+      setData((current) => current
+        ? {
+            ...current,
+            ...payload.data,
+            assignees: payload.data?.assignees ?? current.assignees,
+          }
+        : payload.data
+      );
+      resetFeedEditor();
+      setMessage('saved');
+    } catch {
+      setMessage('error');
+    } finally {
+      setFeedSaving(false);
+    }
+  }
+
   async function captureOneFeed(feedUrl: string) {
     const payload = await adminFetch<PautasPayload>('/api/admin/pautas.php', {
       method: 'POST',
@@ -7339,7 +7465,7 @@ function PautasView({ csrfToken }: { csrfToken: string }) {
         return;
       }
 
-      const sources = data?.sources ?? [];
+      const sources = (data?.sources ?? []).filter((source) => source.enabled);
       let cursor = 0;
       let captured = 0;
       let failures = 0;
@@ -7877,15 +8003,119 @@ function PautasView({ csrfToken }: { csrfToken: string }) {
             <span>Radar</span>
             <h2>Fontes monitoradas</h2>
           </div>
-          <button
-            type="button"
-            className="admin-radar-capture"
-            disabled={Boolean(capturing)}
-            onClick={() => void captureFeed()}
-          >
-            {capturing === 'all' ? 'Capturando…' : 'Capturar agora'}
-          </button>
+          <div className="admin-pautas-radar__actions">
+            <button
+              type="button"
+              className="admin-radar-add"
+              disabled={Boolean(capturing) || feedSaving}
+              onClick={() => {
+                resetFeedEditor();
+                setFeedEditorOpen(true);
+              }}
+            >
+              + Fonte RSS
+            </button>
+            <button
+              type="button"
+              className="admin-radar-capture"
+              disabled={Boolean(capturing) || !(data.sources ?? []).some((source) => source.enabled)}
+              onClick={() => void captureFeed()}
+            >
+              {capturing === 'all' ? 'Capturando…' : 'Capturar agora'}
+            </button>
+          </div>
         </div>
+
+        {feedEditorOpen && (
+          <form className="admin-feed-editor" onSubmit={(event) => void saveFeed(event)}>
+            <div className="admin-feed-editor__head">
+              <div>
+                <span>{feedEditingId ? 'Editar fonte' : 'Nova fonte'}</span>
+                <strong>{feedEditingId ? feedName || 'Fonte RSS' : 'Adicionar ao Radar'}</strong>
+              </div>
+              <button type="button" onClick={resetFeedEditor} aria-label="Fechar editor de feed">×</button>
+            </div>
+
+            <div className="admin-feed-editor__fields">
+              <label>
+                <span>Nome</span>
+                <input
+                  value={feedName}
+                  maxLength={250}
+                  required
+                  placeholder="Ex.: Agência Brasil"
+                  onChange={(event) => setFeedName(event.target.value)}
+                />
+              </label>
+              <label>
+                <span>Tema / categoria</span>
+                <input
+                  value={feedCategory}
+                  maxLength={160}
+                  placeholder="Pelotas, Tecnologia, Ciência…"
+                  onChange={(event) => setFeedCategory(event.target.value)}
+                />
+              </label>
+              <label className="admin-feed-editor__url">
+                <span>URL RSS/Atom</span>
+                <input
+                  type="url"
+                  value={feedUrl}
+                  required
+                  placeholder="https://exemplo.com/feed/"
+                  onChange={(event) => setFeedUrl(event.target.value)}
+                />
+                <small>Somente HTTPS público. Endereços privados, localhost e redirects não são aceitos.</small>
+              </label>
+              <label>
+                <span>Tipo</span>
+                <select value={feedKind} onChange={(event) => setFeedKind(event.target.value)}>
+                  <option value="fonte primária">Fonte primária</option>
+                  <option value="jornalística">Jornalística</option>
+                  <option value="agregador">Agregador</option>
+                  <option value="radar">Radar</option>
+                </select>
+              </label>
+              <label>
+                <span>Prioridade editorial</span>
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={feedPriority}
+                  onChange={(event) => setFeedPriority(
+                    Math.max(0, Math.min(100, Number(event.target.value) || 0)),
+                  )}
+                />
+              </label>
+              <label className="admin-feed-editor__enabled">
+                <input
+                  type="checkbox"
+                  checked={feedEnabled}
+                  onChange={(event) => setFeedEnabled(event.target.checked)}
+                />
+                <span>Fonte ativa para captura</span>
+              </label>
+            </div>
+
+            <footer>
+              {feedEditingId && (
+                <button type="button" className="danger" disabled={feedSaving} onClick={() => void deleteFeed()}>
+                  Remover fonte
+                </button>
+              )}
+              <span />
+              <button type="button" disabled={feedSaving} onClick={resetFeedEditor}>Cancelar</button>
+              <button
+                type="submit"
+                className="admin-button--primary"
+                disabled={feedSaving || !feedName.trim() || !feedUrl.trim()}
+              >
+                {feedSaving ? 'Salvando…' : 'Salvar fonte'}
+              </button>
+            </footer>
+          </form>
+        )}
 
         {captureResult && (
           <div className="admin-radar-result" role="status">{captureResult}</div>
@@ -7896,7 +8126,8 @@ function PautasView({ csrfToken }: { csrfToken: string }) {
             <article key={source.feedUrl}>
               <div className="admin-pautas-source__identity">
                 <div className="admin-pautas-source__eyebrow">
-                  <span className="admin-pautas-source__category">{source.category}</span>
+                  <span className="admin-pautas-source__category">{source.category || 'Sem tema'}</span>
+                  {!source.enabled && <span className="admin-feed-disabled">Pausada</span>}
                   <span
                     className={'admin-feed-health admin-feed-health--' + source.health.status}
                     title={
@@ -7956,10 +8187,21 @@ function PautasView({ csrfToken }: { csrfToken: string }) {
               <div className="admin-pautas-source__actions">
                 <button
                   type="button"
-                  disabled={Boolean(capturing)}
+                  disabled={Boolean(capturing) || !source.enabled}
                   onClick={() => void captureFeed(source.feedUrl)}
                 >
-                  {capturing === source.feedUrl ? 'Capturando…' : 'Capturar'}
+                  {capturing === source.feedUrl
+                    ? 'Capturando…'
+                    : source.enabled
+                      ? 'Capturar'
+                      : 'Pausada'}
+                </button>
+                <button
+                  type="button"
+                  disabled={Boolean(capturing) || feedSaving}
+                  onClick={() => editFeed(source)}
+                >
+                  Editar
                 </button>
                 <a href={source.feedUrl} target="_blank" rel="noopener noreferrer">
                   RSS ↗
