@@ -2145,3 +2145,36 @@ Referências conceituais estudadas nesta rodada:
 - WPGraphQL.
 
 A implementação não copia esses projetos; reaproveita padrões maduros compatíveis com a arquitetura própria do Nosso Jornal.
+
+## 38. Timeline editorial unificada com revisões nativas
+
+O histórico de Notícias agora deixa de enxergar apenas `nj_revision` e passa a incorporar as revisões nativas preservadas do WordPress.
+
+### Contrato
+
+`GET /api/admin/post-revisions.php?id=:postId` combina:
+
+- `post_type=nj_revision`;
+- `post_type=revision` com o mesmo `post_parent`.
+
+A resposta identifica `source` e `restorable`.
+
+### Segurança de restauração
+
+Nesta etapa, revisões WordPress históricas são somente leitura.
+
+O motivo é preservar metadados modernos que não fazem parte do snapshot nativo antigo, como SEO, categoria principal e campos editoriais `_nj_*`.
+
+Revisões do Nosso Jornal continuam restauráveis porque já carregam o snapshot completo esperado pelo editor atual.
+
+### Interface
+
+O card “Histórico e autosave” passa a:
+
+- misturar as duas linhas do tempo em ordem cronológica;
+- identificar visualmente “Nosso Jornal” e “Acervo legado”;
+- exibir o título preservado quando disponível;
+- sinalizar revisões WordPress como “Somente leitura”;
+- manter restauração apenas onde o contrato é seguro.
+
+A próxima evolução é comparação de versões e, depois, restauração nativa com merge controlado.
