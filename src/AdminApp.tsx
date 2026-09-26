@@ -5083,143 +5083,6 @@ function NewCategoryView({ csrfToken }: { csrfToken: string }) {
           </div>
         </section>
 
-        <section className="admin-editor-card">
-          <div className="admin-editor-card__head">
-            <span>Perfil público</span>
-            <strong>Autoria e apresentação</strong>
-          </div>
-
-          <div className="admin-author-profile-status">
-            <div>
-              <strong>
-                {data.publicProfile.publishedCount.toLocaleString('pt-BR')}
-                {' '}
-                {data.publicProfile.publishedCount === 1 ? 'publicação' : 'publicações'}
-              </strong>
-              <span>
-                {data.publicProfile.url
-                  ? 'Perfil público ativo'
-                  : 'O perfil ficará público quando houver matéria publicada.'}
-              </span>
-            </div>
-            {data.publicProfile.url && (
-              <a href={data.publicProfile.url} target="_blank" rel="noopener noreferrer">
-                Ver perfil ↗
-              </a>
-            )}
-          </div>
-
-          <div className="admin-editor-card__body admin-editor-card__body--fields">
-            <label className="admin-editor-field">
-              <span>Slug público</span>
-              <input value={data.publicProfile.slug} readOnly />
-            </label>
-
-            <label className="admin-editor-field">
-              <span>Função editorial pública</span>
-              <input
-                value={publicRole}
-                readOnly={!profileCanSave}
-                placeholder="Ex.: Repórter, Colunista, Editor"
-                onChange={(event) => {
-                  setPublicRole(event.target.value);
-                  setSaveState('idle');
-                }}
-              />
-            </label>
-
-            <label className="admin-editor-field admin-editor-field--wide">
-              <span>Biografia pública</span>
-              <textarea
-                value={publicBio}
-                readOnly={!profileCanSave}
-                rows={5}
-                placeholder="Apresentação curta do autor para leitores e mecanismos de busca."
-                onChange={(event) => {
-                  setPublicBio(event.target.value);
-                  setSaveState('idle');
-                }}
-              />
-              {data.publicProfile.bioSource === 'wordpress' && (
-                <small>
-                  Esta biografia veio do perfil WordPress legado. Ao salvar, o Nosso Jornal passa a manter uma versão pública própria.
-                </small>
-              )}
-            </label>
-
-            <label className="admin-editor-field admin-editor-field--wide">
-              <span>Site</span>
-              <input
-                type="url"
-                value={website}
-                readOnly={!profileCanSave}
-                placeholder="https://"
-                onChange={(event) => {
-                  setWebsite(event.target.value);
-                  setSaveState('idle');
-                }}
-              />
-            </label>
-
-            <label className="admin-editor-field">
-              <span>Instagram</span>
-              <input
-                type="url"
-                value={instagram}
-                readOnly={!profileCanSave}
-                placeholder="https://instagram.com/..."
-                onChange={(event) => {
-                  setInstagram(event.target.value);
-                  setSaveState('idle');
-                }}
-              />
-            </label>
-
-            <label className="admin-editor-field">
-              <span>Facebook</span>
-              <input
-                type="url"
-                value={facebook}
-                readOnly={!profileCanSave}
-                placeholder="https://facebook.com/..."
-                onChange={(event) => {
-                  setFacebook(event.target.value);
-                  setSaveState('idle');
-                }}
-              />
-            </label>
-
-            <label className="admin-editor-field">
-              <span>LinkedIn</span>
-              <input
-                type="url"
-                value={linkedin}
-                readOnly={!profileCanSave}
-                placeholder="https://linkedin.com/..."
-                onChange={(event) => {
-                  setLinkedin(event.target.value);
-                  setSaveState('idle');
-                }}
-              />
-            </label>
-
-            <label className="admin-editor-field">
-              <span>X / Twitter</span>
-              <input
-                type="url"
-                value={xProfile}
-                readOnly={!profileCanSave}
-                placeholder="https://x.com/..."
-                onChange={(event) => {
-                  setXProfile(event.target.value);
-                  setSaveState('idle');
-                }}
-              />
-            </label>
-          </div>
-        </section>
-        </div>
-
         <aside className="admin-editor-card">
           <div className="admin-editor-card__head">
             <span>Identidade</span>
@@ -6322,6 +6185,143 @@ function UserEditorView({
             </label>
           </div>
         </section>
+
+        <section className="admin-editor-card">
+          <div className="admin-editor-card__head">
+            <span>Perfil público</span>
+            <strong>Autoria e apresentação</strong>
+          </div>
+
+          <div className="admin-author-profile-status">
+            <div>
+              <strong>
+                {data.publicProfile.publishedCount.toLocaleString('pt-BR')}
+                {' '}
+                {data.publicProfile.publishedCount === 1 ? 'publicação' : 'publicações'}
+              </strong>
+              <span>
+                {data.publicProfile.url
+                  ? 'Perfil público ativo'
+                  : 'O perfil ficará público quando houver matéria publicada.'}
+              </span>
+            </div>
+            {data.publicProfile.url && (
+              <a href={data.publicProfile.url} target="_blank" rel="noopener noreferrer">
+                Ver perfil ↗
+              </a>
+            )}
+          </div>
+
+          <div className="admin-editor-card__body admin-editor-card__body--fields">
+            <label className="admin-editor-field">
+              <span>Slug público</span>
+              <input value={data.publicProfile.slug} readOnly />
+            </label>
+
+            <label className="admin-editor-field">
+              <span>Função editorial pública</span>
+              <input
+                value={publicRole}
+                readOnly={!profileCanSave}
+                placeholder="Ex.: Repórter, Colunista, Editor"
+                onChange={(event) => {
+                  setPublicRole(event.target.value);
+                  setSaveState('idle');
+                }}
+              />
+            </label>
+
+            <label className="admin-editor-field admin-editor-field--wide">
+              <span>Biografia pública</span>
+              <textarea
+                value={publicBio}
+                readOnly={!profileCanSave}
+                rows={5}
+                placeholder="Apresentação curta do autor para leitores e mecanismos de busca."
+                onChange={(event) => {
+                  setPublicBio(event.target.value);
+                  setSaveState('idle');
+                }}
+              />
+              {data.publicProfile.bioSource === 'wordpress' && (
+                <small>
+                  Esta biografia veio do perfil WordPress legado. Ao salvar, o Nosso Jornal passa a manter uma versão pública própria.
+                </small>
+              )}
+            </label>
+
+            <label className="admin-editor-field admin-editor-field--wide">
+              <span>Site</span>
+              <input
+                type="url"
+                value={website}
+                readOnly={!profileCanSave}
+                placeholder="https://"
+                onChange={(event) => {
+                  setWebsite(event.target.value);
+                  setSaveState('idle');
+                }}
+              />
+            </label>
+
+            <label className="admin-editor-field">
+              <span>Instagram</span>
+              <input
+                type="url"
+                value={instagram}
+                readOnly={!profileCanSave}
+                placeholder="https://instagram.com/..."
+                onChange={(event) => {
+                  setInstagram(event.target.value);
+                  setSaveState('idle');
+                }}
+              />
+            </label>
+
+            <label className="admin-editor-field">
+              <span>Facebook</span>
+              <input
+                type="url"
+                value={facebook}
+                readOnly={!profileCanSave}
+                placeholder="https://facebook.com/..."
+                onChange={(event) => {
+                  setFacebook(event.target.value);
+                  setSaveState('idle');
+                }}
+              />
+            </label>
+
+            <label className="admin-editor-field">
+              <span>LinkedIn</span>
+              <input
+                type="url"
+                value={linkedin}
+                readOnly={!profileCanSave}
+                placeholder="https://linkedin.com/..."
+                onChange={(event) => {
+                  setLinkedin(event.target.value);
+                  setSaveState('idle');
+                }}
+              />
+            </label>
+
+            <label className="admin-editor-field">
+              <span>X / Twitter</span>
+              <input
+                type="url"
+                value={xProfile}
+                readOnly={!profileCanSave}
+                placeholder="https://x.com/..."
+                onChange={(event) => {
+                  setXProfile(event.target.value);
+                  setSaveState('idle');
+                }}
+              />
+            </label>
+          </div>
+        </section>
+        </div>
 
         <aside className="admin-editor-card">
           <div className="admin-editor-card__head">
