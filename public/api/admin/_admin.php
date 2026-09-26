@@ -213,6 +213,7 @@ function nj_admin_user_payload(PDO $pdo, array $row): array
             'editPosts' => in_array('edit_posts', $access['capabilities'], true),
             'publishPosts' => in_array('publish_posts', $access['capabilities'], true),
             'manageCategories' => in_array('manage_categories', $access['capabilities'], true),
+            'uploadFiles' => in_array('upload_files', $access['capabilities'], true),
             'listUsers' => in_array('list_users', $access['capabilities'], true),
             'editUsers' => in_array('edit_users', $access['capabilities'], true),
             'manageOptions' => in_array('manage_options', $access['capabilities'], true),
