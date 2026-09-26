@@ -1735,3 +1735,66 @@
     flex-direction: column;
   }
 }
+
+
+.admin-page-heading-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.admin-page-heading-row .admin-page-header {
+  margin-bottom: 22px;
+}
+
+.admin-create-button {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 18px;
+  border: 1px solid #2271b1;
+  border-radius: 3px;
+  padding: 0 14px;
+  background: #2271b1;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.admin-create-button:hover,
+.admin-create-button:focus-visible {
+  background: #135e96;
+}
+
+.admin-create-button:disabled {
+  border-color: #c3c4c7;
+  background: #dcdcde;
+  color: #8c8f94;
+  cursor: not-allowed;
+}
+
+.admin-editor-next--current {
+  color: #17711f;
+  font-weight: 800;
+}
+
+.admin-editor-field input:not([readonly]),
+.admin-editor-field textarea:not([readonly]) {
+  border-color: #2271b1;
+  box-shadow: 0 0 0 1px rgba(34,113,177,.08);
+}
+
+@media (max-width: 720px) {
+  .admin-page-heading-row {
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .admin-create-button {
+    width: 100%;
+    margin: -6px 0 18px;
+  }
+}
