@@ -145,9 +145,27 @@ function StoryMeta({ article, showViews = false }: { article: Article; showViews
   );
 }
 
+function editorialContrastColor(color?: string) {
+  const normalized = color?.trim().replace('#', '') ?? '';
+
+  if (!/^[0-9a-fA-F]{6}$/.test(normalized)) {
+    return '#FFFFFF';
+  }
+
+  const red = Number.parseInt(normalized.slice(0, 2), 16);
+  const green = Number.parseInt(normalized.slice(2, 4), 16);
+  const blue = Number.parseInt(normalized.slice(4, 6), 16);
+  const luminance = (red * 299 + green * 587 + blue * 114) / 1000;
+
+  return luminance > 168 ? '#111827' : '#FFFFFF';
+}
+
 function editorialStyle(color?: string) {
   return color
-    ? ({ '--editorial-color': color } as CSSProperties)
+    ? ({
+        '--editorial-color': color,
+        '--editorial-contrast': editorialContrastColor(color),
+      } as CSSProperties)
     : undefined;
 }
 
@@ -394,12 +412,17 @@ function PublicSite() {
               style={editorialStyle(section.category.color)}
             >
               <div className="container">
-                <div className="home-section-heading">
-                  <div>
+                <div className="home-section-heading home-section-heading--editorial">
+                  <div className="home-section-heading__identity">
                     <span>Editoria</span>
-                    <h2 id={`section-${section.category.slug}`}>{section.category.name}</h2>
+                    <h2 id={`section-${section.category.slug}`}>
+                      <a href={section.category.url}>{section.category.name}</a>
+                    </h2>
                   </div>
-                  <a href={section.category.url}>Ver editoria</a>
+                  <a className="home-section-heading__cta" href={section.category.url}>
+                    Ver editoria
+                    <span aria-hidden="true">→</span>
+                  </a>
                 </div>
 
                 <div className="home-category-grid">
