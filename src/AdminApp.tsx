@@ -749,7 +749,14 @@ function DashboardView({ user }: { user: AdminUser }) {
         description="Resumo editorial e atividade recente do Nosso Jornal."
       />
 
-      <ReadOnlyNotice />
+      {writeReadiness?.database.runtimeWriteReady ? (
+        <div className="admin-write-ready" role="status">
+          <strong>Runtime de escrita disponível.</strong>
+          <span>Podemos começar pelas mutations canárias de categoria e rascunho.</span>
+        </div>
+      ) : (
+        <ReadOnlyNotice />
+      )}
 
       <section className="admin-stats" aria-label="Resumo">
         {stats.map((stat) => (
@@ -1254,10 +1261,13 @@ function CategoriesView() {
   );
 }
 
-function CategoryEditorView() {
+function CategoryEditorView({ csrfToken }: { csrfToken: string }) {
   const match = window.location.pathname.match(/^\/sistema\/categorias\/(\d+)\/?$/);
   const categoryId = match ? Number.parseInt(match[1], 10) : 0;
   const [data, setData] = useState<CategoryDetailPayload['data']>();
+  const [writeReadiness, setWriteReadiness] = useState<WriteReadinessPayload['data']>();
+  const [color, setColor] = useState('');
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [error, setError] = useState(false);
 
   useEffect(() => {
@@ -1270,14 +1280,82 @@ function CategoryEditorView() {
       .then((payload) => {
         if (!payload.ok || !payload.data) throw new Error('category_invalid');
         setData(payload.data);
+        setColor(payload.data.category.color);
       })
       .catch(() => setError(true));
+
+    void adminFetch<WriteReadinessPayload>('/api/admin/write-readiness.php')
+      .then((payload) => {
+        if (payload.ok && payload.data) setWriteReadiness(payload.data);
+      })
+      .catch(() => {
+        // O editor permanece somente leitura se o probe não estiver disponível.
+      });
   }, [categoryId]);
 
   if (error) return <AdminError />;
   if (!data) return <AdminLoading />;
 
   const category = data.category;
+  const canWriteColor = Boolean(
+    writeReadiness?.database.insert.available
+      && writeReadiness?.database.update.available,
+  );
+  const colorChanged = color.toUpperCase() !== category.color.toUpperCase();
+
+  async function saveColor() {
+    if (!canWriteColor || !colorChanged || saveState === 'saving') return;
+
+    setSaveState('saving');
+
+    try {
+      const payload = await adminFetch<{
+        ok: boolean;
+        data?: {
+          category: {
+            id: number;
+            name: string;
+            slug: string;
+            color: string;
+            colorSource: 'termmeta';
+          };
+          mutation: {
+            metaKey: string;
+            verifiedByReadBack: boolean;
+          };
+        };
+      }>('/api/admin/category-color.php', {
+        method: 'POST',
+        headers: {
+          'X-CSRF-Token': csrfToken,
+        },
+        body: JSON.stringify({
+          categoryId: category.id,
+          color,
+        }),
+      });
+
+      if (!payload.ok || !payload.data) {
+        throw new Error('category_color_invalid_response');
+      }
+
+      setData((current) => current
+        ? {
+            ...current,
+            category: {
+              ...current.category,
+              color: payload.data!.category.color,
+              colorSource: 'termmeta',
+            },
+          }
+        : current
+      );
+      setColor(payload.data.category.color);
+      setSaveState('saved');
+    } catch {
+      setSaveState('error');
+    }
+  }
 
   return (
     <>
@@ -1299,13 +1377,38 @@ function CategoryEditorView() {
           <a href={category.publicUrl} target="_blank" rel="noopener noreferrer">
             Ver editoria ↗
           </a>
-          <button type="button" className="admin-button--primary" disabled title="Aguardando write MySQL">
-            Salvar alterações
+          <button
+            type="button"
+            className="admin-button--primary"
+            disabled={!canWriteColor || !colorChanged || saveState === 'saving'}
+            title={canWriteColor ? 'Salvar cor editorial' : 'Aguardando write MySQL'}
+            onClick={() => void saveColor()}
+          >
+            {saveState === 'saving' ? 'Salvando…' : 'Salvar cor'}
           </button>
         </div>
       </header>
 
-      <ReadOnlyNotice />
+      {canWriteColor ? (
+        <div className="admin-write-ready" role="status">
+          <strong>Write canário disponível.</strong>
+          <span>A cor editorial já pode ser persistida em termmeta com read-back.</span>
+        </div>
+      ) : (
+        <ReadOnlyNotice />
+      )}
+
+      {saveState === 'saved' && (
+        <div className="admin-save-feedback admin-save-feedback--success" role="status">
+          Cor editorial salva e confirmada no banco.
+        </div>
+      )}
+
+      {saveState === 'error' && (
+        <div className="admin-save-feedback admin-save-feedback--error" role="alert">
+          Não foi possível salvar a cor. O runtime pode continuar sem permissão de escrita.
+        </div>
+      )}
 
       <div className="admin-category-editor">
         <section className="admin-editor-card">
@@ -1350,12 +1453,21 @@ function CategoryEditorView() {
             </div>
 
             <div className="admin-category-color-editor">
-              <div className="admin-category-color-editor__swatch" style={{ background: category.color }} />
+              <div className="admin-category-color-editor__swatch" style={{ background: color || category.color }} />
               <div>
-                <strong>{category.color}</strong>
+                <strong>{color || category.color}</strong>
                 <span>{category.colorSource === 'termmeta' ? 'Persistida no banco' : 'Fallback do código'}</span>
               </div>
-              <input type="color" value={category.color} disabled aria-label="Cor editorial" />
+              <input
+                type="color"
+                value={color || category.color}
+                disabled={!canWriteColor || saveState === 'saving'}
+                aria-label="Cor editorial"
+                onChange={(event) => {
+                  setColor(event.target.value.toUpperCase());
+                  setSaveState('idle');
+                }}
+              />
             </div>
           </section>
 
@@ -1783,7 +1895,7 @@ export function AdminApp() {
           {view === 'posts' && <PostsView />}
           {view === 'post' && <PostEditorView />}
           {view === 'categories' && <CategoriesView />}
-          {view === 'category' && <CategoryEditorView />}
+          {view === 'category' && <CategoryEditorView csrfToken={csrfToken} />}
           {view === 'media' && <MediaView />}
           {view === 'users' && <UsersView />}
           {view === 'settings' && <SettingsView />}
