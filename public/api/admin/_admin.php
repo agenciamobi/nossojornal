@@ -459,3 +459,223 @@ function nj_admin_require_pautas_owner(array $user): void
         throw new NjApiHttpException(403, 'pautas_access_denied');
     }
 }
+
+
+function nj_admin_slugify(string $value): string
+{
+    $value = trim($value);
+
+    if ($value === '') {
+        return '';
+    }
+
+    if (class_exists('Transliterator')) {
+        $transliterator = Transliterator::create('Any-Latin; Latin-ASCII; Lower()');
+        if ($transliterator !== null) {
+            $value = $transliterator->transliterate($value);
+        }
+    }
+
+    if (function_exists('iconv')) {
+        $ascii = @iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $value);
+        if (is_string($ascii) && $ascii !== '') {
+            $value = $ascii;
+        }
+    }
+
+    $value = strtolower($value);
+    $value = preg_replace('/[^a-z0-9]+/', '-', $value) ?? '';
+    $value = trim($value, '-');
+
+    return substr($value, 0, 180);
+}
+
+function nj_admin_unique_post_slug(
+    PDO $pdo,
+    int $postId,
+    string $requestedSlug,
+    string $fallbackTitle
+): string {
+    $posts = nj_table('posts');
+    $base = nj_admin_slugify($requestedSlug !== '' ? $requestedSlug : $fallbackTitle);
+
+    if ($base === '') {
+        $base = 'noticia-' . $postId;
+    }
+
+    $candidate = $base;
+    $suffix = 2;
+
+    $statement = $pdo->prepare(<<<SQL
+SELECT ID
+FROM {$posts}
+WHERE
+    post_type = 'post'
+    AND post_name = :slug
+    AND ID <> :id
+LIMIT 1
+SQL);
+
+    while (true) {
+        $statement->execute([
+            'slug' => $candidate,
+            'id' => $postId,
+        ]);
+
+        if (!$statement->fetchColumn()) {
+            return $candidate;
+        }
+
+        $candidate = substr($base, 0, 170) . '-' . $suffix;
+        $suffix++;
+
+        if ($suffix > 500) {
+            throw new RuntimeException('unique_slug_exhausted');
+        }
+    }
+}
+
+function nj_admin_upsert_postmeta(
+    PDO $pdo,
+    int $postId,
+    string $key,
+    string $value
+): void {
+    $postmeta = nj_table('postmeta');
+
+    $find = $pdo->prepare(<<<SQL
+SELECT meta_id
+FROM {$postmeta}
+WHERE
+    post_id = :post_id
+    AND meta_key = :meta_key
+ORDER BY meta_id DESC
+LIMIT 1
+SQL);
+    $find->execute([
+        'post_id' => $postId,
+        'meta_key' => $key,
+    ]);
+    $metaId = (int) ($find->fetchColumn() ?: 0);
+
+    if ($value === '') {
+        if ($metaId > 0) {
+            $delete = $pdo->prepare(
+                "DELETE FROM {$postmeta} WHERE post_id = :post_id AND meta_key = :meta_key"
+            );
+            $delete->execute([
+                'post_id' => $postId,
+                'meta_key' => $key,
+            ]);
+        }
+
+        return;
+    }
+
+    if ($metaId > 0) {
+        $update = $pdo->prepare(<<<SQL
+UPDATE {$postmeta}
+SET meta_value = :meta_value
+WHERE meta_id = :meta_id
+LIMIT 1
+SQL);
+        $update->execute([
+            'meta_value' => $value,
+            'meta_id' => $metaId,
+        ]);
+
+        return;
+    }
+
+    $insert = $pdo->prepare(<<<SQL
+INSERT INTO {$postmeta} (post_id, meta_key, meta_value)
+VALUES (:post_id, :meta_key, :meta_value)
+SQL);
+    $insert->execute([
+        'post_id' => $postId,
+        'meta_key' => $key,
+        'meta_value' => $value,
+    ]);
+}
+
+function nj_admin_recount_categories(PDO $pdo, array $termTaxonomyIds): void
+{
+    $termTaxonomyIds = array_values(array_unique(array_filter(array_map(
+        static fn (mixed $value): int => (int) $value,
+        $termTaxonomyIds
+    ))));
+
+    if ($termTaxonomyIds === []) {
+        return;
+    }
+
+    $posts = nj_table('posts');
+    $relationships = nj_table('term_relationships');
+    $taxonomy = nj_table('term_taxonomy');
+
+    $statement = $pdo->prepare(<<<SQL
+UPDATE {$taxonomy} tt
+SET tt.count = (
+    SELECT COUNT(*)
+    FROM {$relationships} tr
+    INNER JOIN {$posts} p ON p.ID = tr.object_id
+    WHERE
+        tr.term_taxonomy_id = tt.term_taxonomy_id
+        AND p.post_type = 'post'
+        AND p.post_status = 'publish'
+)
+WHERE tt.term_taxonomy_id = :taxonomy_id
+SQL);
+
+    foreach ($termTaxonomyIds as $taxonomyId) {
+        $statement->execute(['taxonomy_id' => $taxonomyId]);
+    }
+}
+
+function nj_admin_validate_category_parent(
+    PDO $pdo,
+    int $categoryId,
+    ?int $parentId
+): void {
+    if ($parentId === null || $parentId === 0) {
+        return;
+    }
+
+    if ($parentId === $categoryId) {
+        throw new NjApiHttpException(422, 'invalid_category_parent');
+    }
+
+    $taxonomy = nj_table('term_taxonomy');
+
+    $statement = $pdo->prepare(<<<SQL
+SELECT term_id, parent
+FROM {$taxonomy}
+WHERE
+    taxonomy = 'category'
+    AND term_id = :term_id
+LIMIT 1
+SQL);
+
+    $visited = [];
+    $cursor = $parentId;
+
+    while ($cursor > 0) {
+        if (isset($visited[$cursor])) {
+            throw new NjApiHttpException(422, 'invalid_category_parent');
+        }
+
+        if ($cursor === $categoryId) {
+            throw new NjApiHttpException(422, 'invalid_category_parent');
+        }
+
+        $visited[$cursor] = true;
+        $statement->execute(['term_id' => $cursor]);
+        $row = $statement->fetch();
+
+        if (!$row) {
+            throw new NjApiHttpException(422, 'category_parent_not_found');
+        }
+
+        $cursor = (int) $row['parent'];
+    }
+}
