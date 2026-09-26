@@ -938,3 +938,185 @@ A partir desta revisão:
 Os endpoints continuam validando sessão, capability, CSRF, entrada e persistência.
 
 Se uma mutation não puder ser executada no banco, somente aquela ação falha e a interface informa o problema. O restante do painel continua gerenciável.
+
+
+## 26. Editor rico de conteúdo
+
+O palco de redação deixa de usar um `textarea` bruto e passa a utilizar:
+
+```text
+src/AdminRichEditor.tsx
+```
+
+O componente é utilizado em:
+
+```text
+/sistema/noticias/:id
+/sistema/paginas/:id
+```
+
+### Experiência
+
+O editor possui uma faixa de ferramentas inspirada em processadores de texto, organizada por grupos:
+
+```text
+Estilo
+Texto
+Parágrafo
+Inserir
+Edição
+```
+
+Recursos disponíveis:
+
+- texto normal;
+- Título 2;
+- Título 3;
+- Título 4;
+- citação;
+- negrito;
+- itálico;
+- sublinhado;
+- tachado;
+- cor do texto;
+- marca-texto;
+- alinhamento à esquerda;
+- centralização;
+- alinhamento à direita;
+- justificação;
+- listas com marcadores;
+- listas numeradas;
+- aumentar recuo;
+- diminuir recuo;
+- inserir link;
+- remover link;
+- inserir imagem da Biblioteca de Mídia;
+- inserir tabela;
+- inserir separador horizontal;
+- desfazer;
+- refazer;
+- limpar formatação.
+
+### Modos de edição
+
+O editor possui:
+
+```text
+Visual
+HTML
+Tela cheia
+```
+
+O modo HTML permite revisar ou ajustar diretamente o conteúdo persistido no banco.
+
+A tela cheia transforma o editor no foco principal da redação sem perder a sidebar administrativa depois que o usuário sair desse modo.
+
+### Biblioteca de Mídia
+
+O botão `Imagem` abre a Biblioteca de Mídia dentro do próprio editor.
+
+A biblioteca permite:
+
+- carregar as imagens já existentes;
+- pesquisar imagens;
+- selecionar uma imagem;
+- inserir a imagem no ponto atual do cursor.
+
+A imagem é inserida como HTML sem virar automaticamente imagem destacada.
+
+Imagem destacada continua sendo uma operação independente na lateral do editor.
+
+### Seleção e cursor
+
+O editor preserva a seleção atual antes de abrir ferramentas que mudam o foco, como:
+
+- links;
+- cores;
+- marca-texto;
+- Biblioteca de Mídia.
+
+Ao concluir a ação, a formatação ou inserção é aplicada na posição em que o cursor estava.
+
+### Colagem de conteúdo
+
+Ao colar HTML vindo de Word, navegador ou outro editor, o conteúdo passa por limpeza no frontend.
+
+São removidos:
+
+- scripts;
+- stylesheets;
+- iframes;
+- objetos;
+- formulários;
+- inputs;
+- botões;
+- embeds;
+- atributos de evento;
+- classes e atributos estranhos ao conteúdo editorial.
+
+Links perigosos com `javascript:` também são rejeitados.
+
+O objetivo é preservar a estrutura útil e evitar carregar lixo de formatação de outros editores.
+
+### Conteúdo público
+
+O sanitizador público foi ajustado para preservar somente estilos editoriais seguros:
+
+- `text-align`;
+- `color`;
+- `background-color`;
+- `font-weight`;
+- `font-style`;
+- `text-decoration`.
+
+Outras propriedades CSS continuam sendo removidas.
+
+Isso permite que cor, marca-texto e alinhamento definidos no editor sobrevivam à publicação sem abrir a porta para CSS arbitrário.
+
+### Tabelas e estrutura
+
+O frontend público ganhou suporte visual para:
+
+- tabelas;
+- cabeçalhos;
+- células;
+- separadores horizontais;
+- alinhamentos.
+
+A aparência final continua subordinada ao design editorial do Nosso Jornal.
+
+### Status do editor
+
+A barra inferior mostra:
+
+- quantidade de palavras;
+- quantidade de caracteres;
+- atalho de salvamento.
+
+Atalho disponível:
+
+```text
+Ctrl+S
+```
+
+ou `Cmd+S` em macOS.
+
+O atalho chama a mesma ação `Salvar` da tela administrativa.
+
+### Princípio de design
+
+O editor é semelhante a um processador de texto na ergonomia, mas não oferece liberdade tipográfica irrestrita.
+
+Famílias de fonte arbitrárias e estilos que poderiam quebrar a identidade visual do portal não fazem parte da primeira versão.
+
+O objetivo é:
+
+```text
+facilidade de redação
++
+controle editorial
++
+HTML limpo
++
+consistência visual do jornal
+```
