@@ -1,0 +1,608 @@
+import {
+  ClipboardEvent,
+  FormEvent,
+  KeyboardEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+
+export type RichEditorMediaItem = {
+  id: number;
+  title: string;
+  url: string;
+  alt: string;
+};
+
+type AdminRichEditorProps = {
+  value: string;
+  onChange: (html: string) => void;
+  disabled?: boolean;
+  onSave?: () => void;
+  canSave?: boolean;
+  loadMedia?: (query: string) => Promise<RichEditorMediaItem[]>;
+  minHeight?: number;
+  label?: string;
+};
+
+type CommandButtonProps = {
+  label: string;
+  title: string;
+  command?: string;
+  value?: string;
+  disabled?: boolean;
+  onClick?: () => void;
+  className?: string;
+};
+
+function escapeHtml(value: string) {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
+function sanitizePastedHtml(html: string) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString('<div>' + html + '</div>', 'text/html');
+  const root = doc.body.firstElementChild;
+
+  if (!root) return '';
+
+  root.querySelectorAll(
+    'script,style,iframe,object,embed,form,input,button,select,textarea,meta,link,noscript',
+  ).forEach((node) => node.remove());
+
+  const walker = doc.createTreeWalker(root, NodeFilter.SHOW_COMMENT);
+  const comments: Comment[] = [];
+  while (walker.nextNode()) comments.push(walker.currentNode as Comment);
+  comments.forEach((comment) => comment.remove());
+
+  root.querySelectorAll<HTMLElement>('*').forEach((element) => {
+    const style = element.style;
+    const weight = style.fontWeight;
+    const italic = style.fontStyle === 'italic';
+    const underline = style.textDecorationLine.includes('underline')
+      || style.textDecoration.includes('underline');
+    const strike = style.textDecorationLine.includes('line-through')
+      || style.textDecoration.includes('line-through');
+    const textAlign = style.textAlign;
+
+    if (
+      element.tagName === 'SPAN'
+      && (weight === 'bold' || Number.parseInt(weight, 10) >= 600)
+    ) {
+      const strong = doc.createElement('strong');
+      while (element.firstChild) strong.appendChild(element.firstChild);
+      element.replaceWith(strong);
+      element = strong;
+    }
+
+    if (element.tagName === 'SPAN' && italic) {
+      const em = doc.createElement('em');
+      while (element.firstChild) em.appendChild(element.firstChild);
+      element.replaceWith(em);
+      element = em;
+    }
+
+    if (element.tagName === 'SPAN' && underline) {
+      const underlineNode = doc.createElement('u');
+      while (element.firstChild) underlineNode.appendChild(element.firstChild);
+      element.replaceWith(underlineNode);
+      element = underlineNode;
+    }
+
+    if (element.tagName === 'SPAN' && strike) {
+      const strikeNode = doc.createElement('s');
+      while (element.firstChild) strikeNode.appendChild(element.firstChild);
+      element.replaceWith(strikeNode);
+      element = strikeNode;
+    }
+
+    if (
+      ['left', 'center', 'right', 'justify'].includes(textAlign)
+      && ['P', 'DIV', 'H2', 'H3', 'H4', 'BLOCKQUOTE'].includes(element.tagName)
+    ) {
+      element.setAttribute('align', textAlign);
+    }
+
+    const allowed = new Set([
+      'href',
+      'src',
+      'alt',
+      'title',
+      'target',
+      'rel',
+      'colspan',
+      'rowspan',
+      'align',
+      'width',
+      'height',
+    ]);
+
+    [...element.attributes].forEach((attribute) => {
+      if (!allowed.has(attribute.name.toLowerCase())) {
+        element.removeAttribute(attribute.name);
+      }
+    });
+
+    if (element.tagName === 'A') {
+      const href = element.getAttribute('href') ?? '';
+      if (/^javascript:/i.test(href)) {
+        element.removeAttribute('href');
+      } else if (href) {
+        element.setAttribute('rel', 'noopener noreferrer');
+      }
+    }
+
+    if (element.tagName === 'IMG') {
+      const src = element.getAttribute('src') ?? '';
+      if (/^(javascript|data:text/html):/i.test(src)) {
+        element.remove();
+      }
+    }
+  });
+
+  return root.innerHTML;
+}
+
+function countWords(html: string) {
+  const element = document.createElement('div');
+  element.innerHTML = html;
+  const text = (element.textContent ?? '').trim();
+  if (!text) return 0;
+  return text.split(/\s+/u).filter(Boolean).length;
+}
+
+function countCharacters(html: string) {
+  const element = document.createElement('div');
+  element.innerHTML = html;
+  return (element.textContent ?? '').length;
+}
+
+function AdminCommandButton({
+  label,
+  title,
+  command,
+  value,
+  disabled,
+  onClick,
+  className = '',
+}: CommandButtonProps) {
+  function execute() {
+    if (disabled) return;
+    if (onClick) {
+      onClick();
+      return;
+    }
+
+    if (command) {
+      document.execCommand(command, false, value);
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      className={'admin-rich-editor__button ' + className}
+      title={title}
+      aria-label={title}
+      disabled={disabled}
+      onMouseDown={(event) => {
+        event.preventDefault();
+        execute();
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
+export function AdminRichEditor({
+  value,
+  onChange,
+  disabled = false,
+  onSave,
+  canSave = false,
+  loadMedia,
+  minHeight = 520,
+  label = 'Conteúdo',
+}: AdminRichEditorProps) {
+  const editorRef = useRef<HTMLDivElement>(null);
+  const [sourceMode, setSourceMode] = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
+  const [source, setSource] = useState(value);
+  const [mediaOpen, setMediaOpen] = useState(false);
+  const [mediaQuery, setMediaQuery] = useState('');
+  const [mediaItems, setMediaItems] = useState<RichEditorMediaItem[]>([]);
+  const [mediaLoading, setMediaLoading] = useState(false);
+  const [mediaError, setMediaError] = useState(false);
+
+  const wordCount = useMemo(() => countWords(value), [value]);
+  const characterCount = useMemo(() => countCharacters(value), [value]);
+
+  useEffect(() => {
+    if (sourceMode) {
+      setSource(value);
+      return;
+    }
+
+    const editor = editorRef.current;
+    if (!editor) return;
+
+    if (document.activeElement !== editor && editor.innerHTML !== value) {
+      editor.innerHTML = value;
+    }
+  }, [sourceMode, value]);
+
+  useEffect(() => {
+    if (!fullscreen) return;
+
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [fullscreen]);
+
+  function emitVisualChange() {
+    const html = editorRef.current?.innerHTML ?? '';
+    onChange(html);
+  }
+
+  function focusEditor() {
+    editorRef.current?.focus();
+  }
+
+  function runCommand(command: string, commandValue?: string) {
+    if (disabled || sourceMode) return;
+
+    focusEditor();
+    document.execCommand(command, false, commandValue);
+    emitVisualChange();
+  }
+
+  function setBlock(tag: string) {
+    runCommand('formatBlock', '<' + tag + '>');
+  }
+
+  function createLink() {
+    if (disabled || sourceMode) return;
+
+    const url = window.prompt('Cole o endereço do link:');
+    if (!url) return;
+
+    const normalized = /^(https?:|mailto:|tel:|\/)/i.test(url)
+      ? url
+      : 'https://' + url;
+
+    runCommand('createLink', normalized);
+
+    editorRef.current
+      ?.querySelectorAll<HTMLAnchorElement>('a[href="' + CSS.escape(normalized) + '"]')
+      .forEach((anchor) => {
+        if (/^https?:/i.test(normalized)) {
+          anchor.target = '_blank';
+          anchor.rel = 'noopener noreferrer';
+        }
+      });
+
+    emitVisualChange();
+  }
+
+  function insertTable() {
+    if (disabled || sourceMode) return;
+
+    const rows = Math.min(12, Math.max(1, Number.parseInt(window.prompt('Número de linhas:', '3') ?? '0', 10)));
+    const columns = Math.min(8, Math.max(1, Number.parseInt(window.prompt('Número de colunas:', '3') ?? '0', 10)));
+
+    if (!Number.isFinite(rows) || !Number.isFinite(columns)) return;
+
+    const cells = Array.from({ length: rows }, (_, rowIndex) => {
+      const tag = rowIndex === 0 ? 'th' : 'td';
+      return '<tr>'
+        + Array.from({ length: columns }, () => '<' + tag + '>&nbsp;</' + tag + '>').join('')
+        + '</tr>';
+    }).join('');
+
+    runCommand(
+      'insertHTML',
+      '<table><tbody>' + cells + '</tbody></table><p><br></p>',
+    );
+  }
+
+  async function searchMedia(query = mediaQuery) {
+    if (!loadMedia) return;
+
+    setMediaLoading(true);
+    setMediaError(false);
+
+    try {
+      const items = await loadMedia(query);
+      setMediaItems(items);
+    } catch {
+      setMediaError(true);
+    } finally {
+      setMediaLoading(false);
+    }
+  }
+
+  async function openMedia() {
+    if (!loadMedia || disabled || sourceMode) return;
+
+    setMediaOpen(true);
+
+    if (mediaItems.length === 0) {
+      await searchMedia('');
+    }
+  }
+
+  function insertMedia(item: RichEditorMediaItem) {
+    const html = [
+      '<figure>',
+      '<img src="' + escapeHtml(item.url) + '" alt="' + escapeHtml(item.alt || item.title) + '">',
+      item.title ? '<figcaption>' + escapeHtml(item.title) + '</figcaption>' : '',
+      '</figure>',
+      '<p><br></p>',
+    ].join('');
+
+    runCommand('insertHTML', html);
+    setMediaOpen(false);
+  }
+
+  function handlePaste(event: ClipboardEvent<HTMLDivElement>) {
+    if (disabled || sourceMode) return;
+
+    const html = event.clipboardData.getData('text/html');
+    const text = event.clipboardData.getData('text/plain');
+
+    event.preventDefault();
+
+    if (html) {
+      runCommand('insertHTML', sanitizePastedHtml(html));
+      return;
+    }
+
+    runCommand(
+      'insertHTML',
+      escapeHtml(text).replace(/\r?\n/g, '<br>'),
+    );
+  }
+
+  function handleKeyDown(event: KeyboardEvent<HTMLDivElement | HTMLTextAreaElement>) {
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
+      event.preventDefault();
+      if (canSave && onSave) onSave();
+    }
+  }
+
+  function toggleSourceMode() {
+    if (sourceMode) {
+      onChange(source);
+      setSourceMode(false);
+      requestAnimationFrame(() => {
+        if (editorRef.current) {
+          editorRef.current.innerHTML = source;
+        }
+      });
+      return;
+    }
+
+    setSource(value);
+    setSourceMode(true);
+  }
+
+  return (
+    <section
+      className={
+        'admin-rich-editor'
+        + (fullscreen ? ' admin-rich-editor--fullscreen' : '')
+        + (disabled ? ' admin-rich-editor--disabled' : '')
+      }
+    >
+      <header className="admin-rich-editor__topbar">
+        <div>
+          <span>{label}</span>
+          <strong>{sourceMode ? 'HTML' : 'Editor visual'}</strong>
+        </div>
+
+        <div className="admin-rich-editor__view-actions">
+          <button
+            type="button"
+            className={sourceMode ? '' : 'active'}
+            disabled={disabled}
+            onClick={() => sourceMode && toggleSourceMode()}
+          >
+            Visual
+          </button>
+          <button
+            type="button"
+            className={sourceMode ? 'active' : ''}
+            disabled={disabled}
+            onClick={() => !sourceMode && toggleSourceMode()}
+          >
+            HTML
+          </button>
+          <button
+            type="button"
+            onClick={() => setFullscreen((current) => !current)}
+          >
+            {fullscreen ? 'Sair da tela cheia' : 'Tela cheia'}
+          </button>
+        </div>
+      </header>
+
+      {!sourceMode && (
+        <div className="admin-rich-editor__ribbon" aria-label="Ferramentas de formatação">
+          <div className="admin-rich-editor__group">
+            <span>Estilo</span>
+            <select
+              aria-label="Estilo do parágrafo"
+              disabled={disabled}
+              defaultValue="p"
+              onChange={(event) => {
+                setBlock(event.target.value);
+                event.currentTarget.value = 'p';
+              }}
+            >
+              <option value="p">Texto normal</option>
+              <option value="h2">Título 2</option>
+              <option value="h3">Título 3</option>
+              <option value="h4">Título 4</option>
+              <option value="blockquote">Citação</option>
+            </select>
+          </div>
+
+          <div className="admin-rich-editor__group">
+            <span>Texto</span>
+            <div className="admin-rich-editor__buttons">
+              <AdminCommandButton label="B" title="Negrito (Ctrl+B)" disabled={disabled} onClick={() => runCommand('bold')} className="strong" />
+              <AdminCommandButton label="I" title="Itálico (Ctrl+I)" disabled={disabled} onClick={() => runCommand('italic')} className="italic" />
+              <AdminCommandButton label="U" title="Sublinhado (Ctrl+U)" disabled={disabled} onClick={() => runCommand('underline')} className="underline" />
+              <AdminCommandButton label="S" title="Tachado" disabled={disabled} onClick={() => runCommand('strikeThrough')} className="strike" />
+              <label className="admin-rich-editor__color" title="Cor do texto">
+                A
+                <input
+                  type="color"
+                  disabled={disabled}
+                  defaultValue="#111827"
+                  onChange={(event) => runCommand('foreColor', event.target.value)}
+                />
+              </label>
+              <label className="admin-rich-editor__color admin-rich-editor__highlight" title="Marca-texto">
+                ▰
+                <input
+                  type="color"
+                  disabled={disabled}
+                  defaultValue="#FFF59D"
+                  onChange={(event) => runCommand('hiliteColor', event.target.value)}
+                />
+              </label>
+            </div>
+          </div>
+
+          <div className="admin-rich-editor__group">
+            <span>Parágrafo</span>
+            <div className="admin-rich-editor__buttons">
+              <AdminCommandButton label="≡" title="Alinhar à esquerda" disabled={disabled} onClick={() => runCommand('justifyLeft')} />
+              <AdminCommandButton label="≣" title="Centralizar" disabled={disabled} onClick={() => runCommand('justifyCenter')} />
+              <AdminCommandButton label="≡" title="Alinhar à direita" disabled={disabled} onClick={() => runCommand('justifyRight')} className="align-right" />
+              <AdminCommandButton label="☰" title="Justificar" disabled={disabled} onClick={() => runCommand('justifyFull')} />
+              <AdminCommandButton label="•" title="Lista com marcadores" disabled={disabled} onClick={() => runCommand('insertUnorderedList')} />
+              <AdminCommandButton label="1." title="Lista numerada" disabled={disabled} onClick={() => runCommand('insertOrderedList')} />
+              <AdminCommandButton label="←" title="Diminuir recuo" disabled={disabled} onClick={() => runCommand('outdent')} />
+              <AdminCommandButton label="→" title="Aumentar recuo" disabled={disabled} onClick={() => runCommand('indent')} />
+            </div>
+          </div>
+
+          <div className="admin-rich-editor__group">
+            <span>Inserir</span>
+            <div className="admin-rich-editor__buttons">
+              <AdminCommandButton label="🔗" title="Inserir link" disabled={disabled} onClick={createLink} />
+              <AdminCommandButton label="×🔗" title="Remover link" disabled={disabled} onClick={() => runCommand('unlink')} />
+              <AdminCommandButton label="Imagem" title="Inserir imagem da biblioteca" disabled={disabled || !loadMedia} onClick={() => void openMedia()} className="wide" />
+              <AdminCommandButton label="Tabela" title="Inserir tabela" disabled={disabled} onClick={insertTable} className="wide" />
+              <AdminCommandButton label="―" title="Inserir linha horizontal" disabled={disabled} onClick={() => runCommand('insertHorizontalRule')} />
+            </div>
+          </div>
+
+          <div className="admin-rich-editor__group">
+            <span>Edição</span>
+            <div className="admin-rich-editor__buttons">
+              <AdminCommandButton label="↶" title="Desfazer (Ctrl+Z)" disabled={disabled} onClick={() => runCommand('undo')} />
+              <AdminCommandButton label="↷" title="Refazer (Ctrl+Y)" disabled={disabled} onClick={() => runCommand('redo')} />
+              <AdminCommandButton label="Tx" title="Limpar formatação" disabled={disabled} onClick={() => runCommand('removeFormat')} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {sourceMode ? (
+        <textarea
+          className="admin-rich-editor__source"
+          value={source}
+          readOnly={disabled}
+          spellCheck={false}
+          style={{ minHeight }}
+          onChange={(event) => {
+            setSource(event.target.value);
+            onChange(event.target.value);
+          }}
+          onKeyDown={handleKeyDown}
+        />
+      ) : (
+        <div
+          ref={editorRef}
+          className="admin-rich-editor__canvas"
+          contentEditable={!disabled}
+          suppressContentEditableWarning
+          spellCheck
+          style={{ minHeight }}
+          onInput={emitVisualChange}
+          onPaste={handlePaste}
+          onKeyDown={handleKeyDown}
+          aria-label={label}
+        />
+      )}
+
+      <footer className="admin-rich-editor__statusbar">
+        <span>{wordCount.toLocaleString('pt-BR')} palavras</span>
+        <span>{characterCount.toLocaleString('pt-BR')} caracteres</span>
+        <span>Ctrl+S salva a notícia</span>
+      </footer>
+
+      {mediaOpen && (
+        <div className="admin-rich-editor__media-layer" role="dialog" aria-modal="true" aria-label="Inserir imagem">
+          <div className="admin-rich-editor__media-dialog">
+            <header>
+              <div>
+                <span>Biblioteca de mídia</span>
+                <h3>Inserir imagem no conteúdo</h3>
+              </div>
+              <button type="button" onClick={() => setMediaOpen(false)} aria-label="Fechar">×</button>
+            </header>
+
+            <form
+              className="admin-rich-editor__media-search"
+              onSubmit={(event: FormEvent) => {
+                event.preventDefault();
+                void searchMedia(mediaQuery);
+              }}
+            >
+              <input
+                type="search"
+                value={mediaQuery}
+                placeholder="Buscar imagem"
+                onChange={(event) => setMediaQuery(event.target.value)}
+              />
+              <button type="submit" disabled={mediaLoading}>
+                {mediaLoading ? 'Buscando…' : 'Buscar'}
+              </button>
+            </form>
+
+            {mediaError && (
+              <p className="admin-rich-editor__media-error">Não foi possível carregar a biblioteca.</p>
+            )}
+
+            <div className="admin-rich-editor__media-grid">
+              {mediaItems.map((item) => (
+                <button
+                  type="button"
+                  key={item.id}
+                  onClick={() => insertMedia(item)}
+                >
+                  <img src={item.url} alt={item.alt || item.title} loading="lazy" />
+                  <span>{item.title}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
