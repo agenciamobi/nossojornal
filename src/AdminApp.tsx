@@ -340,27 +340,129 @@ function AdminLogin({
   );
 }
 
+type AdminIconName =
+  | 'dashboard'
+  | 'news'
+  | 'categories'
+  | 'media'
+  | 'users'
+  | 'pautas'
+  | 'settings';
+
+function AdminIcon({ name }: { name: AdminIconName }) {
+  const common = {
+    width: 20,
+    height: 20,
+    viewBox: '0 0 24 24',
+    fill: 'none',
+    stroke: 'currentColor',
+    strokeWidth: 1.8,
+    strokeLinecap: 'round' as const,
+    strokeLinejoin: 'round' as const,
+    'aria-hidden': true,
+  };
+
+  if (name === 'dashboard') {
+    return (
+      <svg {...common}>
+        <rect x="3" y="3" width="7" height="7" rx="1.4" />
+        <rect x="14" y="3" width="7" height="7" rx="1.4" />
+        <rect x="3" y="14" width="7" height="7" rx="1.4" />
+        <rect x="14" y="14" width="7" height="7" rx="1.4" />
+      </svg>
+    );
+  }
+
+  if (name === 'news') {
+    return (
+      <svg {...common}>
+        <path d="M4 4.5h11.5v15H4z" />
+        <path d="M15.5 7H20v10.5a2 2 0 0 1-2 2h-2.5" />
+        <path d="M7 8h5.5M7 11h5.5M7 14h5.5M7 17h3.5" />
+      </svg>
+    );
+  }
+
+  if (name === 'categories') {
+    return (
+      <svg {...common}>
+        <path d="M4 6h6l2 2h8v10H4z" />
+        <path d="M4 8V5h6l2 3" />
+      </svg>
+    );
+  }
+
+  if (name === 'media') {
+    return (
+      <svg {...common}>
+        <rect x="3" y="4" width="18" height="16" rx="2" />
+        <circle cx="8.5" cy="9" r="1.6" />
+        <path d="m5 17 4.5-4.5 3.2 3.2 2.2-2.2L19 17" />
+      </svg>
+    );
+  }
+
+  if (name === 'users') {
+    return (
+      <svg {...common}>
+        <circle cx="9" cy="8" r="3" />
+        <path d="M3.5 19c.5-3.3 2.4-5 5.5-5s5 1.7 5.5 5" />
+        <path d="M16 7.5a2.5 2.5 0 1 1 0 5M16 14.5c2.7.2 4.2 1.7 4.5 4.5" />
+      </svg>
+    );
+  }
+
+  if (name === 'pautas') {
+    return (
+      <svg {...common}>
+        <path d="M4 5h10v14H4z" />
+        <path d="M7 9h4M7 12h4M7 15h2.5" />
+        <path d="M17 4v6M14 7h6" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg {...common}>
+      <circle cx="12" cy="12" r="3.2" />
+      <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21h-4v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3v-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.5V3h4v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.5 1h.1v4h-.1a1.7 1.7 0 0 0-1.5 1Z" />
+    </svg>
+  );
+}
+
 function AdminNav({ user, view }: { user: AdminUser; view: AdminView }) {
-  const entries = [
-    { key: 'dashboard' as const, label: 'Painel', href: '/sistema', glyph: 'P' },
+  const entries: Array<{
+    key: AdminView;
+    label: string;
+    href: string;
+    icon: AdminIconName;
+    group: 'content' | 'management' | 'system';
+  }> = [
+    { key: 'dashboard', label: 'Painel', href: '/sistema', icon: 'dashboard', group: 'content' },
     ...(user.permissions.editPosts
-      ? [{ key: 'posts' as const, label: 'Notícias', href: '/sistema/noticias', glyph: 'N' }]
+      ? [{ key: 'posts' as const, label: 'Notícias', href: '/sistema/noticias', icon: 'news' as const, group: 'content' as const }]
       : []),
     ...(user.permissions.manageCategories
-      ? [{ key: 'categories' as const, label: 'Categorias', href: '/sistema/categorias', glyph: 'C' }]
+      ? [{ key: 'categories' as const, label: 'Categorias', href: '/sistema/categorias', icon: 'categories' as const, group: 'content' as const }]
       : []),
     ...(user.permissions.uploadFiles
-      ? [{ key: 'media' as const, label: 'Mídia', href: '/sistema/midia', glyph: 'M' }]
+      ? [{ key: 'media' as const, label: 'Mídia', href: '/sistema/midia', icon: 'media' as const, group: 'content' as const }]
       : []),
     ...(user.permissions.listUsers
-      ? [{ key: 'users' as const, label: 'Usuários', href: '/sistema/usuarios', glyph: 'U' }]
+      ? [{ key: 'users' as const, label: 'Usuários', href: '/sistema/usuarios', icon: 'users' as const, group: 'management' as const }]
       : []),
     ...(user.login === 'agenciamobi' && user.permissions.managePautas
-      ? [{ key: 'pautas' as const, label: 'Mesa de Pautas', href: '/sistema/pautas', glyph: 'P+' }]
+      ? [{ key: 'pautas' as const, label: 'Mesa de Pautas', href: '/sistema/pautas', icon: 'pautas' as const, group: 'management' as const }]
       : []),
     ...(user.permissions.manageOptions
-      ? [{ key: 'settings' as const, label: 'Configurações', href: '/sistema/configuracoes', glyph: 'G' }]
+      ? [{ key: 'settings' as const, label: 'Configurações', href: '/sistema/configuracoes', icon: 'settings' as const, group: 'system' as const }]
       : []),
+  ];
+
+  const groups = [
+    { key: 'content' as const, label: 'Conteúdo' },
+    { key: 'management' as const, label: 'Gestão' },
+    { key: 'system' as const, label: 'Sistema' },
   ];
 
   return (
@@ -371,21 +473,37 @@ function AdminNav({ user, view }: { user: AdminUser; view: AdminView }) {
       </a>
 
       <nav aria-label="Menu administrativo">
-        {entries.map((entry) => (
-          <a
-            key={entry.key}
-            href={entry.href}
-            className={view === entry.key ? 'admin-nav__item admin-nav__item--active' : 'admin-nav__item'}
-            aria-current={view === entry.key ? 'page' : undefined}
-          >
-            <span className="admin-nav__glyph" aria-hidden="true">{entry.glyph}</span>
-            <span>{entry.label}</span>
-          </a>
-        ))}
+        {groups.map((group) => {
+          const items = entries.filter((entry) => entry.group === group.key);
+          if (items.length === 0) return null;
+
+          return (
+            <section className="admin-nav__group" key={group.key}>
+              <span className="admin-nav__group-label">{group.label}</span>
+
+              {items.map((entry) => (
+                <a
+                  key={entry.key}
+                  href={entry.href}
+                  className={view === entry.key ? 'admin-nav__item admin-nav__item--active' : 'admin-nav__item'}
+                  aria-current={view === entry.key ? 'page' : undefined}
+                >
+                  <span className="admin-nav__icon">
+                    <AdminIcon name={entry.icon} />
+                  </span>
+                  <span>{entry.label}</span>
+                </a>
+              ))}
+            </section>
+          );
+        })}
       </nav>
 
       <div className="admin-sidebar__bottom">
-        <a href="/" target="_blank" rel="noopener noreferrer">Ver site ↗</a>
+        <a href="/" target="_blank" rel="noopener noreferrer">
+          <span>Ver site</span>
+          <span aria-hidden="true">↗</span>
+        </a>
       </div>
     </aside>
   );
