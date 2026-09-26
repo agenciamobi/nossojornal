@@ -83,6 +83,13 @@ function formatViews(value: number) {
   return new Intl.NumberFormat('pt-BR').format(value);
 }
 
+function homeTitle(article: Article) {
+  const override = cleanLegacyText(article.homeHeadline ?? '');
+  const original = cleanLegacyText(article.title);
+
+  return override || original || 'Notícia';
+}
+
 function StoryMedia({
   article,
   className = '',
