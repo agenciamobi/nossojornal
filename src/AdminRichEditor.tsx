@@ -212,6 +212,7 @@ export function AdminRichEditor({
   label = 'Conteúdo',
 }: AdminRichEditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
+  const selectionRef = useRef<Range | null>(null);
   const [sourceMode, setSourceMode] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
   const [source, setSource] = useState(value);
@@ -254,8 +255,33 @@ export function AdminRichEditor({
     onChange(html);
   }
 
+  function rememberSelection() {
+    if (sourceMode) return;
+
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) return;
+
+    const range = selection.getRangeAt(0);
+    const editor = editorRef.current;
+
+    if (editor && editor.contains(range.commonAncestorContainer)) {
+      selectionRef.current = range.cloneRange();
+    }
+  }
+
+  function restoreSelection() {
+    const selection = window.getSelection();
+    const range = selectionRef.current;
+
+    if (!selection || !range) return;
+
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }
+
   function focusEditor() {
     editorRef.current?.focus();
+    restoreSelection();
   }
 
   function runCommand(command: string, commandValue?: string) {
@@ -334,6 +360,7 @@ export function AdminRichEditor({
   async function openMedia() {
     if (!loadMedia || disabled || sourceMode) return;
 
+    rememberSelection();
     setMediaOpen(true);
 
     if (mediaItems.length === 0) {
@@ -345,7 +372,6 @@ export function AdminRichEditor({
     const html = [
       '<figure>',
       '<img src="' + escapeHtml(item.url) + '" alt="' + escapeHtml(item.alt || item.title) + '">',
-      item.title ? '<figcaption>' + escapeHtml(item.title) + '</figcaption>' : '',
       '</figure>',
       '<p><br></p>',
     ].join('');
@@ -542,9 +568,15 @@ export function AdminRichEditor({
           suppressContentEditableWarning
           spellCheck
           style={{ minHeight }}
-          onInput={emitVisualChange}
+          onInput={() => {
+            emitVisualChange();
+            rememberSelection();
+          }}
           onPaste={handlePaste}
           onKeyDown={handleKeyDown}
+          onKeyUp={rememberSelection}
+          onMouseUp={rememberSelection}
+          onFocus={rememberSelection}
           aria-label={label}
         />
       )}
