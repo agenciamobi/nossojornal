@@ -13,6 +13,7 @@ type AdminUser = {
     editPosts: boolean;
     publishPosts: boolean;
     manageCategories: boolean;
+    uploadFiles: boolean;
     listUsers: boolean;
     editUsers: boolean;
     manageOptions: boolean;
@@ -107,14 +108,48 @@ type UsersPayload = {
   };
 };
 
-type AdminView = 'dashboard' | 'posts' | 'categories' | 'users';
+
+type MediaPayload = {
+  ok: boolean;
+  data?: {
+    items: Array<{
+      id: number;
+      title: string;
+      mimeType: string;
+      url: string;
+      alt: string;
+      createdAt: string;
+      modifiedAt: string;
+      parentId: number;
+    }>;
+    pagination: {
+      page: number;
+      perPage: number;
+      total: number;
+      totalPages: number;
+    };
+    mode: 'read_only';
+  };
+};
+
+type SettingsPayload = {
+  ok: boolean;
+  data?: {
+    options: Record<string, string>;
+    mode: 'read_only';
+  };
+};
+
+type AdminView = 'dashboard' | 'posts' | 'categories' | 'media' | 'users' | 'settings';
 
 function resolveAdminView(pathname: string): AdminView {
   const clean = pathname.replace(/\/+$/, '');
 
   if (clean === '/sistema/noticias') return 'posts';
   if (clean === '/sistema/categorias') return 'categories';
+  if (clean === '/sistema/midia') return 'media';
   if (clean === '/sistema/usuarios') return 'users';
+  if (clean === '/sistema/configuracoes') return 'settings';
 
   return 'dashboard';
 }
@@ -275,8 +310,14 @@ function AdminNav({ user, view }: { user: AdminUser; view: AdminView }) {
     ...(user.permissions.manageCategories
       ? [{ key: 'categories' as const, label: 'Categorias', href: '/sistema/categorias', glyph: 'C' }]
       : []),
+    ...(user.permissions.uploadFiles
+      ? [{ key: 'media' as const, label: 'Mídia', href: '/sistema/midia', glyph: 'M' }]
+      : []),
     ...(user.permissions.listUsers
       ? [{ key: 'users' as const, label: 'Usuários', href: '/sistema/usuarios', glyph: 'U' }]
+      : []),
+    ...(user.permissions.manageOptions
+      ? [{ key: 'settings' as const, label: 'Configurações', href: '/sistema/configuracoes', glyph: 'G' }]
       : []),
   ];
 
@@ -757,6 +798,115 @@ function UsersView() {
   );
 }
 
+
+function MediaView() {
+  const params = useMemo(() => new URLSearchParams(window.location.search), []);
+  const page = Math.max(1, Number.parseInt(params.get('page') ?? '1', 10) || 1);
+  const [data, setData] = useState<MediaPayload['data']>();
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    void adminFetch<MediaPayload>('/api/admin/media.php?page=' + page + '&per_page=36')
+      .then((payload) => {
+        if (!payload.ok || !payload.data) throw new Error('media_invalid');
+        setData(payload.data);
+      })
+      .catch(() => setError(true));
+  }, [page]);
+
+  if (error) return <AdminError />;
+  if (!data) return <AdminLoading />;
+
+  return (
+    <>
+      <AdminPageHeader
+        eyebrow="Acervo"
+        title="Mídia"
+        description="Biblioteca de imagens e arquivos reaproveitada do WordPress."
+      />
+
+      <ReadOnlyNotice />
+
+      <section className="admin-media-grid" aria-label="Biblioteca de mídia">
+        {data.items.map((item) => (
+          <article className="admin-media-card" key={item.id}>
+            <div className="admin-media-card__preview">
+              {item.mimeType.startsWith('image/') ? (
+                <img src={item.url} alt={item.alt || item.title} loading="lazy" />
+              ) : (
+                <span>{item.mimeType || 'arquivo'}</span>
+              )}
+            </div>
+
+            <div className="admin-media-card__body">
+              <strong>{item.title}</strong>
+              <small>{formatAdminDate(item.createdAt)}</small>
+            </div>
+          </article>
+        ))}
+      </section>
+
+      <AdminPagination
+        page={data.pagination.page}
+        totalPages={data.pagination.totalPages}
+        base="/sistema/midia"
+        params={{}}
+      />
+    </>
+  );
+}
+
+function SettingsView() {
+  const [data, setData] = useState<SettingsPayload['data']>();
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    void adminFetch<SettingsPayload>('/api/admin/settings.php')
+      .then((payload) => {
+        if (!payload.ok || !payload.data) throw new Error('settings_invalid');
+        setData(payload.data);
+      })
+      .catch(() => setError(true));
+  }, []);
+
+  if (error) return <AdminError />;
+  if (!data) return <AdminLoading />;
+
+  const labels: Record<string, string> = {
+    blogname: 'Nome do site',
+    blogdescription: 'Descrição',
+    home: 'URL pública',
+    siteurl: 'URL do WordPress legado',
+    admin_email: 'E-mail administrativo',
+    posts_per_page: 'Posts por página',
+    date_format: 'Formato de data',
+    time_format: 'Formato de hora',
+    timezone_string: 'Fuso horário',
+    permalink_structure: 'Estrutura histórica de links',
+  };
+
+  return (
+    <>
+      <AdminPageHeader
+        eyebrow="Site"
+        title="Configurações"
+        description="Configurações gerais herdadas do WordPress."
+      />
+
+      <ReadOnlyNotice />
+
+      <section className="admin-settings">
+        {Object.entries(data.options).map(([key, value]) => (
+          <label key={key}>
+            <span>{labels[key] ?? key}</span>
+            <input value={value} readOnly />
+          </label>
+        ))}
+      </section>
+    </>
+  );
+}
+
 function AdminPagination({
   page,
   totalPages,
@@ -879,7 +1029,9 @@ export function AdminApp() {
           {view === 'dashboard' && <DashboardView user={user} />}
           {view === 'posts' && <PostsView />}
           {view === 'categories' && <CategoriesView />}
+          {view === 'media' && <MediaView />}
           {view === 'users' && <UsersView />}
+          {view === 'settings' && <SettingsView />}
         </main>
       </div>
     </div>
