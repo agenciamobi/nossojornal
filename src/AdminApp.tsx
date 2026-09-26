@@ -7667,6 +7667,41 @@ function PautasView({ csrfToken }: { csrfToken: string }) {
   ) as Record<PautaItem['stage'], number>;
 
   const newCount = data.items.filter((item) => item.isNew).length;
+  const dueFeedCount = (data.sources ?? []).filter(
+    (source) => source.enabled && source.health.due,
+  ).length;
+
+  const sourceGroups = Array.from(
+    (data.sources ?? []).reduce((groups, source) => {
+      const groupName = source.category.trim() || 'Sem tema';
+      const group = groups.get(groupName) ?? [];
+      group.push(source);
+      groups.set(groupName, group);
+      return groups;
+    }, new Map<string, PautaFeedSource[]>()),
+  )
+    .map(([name, sources]) => ({
+      name,
+      sources: [...sources].sort((left, right) =>
+        right.priority - left.priority || left.name.localeCompare(right.name, 'pt-BR')
+      ),
+    }))
+    .sort((left, right) => left.name.localeCompare(right.name, 'pt-BR'));
+
+  function feedCadenceLabel(minutes: number) {
+    if (minutes >= 1440 && minutes % 1440 === 0) {
+      const days = minutes / 1440;
+      return days === 1 ? '1 dia' : days + ' dias';
+    }
+
+    if (minutes >= 60 && minutes % 60 === 0) {
+      const hours = minutes / 60;
+      return hours === 1 ? '1h' : hours + 'h';
+    }
+
+    return minutes + ' min';
+  }
+
   const activeFilterCount = [
     normalizedQuery !== '',
     filterStage !== 'all',
@@ -8058,11 +8093,21 @@ function PautasView({ csrfToken }: { csrfToken: string }) {
             </button>
             <button
               type="button"
+              className="admin-radar-due"
+              disabled={Boolean(capturing) || dueFeedCount === 0}
+              onClick={() => void captureDueFeeds()}
+            >
+              {capturing === 'due'
+                ? 'Capturando…'
+                : 'Vencidas ' + dueFeedCount.toLocaleString('pt-BR')}
+            </button>
+            <button
+              type="button"
               className="admin-radar-capture"
               disabled={Boolean(capturing) || !(data.sources ?? []).some((source) => source.enabled)}
               onClick={() => void captureFeed()}
             >
-              {capturing === 'all' ? 'Capturando…' : 'Capturar agora'}
+              {capturing === 'all' ? 'Capturando…' : 'Capturar tudo'}
             </button>
           </div>
         </div>
@@ -8129,6 +8174,31 @@ function PautasView({ csrfToken }: { csrfToken: string }) {
                   )}
                 />
               </label>
+              <label>
+                <span>Cadência desejada</span>
+                <select
+                  value={feedRefreshMinutes}
+                  onChange={(event) => setFeedRefreshMinutes(Number(event.target.value) || 180)}
+                >
+                  <option value={60}>A cada 1 hora</option>
+                  <option value={180}>A cada 3 horas</option>
+                  <option value={360}>A cada 6 horas</option>
+                  <option value={720}>A cada 12 horas</option>
+                  <option value={1440}>A cada 24 horas</option>
+                </select>
+              </label>
+              <label>
+                <span>Itens por captura</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={30}
+                  value={feedMaxItems}
+                  onChange={(event) => setFeedMaxItems(
+                    Math.max(1, Math.min(30, Number(event.target.value) || 1)),
+                  )}
+                />
+              </label>
               <label className="admin-feed-editor__enabled">
                 <input
                   type="checkbox"
@@ -8162,94 +8232,147 @@ function PautasView({ csrfToken }: { csrfToken: string }) {
           <div className="admin-radar-result" role="status">{captureResult}</div>
         )}
 
-        <div className="admin-pautas-sources">
-          {(data.sources ?? []).map((source) => (
-            <article key={source.feedUrl}>
-              <div className="admin-pautas-source__identity">
-                <div className="admin-pautas-source__eyebrow">
-                  <span className="admin-pautas-source__category">{source.category || 'Sem tema'}</span>
-                  {!source.enabled && <span className="admin-feed-disabled">Pausada</span>}
-                  <span
-                    className={'admin-feed-health admin-feed-health--' + source.health.status}
-                    title={
-                      source.health.status === 'healthy'
-                        ? 'Feed respondeu na última tentativa'
-                        : source.health.status === 'error'
-                          ? 'Feed falhou na última tentativa'
-                          : 'Feed ainda não foi verificado'
-                    }
+        <div className="admin-pautas-source-groups">
+          {sourceGroups.map((group) => {
+            const enabled = group.sources.filter((source) => source.enabled);
+            const due = enabled.filter((source) => source.health.due);
+
+            return (
+              <section className="admin-pautas-source-group" key={group.name}>
+                <header>
+                  <div>
+                    <span>Grupo editorial</span>
+                    <strong>{group.name}</strong>
+                    <small>
+                      {group.sources.length.toLocaleString('pt-BR')} fontes
+                      {' • '}
+                      {due.length.toLocaleString('pt-BR')} vencidas
+                    </small>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={Boolean(capturing) || enabled.length === 0}
+                    onClick={() => void captureSourceGroup(group.name, group.sources)}
                   >
-                    {source.health.status === 'healthy'
-                      ? 'Saudável'
-                      : source.health.status === 'error'
-                        ? 'Falha'
-                        : 'Não verificado'}
-                  </span>
+                    {capturing === 'group:' + group.name ? 'Capturando…' : 'Capturar grupo'}
+                  </button>
+                </header>
+
+                <div className="admin-pautas-sources">
+                  {group.sources.map((source) => (
+                    <article key={source.id}>
+                      <div className="admin-pautas-source__identity">
+                        <div className="admin-pautas-source__eyebrow">
+                          <span className="admin-pautas-source__category">{source.kind}</span>
+                          {!source.enabled && <span className="admin-feed-disabled">Pausada</span>}
+                          {source.enabled && source.health.due && (
+                            <span className="admin-feed-due">Vencida</span>
+                          )}
+                          <span
+                            className={'admin-feed-health admin-feed-health--' + source.health.status}
+                            title={
+                              source.health.status === 'healthy'
+                                ? 'Feed respondeu na última tentativa'
+                                : source.health.status === 'error'
+                                  ? 'Feed falhou na última tentativa'
+                                  : 'Feed ainda não foi verificado'
+                            }
+                          >
+                            {source.health.status === 'healthy'
+                              ? 'Saudável'
+                              : source.health.status === 'error'
+                                ? 'Falha'
+                                : 'Não verificado'}
+                          </span>
+                        </div>
+                        <h3>{source.name}</h3>
+                        <p>
+                          prioridade {source.priority}
+                          {' • '}
+                          a cada {feedCadenceLabel(source.refreshMinutes)}
+                          {' • '}
+                          até {source.maxItems} itens
+                        </p>
+
+                        <dl className="admin-feed-health__meta">
+                          <div>
+                            <dt>Último sucesso</dt>
+                            <dd>
+                              {source.health.lastSuccessAt
+                                ? formatAdminDate(source.health.lastSuccessAt)
+                                : 'Nunca'}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt>Próxima janela</dt>
+                            <dd>
+                              {!source.enabled
+                                ? 'Pausada'
+                                : source.health.due
+                                  ? 'Agora'
+                                  : source.health.nextRefreshAt
+                                    ? formatAdminDate(source.health.nextRefreshAt)
+                                    : 'Agora'}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt>Resposta</dt>
+                            <dd>
+                              {source.health.lastDurationMs > 0
+                                ? source.health.lastDurationMs.toLocaleString('pt-BR') + ' ms'
+                                : '—'}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt>Última captura</dt>
+                            <dd>{source.health.lastCaptured.toLocaleString('pt-BR')}</dd>
+                          </div>
+                          <div>
+                            <dt>Total capturado</dt>
+                            <dd>{source.health.totalCaptured.toLocaleString('pt-BR')}</dd>
+                          </div>
+                        </dl>
+
+                        {source.health.status === 'error' && (
+                          <small className="admin-feed-health__error">
+                            {source.health.consecutiveFailures.toLocaleString('pt-BR')}
+                            {' '}
+                            {source.health.consecutiveFailures === 1
+                              ? 'falha consecutiva'
+                              : 'falhas consecutivas'}
+                          </small>
+                        )}
+                      </div>
+
+                      <div className="admin-pautas-source__actions">
+                        <button
+                          type="button"
+                          disabled={Boolean(capturing) || !source.enabled}
+                          onClick={() => void captureFeed(source.feedUrl)}
+                        >
+                          {capturing === source.feedUrl
+                            ? 'Capturando…'
+                            : source.enabled
+                              ? 'Capturar'
+                              : 'Pausada'}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={Boolean(capturing) || feedSaving}
+                          onClick={() => editFeed(source)}
+                        >
+                          Editar
+                        </button>
+                        <a href={source.feedUrl} target="_blank" rel="noopener noreferrer">
+                          RSS ↗
+                        </a>
+                      </div>
+                    </article>
+                  ))}
                 </div>
-                <h3>{source.name}</h3>
-                <p>{source.kind} • prioridade editorial {source.priority}</p>
-
-                <dl className="admin-feed-health__meta">
-                  <div>
-                    <dt>Último sucesso</dt>
-                    <dd>
-                      {source.health.lastSuccessAt
-                        ? formatAdminDate(source.health.lastSuccessAt)
-                        : 'Nunca'}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>Resposta</dt>
-                    <dd>
-                      {source.health.lastDurationMs > 0
-                        ? source.health.lastDurationMs.toLocaleString('pt-BR') + ' ms'
-                        : '—'}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>Última captura</dt>
-                    <dd>{source.health.lastCaptured.toLocaleString('pt-BR')}</dd>
-                  </div>
-                  <div>
-                    <dt>Total capturado</dt>
-                    <dd>{source.health.totalCaptured.toLocaleString('pt-BR')}</dd>
-                  </div>
-                </dl>
-
-                {source.health.status === 'error' && (
-                  <small className="admin-feed-health__error">
-                    {source.health.consecutiveFailures.toLocaleString('pt-BR')}
-                    {' '}
-                    {source.health.consecutiveFailures === 1 ? 'falha consecutiva' : 'falhas consecutivas'}
-                  </small>
-                )}
-              </div>
-
-              <div className="admin-pautas-source__actions">
-                <button
-                  type="button"
-                  disabled={Boolean(capturing) || !source.enabled}
-                  onClick={() => void captureFeed(source.feedUrl)}
-                >
-                  {capturing === source.feedUrl
-                    ? 'Capturando…'
-                    : source.enabled
-                      ? 'Capturar'
-                      : 'Pausada'}
-                </button>
-                <button
-                  type="button"
-                  disabled={Boolean(capturing) || feedSaving}
-                  onClick={() => editFeed(source)}
-                >
-                  Editar
-                </button>
-                <a href={source.feedUrl} target="_blank" rel="noopener noreferrer">
-                  RSS ↗
-                </a>
-              </div>
-            </article>
-          ))}
+              </section>
+            );
+          })}
         </div>
       </section>
     </>
