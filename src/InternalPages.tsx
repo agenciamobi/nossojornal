@@ -75,6 +75,12 @@ type StaticPagePayload = {
       contentHtml: string;
       excerpt: string;
       modifiedAt: string;
+      contacts?: Array<{
+        type: 'whatsapp' | 'email' | 'phone';
+        href: string;
+        value: string;
+        label: string;
+      }>;
     };
   };
 };
@@ -185,6 +191,28 @@ function formatDate(value: string, includeTime = true) {
   }).format(date);
 }
 
+function estimateReadingMinutes(html: string) {
+  const text = html
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&[a-z0-9#]+;/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (!text) return 1;
+
+  return Math.max(1, Math.ceil(text.split(' ').length / 210));
+}
+
+function formatWhatsappNumber(value: string) {
+  const digits = value.replace(/\D/g, '');
+
+  if (digits === '53992413788') {
+    return '(53) 99241-3788';
+  }
+
+  return value;
+}
+
 function LoadingState({ label = 'Carregando conteúdo' }: { label?: string }) {
   return (
     <main className="internal-main" aria-busy="true">
@@ -293,6 +321,7 @@ function Pagination({
 function ArticlePage({ slug }: { slug: string }) {
   const [payload, setPayload] = useState<ArticlePayload['data']>();
   const [state, setState] = useState<'loading' | 'ready' | 'error' | 'not-found'>('loading');
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -370,6 +399,34 @@ function ArticlePage({ slug }: { slug: string }) {
 
   const shareUrl = new URL(article.url, window.location.origin).toString();
   const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(`${article.title} ${shareUrl}`)}`;
+  const readingMinutes = estimateReadingMinutes(article.contentHtml ?? '');
+
+  async function copyShareLink() {
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1800);
+    } catch {
+      window.prompt('Copie o link da notícia:', shareUrl);
+    }
+  }
+
+  async function shareArticle() {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: article.title,
+          text: article.excerpt,
+          url: shareUrl,
+        });
+        return;
+      } catch {
+        return;
+      }
+    }
+
+    await copyShareLink();
+  }
 
   return (
     <main className="internal-main article-page">
@@ -397,8 +454,9 @@ function ArticlePage({ slug }: { slug: string }) {
             <h1>{article.title}</h1>
             {article.excerpt && <p className="article-detail__deck">{article.excerpt}</p>}
 
-            <div className="article-detail__byline">
-              <div>
+            <div className="article-detail__meta-row">
+              <div className="article-detail__byline">
+                <span className="article-detail__byline-label">Por</span>
                 <strong>{article.author.name || 'Nosso Jornal'}</strong>
                 <span>Publicado em {formatDate(article.publishedAt)}</span>
                 {article.modifiedAt !== article.publishedAt && (
@@ -406,14 +464,27 @@ function ArticlePage({ slug }: { slug: string }) {
                 )}
               </div>
 
-              <a
-                href={whatsappUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label="Compartilhar esta notícia no WhatsApp em nova aba"
-              >
-                Compartilhar
-              </a>
+              <div className="article-detail__facts" aria-label="Informações da matéria">
+                <span>{readingMinutes} min de leitura</span>
+                {article.views > 0 && <span>{article.views} visualizações</span>}
+              </div>
+
+              <div className="article-share" aria-label="Compartilhar notícia">
+                <a
+                  href={whatsappUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Compartilhar esta notícia no WhatsApp em nova aba"
+                >
+                  WhatsApp
+                </a>
+                <button type="button" onClick={() => void shareArticle()}>
+                  Compartilhar
+                </button>
+                <button type="button" onClick={() => void copyShareLink()}>
+                  {copied ? 'Link copiado' : 'Copiar link'}
+                </button>
+              </div>
             </div>
           </header>
 
@@ -429,13 +500,19 @@ function ArticlePage({ slug }: { slug: string }) {
               dangerouslySetInnerHTML={{ __html: article.contentHtml ?? '' }}
             />
 
-            <aside className="article-detail__aside">
-              <span className="internal-kicker">Editorias</span>
+            <aside className="article-detail__aside" aria-label="Navegação da matéria">
+              <span className="internal-kicker">Nesta matéria</span>
               <div className="article-detail__categories">
                 {article.categories.map((category) => (
                   <a href={category.url} key={category.id}>{category.name}</a>
                 ))}
               </div>
+
+              {article.primaryCategory && (
+                <a className="article-detail__back-category" href={article.primaryCategory.url}>
+                  Mais em {article.primaryCategory.name}
+                </a>
+              )}
             </aside>
           </div>
         </article>
@@ -663,18 +740,112 @@ function StaticPage({ slug }: { slug: 'sobre' | 'contato' }) {
   if (state === 'not-found') return <ErrorState title="Página não encontrada" />;
   if (state === 'error' || !page) return <ErrorState />;
 
+  if (slug === 'contato') {
+    const contacts = page.contacts ?? [];
+    const whatsapp = contacts.find((contact) => contact.type === 'whatsapp');
+    const email = contacts.find((contact) => contact.type === 'email');
+    const phone = contacts.find((contact) => contact.type === 'phone');
+
+    return (
+      <main className="internal-main contact-page">
+        <div className="container static-page__shell">
+          <Breadcrumbs items={[{ label: 'Capa', href: '/' }, { label: 'Contato' }]} />
+
+          <header className="contact-page__header">
+            <span className="internal-kicker">Fale com a redação</span>
+            <h1>Contato</h1>
+            <p>
+              Pautas, publicidade, informações comerciais e contato com o Nosso Jornal
+              em um só lugar.
+            </p>
+          </header>
+
+          <div className="contact-page__grid">
+            {whatsapp && (
+              <a
+                className="contact-card contact-card--primary"
+                href={whatsapp.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Conversar com o Nosso Jornal pelo WhatsApp em nova aba"
+              >
+                <span>WhatsApp comercial</span>
+                <strong>{formatWhatsappNumber(whatsapp.value)}</strong>
+                <small>Abrir conversa</small>
+              </a>
+            )}
+
+            {phone && (
+              <a className="contact-card" href={phone.href}>
+                <span>Telefone</span>
+                <strong>{phone.value}</strong>
+                <small>Ligar agora</small>
+              </a>
+            )}
+
+            {email && (
+              <a className="contact-card" href={email.href}>
+                <span>E-mail</span>
+                <strong>{email.value}</strong>
+                <small>Enviar mensagem</small>
+              </a>
+            )}
+
+            <div className="contact-card">
+              <span>Redação regional</span>
+              <strong>Hulha Negra, RS</strong>
+              <small>Cobertura local e regional</small>
+            </div>
+          </div>
+
+          <section className="contact-page__note">
+            <span className="internal-kicker">Nosso Jornal</span>
+            <h2>Tem uma pauta para a região?</h2>
+            <p>
+              Use um dos canais acima para encaminhar informações, sugestões de reportagem
+              ou oportunidades comerciais.
+            </p>
+          </section>
+        </div>
+      </main>
+    );
+  }
+
   return (
-    <main className="internal-main static-page">
+    <main className="internal-main static-page about-page">
       <div className="container static-page__shell">
         <Breadcrumbs items={[{ label: 'Capa', href: '/' }, { label: page.title }]} />
 
-        <header className="static-page__header">
-          <span className="internal-kicker">Nosso Jornal</span>
+        <header className="static-page__header about-page__header">
+          <span className="internal-kicker">Nossa história</span>
           <h1>{page.title}</h1>
           {page.excerpt && <p>{page.excerpt}</p>}
         </header>
 
-        <div className="static-page__body" dangerouslySetInnerHTML={{ __html: page.contentHtml }} />
+        <div className="about-page__layout">
+          <div
+            className="static-page__body about-page__story"
+            dangerouslySetInnerHTML={{ __html: page.contentHtml }}
+          />
+
+          <aside className="about-page__rail" aria-label="Marcos do Nosso Jornal">
+            <div>
+              <span>Fundação</span>
+              <strong>2013</strong>
+              <p>O primeiro jornal impresso de Hulha Negra.</p>
+            </div>
+            <div>
+              <span>Nova fase</span>
+              <strong>Digital</strong>
+              <p>Retorno ao formato digital preservando a memória e a informação local.</p>
+            </div>
+            <div>
+              <span>Território</span>
+              <strong>Hulha Negra</strong>
+              <p>Jornalismo feito a partir da comunidade e da região.</p>
+            </div>
+          </aside>
+        </div>
       </div>
     </main>
   );
