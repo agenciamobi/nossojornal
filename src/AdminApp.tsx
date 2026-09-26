@@ -827,6 +827,15 @@ function AdminError() {
   );
 }
 
+function AdminAccessDenied() {
+  return (
+    <div className="admin-error" role="alert">
+      <strong>Acesso não permitido.</strong>
+      <p>Seu usuário não possui permissão para administrar esta área.</p>
+    </div>
+  );
+}
+
 function DashboardView({ user }: { user: AdminUser }) {
   const [data, setData] = useState<DashboardPayload['data']>();
   const [error, setError] = useState(false);
@@ -3577,7 +3586,11 @@ function MediaItemView({ csrfToken }: { csrfToken: string }) {
   if (!data) return <AdminLoading />;
 
   const media = data.media;
-  const canEdit = Boolean(writeReadiness?.database.update.available);
+  const canEdit = Boolean(
+    writeReadiness?.database.insert.available
+      && writeReadiness.database.update.available
+      && writeReadiness.database.delete.available,
+  );
   const changed =
     title !== media.title
     || alt !== media.alt
@@ -4224,14 +4237,26 @@ export function AdminApp() {
           {view === 'dashboard' && <DashboardView user={user} />}
           {view === 'posts' && <PostsView user={user} csrfToken={csrfToken} />}
           {view === 'post' && <PostEditorView user={user} csrfToken={csrfToken} />}
-          {view === 'pages' && user.permissions.editPages && <PagesView />}
-          {view === 'page' && user.permissions.editPages && <PageEditorView user={user} csrfToken={csrfToken} />}
+          {view === 'pages' && (
+            user.permissions.editPages
+              ? <PagesView />
+              : <AdminAccessDenied />
+          )}
+          {view === 'page' && (
+            user.permissions.editPages
+              ? <PageEditorView user={user} csrfToken={csrfToken} />
+              : <AdminAccessDenied />
+          )}
           {view === 'categories' && <CategoriesView />}
           {view === 'categoryNew' && <NewCategoryView csrfToken={csrfToken} />}
           {view === 'category' && <CategoryEditorView csrfToken={csrfToken} />}
           {view === 'media' && <MediaView csrfToken={csrfToken} />}
           {view === 'mediaItem' && <MediaItemView csrfToken={csrfToken} />}
-          {view === 'comments' && user.permissions.moderateComments && <CommentsView csrfToken={csrfToken} />}
+          {view === 'comments' && (
+            user.permissions.moderateComments
+              ? <CommentsView csrfToken={csrfToken} />
+              : <AdminAccessDenied />
+          )}
           {view === 'users' && <UsersView />}
           {view === 'user' && <UserEditorView csrfToken={csrfToken} />}
           {view === 'settings' && <SettingsView csrfToken={csrfToken} />}
