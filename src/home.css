@@ -55,7 +55,7 @@
 
 .home-eyebrow {
   display: inline-flex;
-  color: var(--blue);
+  color: var(--editorial-color, var(--blue));
   font-size: 10px;
   font-weight: 900;
   letter-spacing: .12em;
@@ -150,7 +150,9 @@
 }
 
 .home-hero .home-eyebrow {
-  color: #c7d9ff;
+  padding-left: 10px;
+  border-left: 3px solid var(--editorial-color, #c7d9ff);
+  color: #fff;
 }
 
 .home-hero h1 {
@@ -382,7 +384,20 @@
 
 .home-category-section {
   padding-block: 58px 64px;
-  border-top: 1px solid var(--line);
+  border-top: 4px solid var(--editorial-color, var(--line));
+}
+
+.home-category-section .home-section-heading {
+  border-bottom-color: var(--editorial-color, var(--ink));
+}
+
+.home-category-section .home-section-heading > div > span,
+.home-category-section .home-section-heading > a {
+  color: var(--editorial-color, var(--blue));
+}
+
+.home-category-section .home-category-card--lead .home-category-card__media {
+  box-shadow: inset 0 -4px 0 var(--editorial-color, transparent);
 }
 
 .home-category-section:nth-of-type(even) {
