@@ -39,7 +39,7 @@ function NativeFooterNavigation({ menu }: { menu: NavigationMenu }) {
   const columns = footerColumns(menu);
 
   return (
-    <>
+    <div className="site-footer__native-nav">
       {columns.map((column, index) => (
         <nav key={column.title + '-' + index} aria-label={column.title}>
           {column.titleItem ? (
@@ -65,7 +65,7 @@ function NativeFooterNavigation({ menu }: { menu: NavigationMenu }) {
           ))}
         </nav>
       ))}
-    </>
+    </div>
   );
 }
 
