@@ -6,6 +6,7 @@ import {
   type EditorialRelatedStory,
 } from './AdminEditorialConnections';
 import { AdminWordPressTools } from './AdminWordPressTools';
+import { useAdminEditorGuard } from './admin/useAdminEditorGuard';
 import './admin.css';
 
 type AdminUser = {
@@ -790,6 +791,45 @@ function resolveAdminView(pathname: string): AdminView {
   if (clean === '/sistema/pautas') return 'pautas';
 
   return 'dashboard';
+}
+
+function AdminEditorGuard({
+  dirty,
+  saving,
+  onSave,
+}: {
+  dirty: boolean;
+  saving: boolean;
+  onSave?: () => void | Promise<void>;
+}) {
+  useAdminEditorGuard({ dirty, saving, onSave });
+  return null;
+}
+
+function AdminEditorSaveIndicator({
+  dirty,
+  state,
+}: {
+  dirty: boolean;
+  state: 'idle' | 'saving' | 'saved' | 'error';
+}) {
+  if (state === 'saving') {
+    return <span className="admin-editor-save-indicator is-saving">Salvando…</span>;
+  }
+
+  if (state === 'error') {
+    return <span className="admin-editor-save-indicator is-error">Falha ao salvar</span>;
+  }
+
+  if (dirty) {
+    return <span className="admin-editor-save-indicator is-dirty">Não salvo</span>;
+  }
+
+  if (state === 'saved') {
+    return <span className="admin-editor-save-indicator is-saved">Salvo</span>;
+  }
+
+  return <span className="admin-editor-save-indicator">Sem alterações</span>;
 }
 
 function formatAdminDate(value: string) {
@@ -3242,6 +3282,11 @@ function PostEditorView({
 
   return (
     <>
+      <AdminEditorGuard
+        dirty={changed}
+        saving={saveState === 'saving'}
+        onSave={savePost}
+      />
       <header className="admin-editor-header">
         <div>
           <a href="/sistema/noticias" className="admin-editor-header__back">← Notícias</a>
@@ -3255,6 +3300,7 @@ function PostEditorView({
         </div>
 
         <div className="admin-editor-header__actions">
+          <AdminEditorSaveIndicator dirty={changed} state={saveState} />
           {post.publicUrl && post.status === 'publish' && (
             <a href={post.publicUrl} target="_blank" rel="noopener noreferrer">
               Ver no site ↗
@@ -4831,6 +4877,11 @@ function PageEditorView({
 
   return (
     <>
+      <AdminEditorGuard
+        dirty={changed}
+        saving={saveState === 'saving'}
+        onSave={savePage}
+      />
       <header className="admin-editor-header">
         <div>
           <a href="/sistema/paginas" className="admin-editor-header__back">← Páginas</a>
@@ -4844,6 +4895,7 @@ function PageEditorView({
         </div>
 
         <div className="admin-editor-header__actions">
+          <AdminEditorSaveIndicator dirty={changed} state={saveState} />
           {item.publicUrl && item.status === 'publish' && (
             <a href={item.publicUrl} target="_blank" rel="noopener noreferrer">Ver no site ↗</a>
           )}
@@ -5107,6 +5159,12 @@ function NewCategoryView({ csrfToken }: { csrfToken: string }) {
   if (!data) return <AdminLoading />;
 
   const canCreate = true;
+  const changed =
+    name.trim() !== ''
+    || slug.trim() !== ''
+    || description.trim() !== ''
+    || parentId !== null
+    || color.toUpperCase() !== '#0B57D0';
 
   async function createCategory() {
     if (!canCreate || name.trim() === '' || saveState === 'saving') return;
@@ -5146,6 +5204,11 @@ function NewCategoryView({ csrfToken }: { csrfToken: string }) {
 
   return (
     <>
+      <AdminEditorGuard
+        dirty={changed}
+        saving={saveState === 'saving'}
+        onSave={createCategory}
+      />
       <header className="admin-editor-header">
         <div>
           <a href="/sistema/categorias" className="admin-editor-header__back">← Categorias</a>
@@ -5373,6 +5436,11 @@ function CategoryEditorView({ csrfToken }: { csrfToken: string }) {
 
   return (
     <>
+      <AdminEditorGuard
+        dirty={changed}
+        saving={saveState === 'saving'}
+        onSave={saveCategory}
+      />
       <header className="admin-editor-header">
         <div>
           <a href="/sistema/categorias" className="admin-editor-header__back">← Categorias</a>
@@ -5388,6 +5456,7 @@ function CategoryEditorView({ csrfToken }: { csrfToken: string }) {
         </div>
 
         <div className="admin-editor-header__actions">
+          <AdminEditorSaveIndicator dirty={changed} state={saveState} />
           <a href={category.publicUrl} target="_blank" rel="noopener noreferrer">
             Ver editoria ↗
           </a>
@@ -5802,6 +5871,37 @@ function SourcesView({ csrfToken }: { csrfToken: string }) {
   if (error) return <AdminError />;
   if (!data) return <AdminLoading />;
 
+  const editingSource = editingId > 0
+    ? data.items.find((item) => item.id === editingId) ?? null
+    : null;
+  const normalizedTopics = topics
+    .split(/[,;\n]+/)
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const sourceDirty = editingSource
+    ? name !== editingSource.name
+      || organization !== editingSource.organization
+      || role !== editingSource.role
+      || phone !== editingSource.phone
+      || whatsapp !== editingSource.whatsapp
+      || email !== editingSource.email
+      || city !== editingSource.city
+      || JSON.stringify(normalizedTopics) !== JSON.stringify(editingSource.topics)
+      || url !== editingSource.url
+      || notes !== editingSource.notes
+    : [
+        name,
+        organization,
+        role,
+        phone,
+        whatsapp,
+        email,
+        city,
+        topics,
+        url,
+        notes,
+      ].some((value) => value.trim() !== '');
+
   function resetForm() {
     setEditingId(0);
     setName('');
@@ -5890,6 +5990,11 @@ function SourcesView({ csrfToken }: { csrfToken: string }) {
 
   return (
     <>
+      <AdminEditorGuard
+        dirty={sourceDirty}
+        saving={saving}
+        onSave={() => mutateSource('save')}
+      />
       <AdminPageHeader
         eyebrow="Apuração"
         title="Fontes"
@@ -5911,8 +6016,14 @@ function SourcesView({ csrfToken }: { csrfToken: string }) {
         <aside className="admin-source-editor">
           <section className="admin-editor-card">
             <div className="admin-editor-card__head">
-              <span>{editingId ? 'Editar' : 'Nova'}</span>
-              <strong>{editingId ? 'Fonte #' + editingId : 'Cadastrar fonte'}</strong>
+              <div>
+                <span>{editingId ? 'Editar' : 'Nova'}</span>
+                <strong>{editingId ? 'Fonte #' + editingId : 'Cadastrar fonte'}</strong>
+              </div>
+              <AdminEditorSaveIndicator
+                dirty={sourceDirty}
+                state={saving ? 'saving' : message === 'error' ? 'error' : message === 'saved' ? 'saved' : 'idle'}
+              />
             </div>
 
             <div className="admin-editor-card__body admin-editor-card__body--fields">
@@ -6249,6 +6360,11 @@ function UserEditorView({
 
   return (
     <>
+      <AdminEditorGuard
+        dirty={changed}
+        saving={saveState === 'saving'}
+        onSave={saveUser}
+      />
       <header className="admin-editor-header">
         <div>
           <a href="/sistema/usuarios" className="admin-editor-header__back">← Usuários</a>
@@ -6260,6 +6376,7 @@ function UserEditorView({
         </div>
 
         <div className="admin-editor-header__actions">
+          <AdminEditorSaveIndicator dirty={changed} state={saveState} />
           <button
             type="button"
             className="admin-button--primary"
@@ -6760,6 +6877,11 @@ function MediaItemView({ csrfToken }: { csrfToken: string }) {
 
   return (
     <>
+      <AdminEditorGuard
+        dirty={changed}
+        saving={saveState === 'saving'}
+        onSave={saveMedia}
+      />
       <header className="admin-editor-header">
         <div>
           <a href="/sistema/midia" className="admin-editor-header__back">← Mídia</a>
@@ -6770,6 +6892,7 @@ function MediaItemView({ csrfToken }: { csrfToken: string }) {
         </div>
 
         <div className="admin-editor-header__actions">
+          <AdminEditorSaveIndicator dirty={changed} state={saveState} />
           <a href={media.url} target="_blank" rel="noopener noreferrer">Abrir arquivo ↗</a>
           <button
             type="button"
@@ -7033,6 +7156,11 @@ function SettingsView({ csrfToken }: { csrfToken: string }) {
 
   return (
     <>
+      <AdminEditorGuard
+        dirty={changed}
+        saving={saveState === 'saving'}
+        onSave={saveSettings}
+      />
       <div className="admin-page-heading-row">
         <AdminPageHeader
           eyebrow="Site"
@@ -7040,14 +7168,17 @@ function SettingsView({ csrfToken }: { csrfToken: string }) {
           description="Informações gerais e preferências do site."
         />
 
-        <button
+        <div className="admin-page-heading-row__actions">
+          <AdminEditorSaveIndicator dirty={changed} state={saveState} />
+          <button
           type="button"
           className="admin-create-button"
           disabled={!canEdit || !changed || saveState === 'saving'}
           onClick={() => void saveSettings()}
         >
           {saveState === 'saving' ? 'Salvando…' : 'Salvar alterações'}
-        </button>
+          </button>
+        </div>
       </div>
 
       {saveState === 'saved' && (
@@ -7218,6 +7349,54 @@ function PautasView({ csrfToken }: { csrfToken: string }) {
     high: 'Alta',
     urgent: 'Urgente',
   };
+
+  const editingPauta = editingId > 0
+    ? data.items.find((item) => item.id === editingId) ?? null
+    : null;
+  const pautaDirty = editingPauta
+    ? title !== editingPauta.title
+      || notes !== editingPauta.notes
+      || stage !== editingPauta.stage
+      || priority !== editingPauta.priority
+      || topic !== editingPauta.topic
+      || sourceName !== editingPauta.sourceName
+      || sourceUrl !== editingPauta.sourceUrl
+      || deadline !== editingPauta.deadline
+      || assigneeId !== editingPauta.assigneeId
+    : [
+        title,
+        notes,
+        topic,
+        sourceName,
+        sourceUrl,
+        deadline,
+      ].some((value) => value.trim() !== '')
+      || stage !== 'inbox'
+      || priority !== 'normal'
+      || assigneeId !== 0;
+
+  const editingFeed = feedEditingId
+    ? data.sources?.find((source) => source.id === feedEditingId) ?? null
+    : null;
+  const feedDirty = feedEditorOpen && (
+    editingFeed
+      ? feedName !== editingFeed.name
+        || feedCategory !== editingFeed.category
+        || feedUrl !== editingFeed.feedUrl
+        || feedKind !== editingFeed.kind
+        || feedPriority !== editingFeed.priority
+        || feedRefreshMinutes !== editingFeed.refreshMinutes
+        || feedMaxItems !== editingFeed.maxItems
+        || feedEnabled !== editingFeed.enabled
+      : feedName.trim() !== ''
+        || feedCategory.trim() !== ''
+        || feedUrl.trim() !== ''
+        || feedKind !== 'jornalística'
+        || feedPriority !== 70
+        || feedRefreshMinutes !== 180
+        || feedMaxItems !== 12
+        || feedEnabled !== true
+  );
 
   function resetForm() {
     setEditingId(0);
@@ -7724,6 +7903,11 @@ function PautasView({ csrfToken }: { csrfToken: string }) {
 
   return (
     <>
+      <AdminEditorGuard
+        dirty={pautaDirty || feedDirty}
+        saving={saving || feedSaving}
+        onSave={feedEditorOpen ? () => saveFeed() : () => mutatePauta('save')}
+      />
       <AdminPageHeader
         eyebrow="Planejamento editorial"
         title="Mesa de Pautas"

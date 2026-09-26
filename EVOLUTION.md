@@ -2758,3 +2758,59 @@ O contrato agora já contém o necessário para um job externo decidir o que dev
 O scheduler continua fora do frontend e fora do runtime público. Quando conectado ao MOBI Core, ele poderá usar essas políticas sem criar outra autoridade de configuração.
 
 Próximo ponto de maior valor: criar uma capability/job autenticada para o MOBI Core disparar apenas capturas vencidas, mantendo o endpoint administrativo do browser separado do caminho machine-to-machine.
+
+## 49. Confiabilidade dos editores administrativos
+
+Os principais editores do Sistema passam a compartilhar uma proteção de estado sujo inspirada no contrato administrativo do MOBI CMS.
+
+### Proteção contra perda de trabalho
+
+O hook reutilizável:
+
+```text
+src/admin/useAdminEditorGuard.ts
+```
+
+protege:
+
+- refresh/fechamento da aba;
+- navegação por links internos;
+- histórico do navegador;
+- atalhos de teclado.
+
+Quando existem alterações não salvas, sair da tela exige confirmação.
+
+### Atalho de salvamento
+
+Nos editores que possuem ação de persistência explícita:
+
+```text
+Ctrl+S
+Cmd+S
+```
+
+aciona o mesmo save utilizado pelo botão da interface.
+
+O atalho não cria uma segunda mutation nem ignora permissões. Ele apenas chama o fluxo já existente.
+
+### Estado visual
+
+Os editores passam a sinalizar:
+
+```text
+Sem alterações
+Não salvo
+Salvando…
+Salvo
+Falha ao salvar
+```
+
+A sinalização foi aplicada a Notícias, Páginas, Categorias, Usuários, Mídia e Configurações.
+
+Cadastro de categoria, Central de Fontes e Mesa de Pautas também passam a proteger formulários parcialmente preenchidos antes de navegação.
+
+### Referência
+
+A implementação reaproveita o princípio do `useUnsavedChangesGuard` do `agenciamobi/mobicms`: dirty state explícito, proteção de beforeunload e navegação interna, adaptado para o runtime sem router do Nosso Jornal.
+
+Próximo ponto: completar a experiência de cadastro com criação nativa de usuários e depois uniformizar validação de campos nos formulários menores.
