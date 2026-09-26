@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/_category_theme.php';
+require_once __DIR__ . '/_media.php';
 
 function nj_content_clean_text_source(string $source): string
 {
@@ -701,8 +702,15 @@ function nj_content_hydrate_articles(PDO $pdo, array $rows, bool $includeBody = 
         $categories = $categoriesByPost[$id] ?? [];
         $primary = nj_content_primary_category($categories, (int) ($row['primary_category_id'] ?? 0));
         $title = trim(html_entity_decode(strip_tags((string) $row['title']), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
-        $featuredImageUrl = trim((string) ($row['featured_image_url'] ?? '')) !== ''
-            ? nj_content_local_media_url((string) $row['featured_image_url'])
+        $featuredImage = nj_media_descriptor(
+            (string) ($row['featured_image_url'] ?? ''),
+            (string) ($row['featured_image_file'] ?? ''),
+            (string) ($row['featured_image_metadata'] ?? ''),
+            (string) ($row['featured_image_alt'] ?? ''),
+            $title
+        );
+        $featuredImageUrl = is_array($featuredImage)
+            ? (string) $featuredImage['url']
             : '';
 
         $article = [
@@ -717,14 +725,7 @@ function nj_content_hydrate_articles(PDO $pdo, array $rows, bool $includeBody = 
                 'id' => (int) ($row['author_id'] ?? 0),
                 'name' => trim((string) ($row['author_name'] ?? '')),
             ],
-            'featuredImage' => $featuredImageUrl !== ''
-                ? [
-                    'url' => $featuredImageUrl,
-                    'alt' => trim((string) ($row['featured_image_alt'] ?? '')) !== ''
-                        ? (string) $row['featured_image_alt']
-                        : $title,
-                ]
-                : null,
+            'featuredImage' => $featuredImage,
             'views' => (int) ($row['views'] ?? 0),
             'primaryCategory' => $primary,
             'categories' => $categories,
@@ -771,6 +772,26 @@ SELECT
         WHERE thumb.post_id = p.ID AND thumb.meta_key = '_thumbnail_id'
         LIMIT 1
     ), '') AS featured_image_url,
+    COALESCE((
+        SELECT file.meta_value
+        FROM {$postmeta} thumb_file
+        INNER JOIN {$postmeta} file
+            ON file.post_id = CAST(thumb_file.meta_value AS UNSIGNED)
+            AND file.meta_key = '_wp_attached_file'
+        WHERE thumb_file.post_id = p.ID AND thumb_file.meta_key = '_thumbnail_id'
+        ORDER BY file.meta_id DESC
+        LIMIT 1
+    ), '') AS featured_image_file,
+    COALESCE((
+        SELECT metadata.meta_value
+        FROM {$postmeta} thumb_meta
+        INNER JOIN {$postmeta} metadata
+            ON metadata.post_id = CAST(thumb_meta.meta_value AS UNSIGNED)
+            AND metadata.meta_key = '_wp_attachment_metadata'
+        WHERE thumb_meta.post_id = p.ID AND thumb_meta.meta_key = '_thumbnail_id'
+        ORDER BY metadata.meta_id DESC
+        LIMIT 1
+    ), '') AS featured_image_metadata,
     COALESCE((
         SELECT alt.meta_value
         FROM {$postmeta} thumb2
