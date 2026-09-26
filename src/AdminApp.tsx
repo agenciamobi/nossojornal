@@ -211,6 +211,29 @@ type SettingsPayload = {
   };
 };
 
+type WriteReadinessPayload = {
+  ok: boolean;
+  data?: {
+    database: {
+      select: { available: boolean; reason: string | null };
+      insert: { available: boolean; reason: string | null };
+      update: { available: boolean; reason: string | null };
+      delete: { available: boolean; reason: string | null };
+      runtimeWriteReady: boolean;
+    };
+    nextCapabilities: {
+      categoryColorWrite: boolean;
+      draftPostWrite: boolean;
+      publishPostWrite: boolean;
+      mediaUploadWrite: boolean;
+    };
+    probe: {
+      mutatedRows: number;
+      transactionRolledBack: boolean;
+    };
+  };
+};
+
 type PautasPayload = {
   ok: boolean;
   data?: {
@@ -683,6 +706,7 @@ function AdminError() {
 
 function DashboardView({ user }: { user: AdminUser }) {
   const [data, setData] = useState<DashboardPayload['data']>();
+  const [writeReadiness, setWriteReadiness] = useState<WriteReadinessPayload['data']>();
   const [error, setError] = useState(false);
 
   useEffect(() => {
@@ -692,7 +716,17 @@ function DashboardView({ user }: { user: AdminUser }) {
         setData(payload.data);
       })
       .catch(() => setError(true));
-  }, []);
+
+    if (user.permissions.manageOptions) {
+      void adminFetch<WriteReadinessPayload>('/api/admin/write-readiness.php')
+        .then((payload) => {
+          if (payload.ok && payload.data) setWriteReadiness(payload.data);
+        })
+        .catch(() => {
+          // O dashboard continua funcional mesmo se o probe não estiver disponível.
+        });
+    }
+  }, [user.permissions.manageOptions]);
 
   if (error) return <AdminError />;
   if (!data) return <AdminLoading />;
@@ -779,6 +813,39 @@ function DashboardView({ user }: { user: AdminUser }) {
             <div><dt>Agendados</dt><dd>{data.summary.posts.future}</dd></div>
             <div><dt>Comentários pendentes</dt><dd>{data.summary.comments.pending}</dd></div>
           </dl>
+
+          {writeReadiness && (
+            <div className="admin-capability-box">
+              <div className="admin-capability-box__head">
+                <span>Runtime MySQL</span>
+                <strong>
+                  {writeReadiness.database.runtimeWriteReady ? 'Escrita disponível' : 'Somente leitura'}
+                </strong>
+              </div>
+
+              <div className="admin-capability-list">
+                {(['select', 'insert', 'update', 'delete'] as const).map((capability) => (
+                  <div key={capability}>
+                    <span>{capability.toUpperCase()}</span>
+                    <strong
+                      className={
+                        writeReadiness.database[capability].available
+                          ? 'admin-capability--ok'
+                          : 'admin-capability--blocked'
+                      }
+                    >
+                      {writeReadiness.database[capability].available ? 'Disponível' : 'Bloqueado'}
+                    </strong>
+                  </div>
+                ))}
+              </div>
+
+              <small>
+                Probe seguro: 0 linhas alteradas
+                {writeReadiness.probe.transactionRolledBack ? ' • rollback confirmado' : ''}
+              </small>
+            </div>
+          )}
         </aside>
       </div>
     </>
