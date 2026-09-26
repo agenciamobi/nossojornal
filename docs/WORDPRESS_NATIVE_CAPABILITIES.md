@@ -406,3 +406,21 @@ Nenhum desses projetos deve ser copiado diretamente. A utilidade está nos padr�
 8. proveniência/importação e sincronização;
 9. arquivos por autor/taxonomia;
 10. cache de leitura e otimizações de consultas com base em métricas reais.
+
+## Rodada 5 — timeline unificada de revisões
+
+O histórico do editor passa a combinar duas fontes existentes no mesmo banco:
+
+- revisões editoriais novas em `post_type = nj_revision`;
+- revisões nativas do WordPress em `post_type = revision`, ligadas por `post_parent`.
+
+As revisões nativas entram inicialmente em modo somente leitura. O Sistema identifica a origem de cada versão e preserva o botão de restauração apenas para snapshots `nj_revision`, cujo contrato já inclui categorias e SEO.
+
+Essa separação é deliberada: uma revisão WordPress histórica contém título, resumo e conteúdo, mas não necessariamente todos os metadados editoriais atuais. Restaurá-la sem uma política explícita poderia apagar contexto moderno.
+
+Próximo passo recomendado:
+
+1. comparação lado a lado entre versão e estado atual;
+2. restauração nativa com merge controlado dos campos cobertos;
+3. registro da restauração na timeline humana;
+4. retenção do estado atual antes de qualquer restore.
