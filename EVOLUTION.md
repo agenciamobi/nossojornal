@@ -1747,3 +1747,59 @@ Recursos principais:
 O sanitizador público passou a permitir apenas propriedades CSS editoriais seguras, e `pages.css` recebeu suporte para tabelas, separadores e alinhamentos.
 
 O editor foi implementado sem biblioteca externa adicional, mantendo a stack React/Vite enxuta e preservando compatibilidade direta com o HTML legado já armazenado em `post_content`.
+
+
+## 28. Primeira onda do sistema operacional de redação
+
+O `/sistema` avança além de um CMS convencional.
+
+Foram adicionados:
+
+- workflow editorial separado de `post_status`;
+- prioridade, responsável e prazo por matéria;
+- Caderno de Apuração privado;
+- fontes consultadas;
+- integração com a Central de Fontes;
+- checklist editorial manual e automático;
+- Central da Capa;
+- Hero e destaques com validade;
+- Agenda Editorial;
+- eventos de cobertura privados;
+- Mesa de Pautas persistente em quadro;
+- transformação de pauta em draft;
+- captura RSS com allowlist e deduplicação;
+- Central privada de Fontes;
+- boxes Entenda, Serviço, Em números e Cronologia;
+- Dashboard transformado em cockpit da redação.
+
+A implementação reutiliza `njsite_posts` e `njsite_postmeta` para evitar introduzir uma segunda camada de persistência durante a migração.
+
+Post types internos:
+
+```text
+nj_pauta
+nj_source
+nj_agenda_event
+```
+
+Esses tipos permanecem privados e não entram nas APIs públicas de notícias.
+
+### Segurança da captura RSS
+
+A captura só aceita feeds definidos no código.
+
+URLs arbitrárias são rejeitadas e redirects HTTP são desabilitados. A captura global executa chamadas isoladas com concorrência controlada, de modo que uma fonte indisponível não derrube o restante do radar.
+
+### Capa pública
+
+`/api/v1/home.php` passa a obedecer posicionamento editorial manual sem eliminar o comportamento automático existente.
+
+A escolha de Hero segue:
+
+```text
+manual ativo
+→ Capa
+→ fallback mais recente
+```
+
+Destaques expirados são ignorados automaticamente.
