@@ -333,7 +333,9 @@ export function AdminRichEditor({
     emitVisualChange();
   }
 
-  function insertEditorialBlock(kind: 'context' | 'service' | 'numbers' | 'timeline') {
+  function insertEditorialBlock(
+    kind: 'context' | 'service' | 'numbers' | 'timeline' | 'keypoints' | 'sources' | 'update' | 'quote',
+  ) {
     if (disabled || sourceMode) return;
 
     const blocks: Record<typeof kind, string> = {
@@ -365,6 +367,35 @@ export function AdminRichEditor({
         '<strong>Cronologia</strong>',
         '<ul><li><b>00:00</b> — descreva o acontecimento.</li><li><b>00:00</b> — próximo marco.</li></ul>',
         '</aside>',
+        '<p><br></p>',
+      ].join(''),
+      keypoints: [
+        '<aside data-nj-block="keypoints">',
+        '<strong>Principais pontos</strong>',
+        '<ul><li>Primeiro ponto essencial da matéria.</li><li>Segundo ponto que o leitor precisa saber.</li><li>Terceiro ponto relevante.</li></ul>',
+        '</aside>',
+        '<p><br></p>',
+      ].join(''),
+      sources: [
+        '<aside data-nj-block="sources">',
+        '<strong>Fontes e documentos</strong>',
+        '<ul><li><a href="https://">Fonte oficial ou documento</a></li><li><a href="https://">Fonte complementar</a></li></ul>',
+        '</aside>',
+        '<p><br></p>',
+      ].join(''),
+      update: [
+        '<aside data-nj-block="update">',
+        '<strong>Atualização</strong>',
+        '<p><b>Horário:</b> 00:00</p>',
+        '<p>Descreva o que mudou ou a nova informação confirmada.</p>',
+        '</aside>',
+        '<p><br></p>',
+      ].join(''),
+      quote: [
+        '<blockquote data-nj-block="quote">',
+        '<p>Insira aqui a declaração em destaque.</p>',
+        '<cite>Nome da fonte — cargo ou contexto</cite>',
+        '</blockquote>',
         '<p><br></p>',
       ].join(''),
     };
@@ -595,6 +626,10 @@ export function AdminRichEditor({
               <AdminCommandButton label="Serviço" title="Inserir box de serviço" disabled={disabled} onClick={() => insertEditorialBlock('service')} className="wide" />
               <AdminCommandButton label="Números" title="Inserir box de números" disabled={disabled} onClick={() => insertEditorialBlock('numbers')} className="wide" />
               <AdminCommandButton label="Cronologia" title="Inserir cronologia" disabled={disabled} onClick={() => insertEditorialBlock('timeline')} className="wide" />
+              <AdminCommandButton label="Pontos-chave" title="Inserir lista de principais pontos" disabled={disabled} onClick={() => insertEditorialBlock('keypoints')} className="wide" />
+              <AdminCommandButton label="Fontes" title="Inserir box de fontes e documentos" disabled={disabled} onClick={() => insertEditorialBlock('sources')} className="wide" />
+              <AdminCommandButton label="Atualização" title="Inserir atualização de cobertura" disabled={disabled} onClick={() => insertEditorialBlock('update')} className="wide" />
+              <AdminCommandButton label="Citação" title="Inserir citação editorial destacada" disabled={disabled} onClick={() => insertEditorialBlock('quote')} className="wide" />
             </div>
           </div>
 
