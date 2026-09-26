@@ -78,7 +78,8 @@ A cor editorial aparece como código de navegação, não como preenchimento dom
 - bloco de título encaixado na régua;
 - CTA da editoria;
 - hover e acentos dos headlines;
-- filete da página de editoria;
+- régua e bloco de título da página de editoria;
+- contador, paginação e interações do arquivo da editoria;
 - marcador da matéria;
 - drop cap;
 - links e blockquotes no corpo;
@@ -87,3 +88,5 @@ A cor editorial aparece como código de navegação, não como preenchimento dom
 O objetivo é preservar o branco e o navy do Nosso Jornal como identidade-base enquanto cada editoria ganha reconhecimento visual próprio.
 
 Na homepage, o cabeçalho de cada editoria pode usar um preenchimento concentrado no título da seção. O restante da superfície permanece claro. O texto sobre a cor editorial usa contraste calculado no frontend para continuar legível mesmo quando o operador cadastrar uma cor clara em `termmeta`.
+
+A página da própria editoria segue a mesma gramática visual: título assentado sobre uma régua cromática, superfícies brancas, cor aplicada em microinterações, paginação, contadores e estados de hover. A matéria herda a cor de sua categoria primária em breadcrumbs, autoria, compartilhamento e blocos relacionados.
