@@ -1200,3 +1200,46 @@ Quando write for homologado, o próximo estágio deve adicionar:
 5. criar/editar usuário;
 6. mídia/upload;
 7. autosave/revisions.
+
+
+## 20. Painel administrativo MVP
+
+O novo portal passa a possuir administração própria em `/sistema`, inspirada na ergonomia do wp-admin e conectada aos usuários/capabilities reais do WordPress legado.
+
+### Autoridade
+
+Frontend:
+
+```text
+src/AdminApp.tsx
+src/admin.css
+```
+
+API:
+
+```text
+/api/admin/*
+```
+
+A implementação paralela `/api/v1/system/*` foi removida para manter uma única sessão e um único contrato.
+
+### Áreas do MVP
+
+```text
+/sistema
+/sistema/noticias
+/sistema/categorias
+/sistema/midia
+/sistema/usuarios
+/sistema/configuracoes
+```
+
+### Segurança
+
+O login reutiliza `njsite_users`, roles e capabilities WordPress, sem expor hashes. Acesso editorial exige `edit_posts`. Sessões usam cookies seguros, user-agent binding e CSRF para mutations. Endpoints administrativos são no-store/noindex e aplicam capability checks por superfície.
+
+### Estado
+
+O primeiro release é read-only. O CRUD será aberto somente após homologação do MySQL write.
+
+Especificação detalhada: `docs/ADMIN_MVP.md`.
