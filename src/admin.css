@@ -2077,3 +2077,260 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+
+.admin-row-action-button {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: #2271b1;
+  font: inherit;
+  font-size: 9px;
+  cursor: pointer;
+}
+
+.admin-row-action-button--danger {
+  color: #b32d2e;
+}
+
+.admin-row-action-button:disabled {
+  color: #a7aaad;
+  cursor: wait;
+}
+
+.admin-empty-state {
+  padding: 34px 18px;
+  border: 1px solid #dcdcde;
+  background: #fff;
+  color: #646970;
+  font-size: 11px;
+  text-align: center;
+}
+
+.admin-comments-list {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-comment-card {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid #dcdcde;
+  background: #fff;
+  box-shadow: 0 1px 1px rgba(0,0,0,.03);
+}
+
+.admin-comment-card__avatar {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #f0f0f1;
+  color: #50575e;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.admin-comment-card__content {
+  min-width: 0;
+}
+
+.admin-comment-card__content > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.admin-comment-card__content > header > div {
+  display: grid;
+  gap: 2px;
+}
+
+.admin-comment-card__content > header strong {
+  color: #1d2327;
+  font-size: 11px;
+}
+
+.admin-comment-card__content > header a {
+  color: #787c82;
+  font-size: 9px;
+}
+
+.admin-comment-card__content > p {
+  margin: 10px 0;
+  color: #2c3338;
+  font-size: 11px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.admin-comment-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  border-radius: 999px;
+  padding: 0 8px;
+  font-size: 8px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+.admin-comment-status--pending {
+  background: #fcf0d4;
+  color: #996800;
+}
+
+.admin-comment-status--approved {
+  background: #edfaef;
+  color: #17711f;
+}
+
+.admin-comment-status--spam,
+.admin-comment-status--trash {
+  background: #fbeaea;
+  color: #b32d2e;
+}
+
+.admin-comment-card__meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  color: #8c8f94;
+  font-size: 9px;
+}
+
+.admin-comment-card__meta a {
+  color: #2271b1;
+}
+
+.admin-comment-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 11px;
+  padding-top: 10px;
+  border-top: 1px solid #f0f0f1;
+}
+
+.admin-comment-actions button {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: #2271b1;
+  font-size: 9px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.admin-comment-actions button.danger {
+  color: #b32d2e;
+}
+
+.admin-comment-actions button:disabled {
+  color: #a7aaad;
+  cursor: wait;
+}
+
+.admin-media-editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 20px;
+  align-items: start;
+}
+
+.admin-media-editor__preview {
+  overflow: hidden;
+  margin: 0;
+  border: 1px solid #c3c4c7;
+  background: #fff;
+}
+
+.admin-media-editor__preview img {
+  width: 100%;
+  max-height: 680px;
+  display: block;
+  object-fit: contain;
+  background: #f6f7f7;
+}
+
+.admin-media-editor__preview > div {
+  min-height: 260px;
+  display: grid;
+  place-items: center;
+  color: #646970;
+  font-size: 12px;
+}
+
+.admin-media-usage {
+  display: grid;
+}
+
+.admin-media-usage > p {
+  margin: 0;
+  padding: 16px;
+  color: #787c82;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.admin-media-usage article {
+  display: grid;
+  gap: 3px;
+  padding: 10px 13px;
+  border-bottom: 1px solid #f0f0f1;
+}
+
+.admin-media-usage article:last-child {
+  border-bottom: 0;
+}
+
+.admin-media-usage a {
+  color: #2271b1;
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.admin-media-usage span {
+  color: #787c82;
+  font-size: 8px;
+}
+
+.admin-media-card__preview {
+  text-decoration: none;
+}
+
+.admin-media-card__body a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.admin-media-card__body a:hover {
+  color: #2271b1;
+}
+
+@media (max-width: 1080px) {
+  .admin-media-editor {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .admin-comment-card {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-comment-card__avatar {
+    width: 34px;
+    height: 34px;
+  }
+
+  .admin-comment-card__content > header {
+    align-items: flex-start;
+  }
+}
