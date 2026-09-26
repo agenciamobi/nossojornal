@@ -232,13 +232,24 @@ SQL);
         $deleteTagRelations->execute(['post_id' => $postId]);
 
         $newTagTaxonomyIds = [];
-        $findTermBySlug = $pdo->prepare(
-            "SELECT term_id FROM {$terms} WHERE slug = :slug LIMIT 1"
-        );
-        $findTagTaxonomy = $pdo->prepare(
-            "SELECT term_taxonomy_id FROM {$taxonomy}
-             WHERE term_id = :term_id AND taxonomy = 'post_tag'
-             LIMIT 1"
+        $findExistingTag = $pdo->prepare(<<<SQL
+SELECT
+    t.term_id,
+    tt.term_taxonomy_id,
+    t.name,
+    t.slug
+FROM {$terms} t
+INNER JOIN {$taxonomy} tt
+    ON tt.term_id = t.term_id
+    AND tt.taxonomy = 'post_tag'
+WHERE t.slug = :slug OR t.name = :name
+ORDER BY
+    CASE WHEN t.slug = :preferred_slug THEN 0 ELSE 1 END,
+    t.term_id ASC
+LIMIT 1
+SQL);
+        $slugExists = $pdo->prepare(
+            "SELECT 1 FROM {$terms} WHERE slug = :slug LIMIT 1"
         );
         $insertTerm = $pdo->prepare(
             "INSERT INTO {$terms} (name, slug, term_group)
@@ -254,26 +265,42 @@ VALUES (:post_id, :taxonomy_id, 0)
 SQL);
 
         foreach ($tagNames as $tagName) {
-            $tagSlug = nj_admin_slugify($tagName);
-            if ($tagSlug === '') {
+            $baseTagSlug = nj_admin_slugify($tagName);
+            if ($baseTagSlug === '') {
                 continue;
             }
 
-            $findTermBySlug->execute(['slug' => $tagSlug]);
-            $termId = (int) ($findTermBySlug->fetchColumn() ?: 0);
+            $findExistingTag->execute([
+                'slug' => $baseTagSlug,
+                'name' => $tagName,
+                'preferred_slug' => $baseTagSlug,
+            ]);
+            $existingTag = $findExistingTag->fetch();
 
-            if ($termId <= 0) {
+            if ($existingTag) {
+                $tagTaxonomyId = (int) $existingTag['term_taxonomy_id'];
+            } else {
+                // WordPress moderno evita shared terms. Se o slug já pertence a
+                // outra taxonomia, gere um slug exclusivo para esta nova tag.
+                $tagSlug = $baseTagSlug;
+                $suffix = 2;
+
+                while (true) {
+                    $slugExists->execute(['slug' => $tagSlug]);
+                    if (!$slugExists->fetchColumn()) {
+                        break;
+                    }
+
+                    $tagSlug = $baseTagSlug . '-' . $suffix;
+                    $suffix++;
+                }
+
                 $insertTerm->execute([
                     'name' => $tagName,
                     'slug' => $tagSlug,
                 ]);
                 $termId = (int) $pdo->lastInsertId();
-            }
 
-            $findTagTaxonomy->execute(['term_id' => $termId]);
-            $tagTaxonomyId = (int) ($findTagTaxonomy->fetchColumn() ?: 0);
-
-            if ($tagTaxonomyId <= 0) {
                 $insertTagTaxonomy->execute(['term_id' => $termId]);
                 $tagTaxonomyId = (int) $pdo->lastInsertId();
             }
