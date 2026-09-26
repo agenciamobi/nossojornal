@@ -2695,3 +2695,66 @@ A troca de URL limpa o health da URL anterior. Exclusão também remove apenas a
 FreshRSS e Miniflux continuam sendo referências para gestão e estado de feeds, mas o Nosso Jornal mantém um catálogo editorial pequeno, explícito e owner-only em vez de importar a arquitetura de um leitor RSS completo.
 
 Próximo ponto de maior valor: separar o Radar em grupos editoriais e permitir políticas de captura por fonte, como frequência desejada e limite de itens, preparando o contrato para jobs do MOBI Core sem acoplar scheduler ao frontend.
+
+## 48. Políticas de captura e grupos editoriais
+
+O catálogo de feeds passa a carregar política operacional por fonte, sem ainda acoplar um scheduler ao portal.
+
+### Política por fonte
+
+Cada entrada do catálogo passa a aceitar:
+
+```text
+refreshMinutes
+maxItems
+```
+
+`refreshMinutes` representa a cadência desejada entre capturas. O intervalo permitido fica entre 60 minutos e 24 horas.
+
+`maxItems` limita quantos itens daquele feed podem ser considerados em uma rodada, entre 1 e 30.
+
+O parser RSS/Atom deixa de ter limite global fixo de 12 itens e passa a obedecer a política da fonte.
+
+### Vencimento
+
+O health calcula:
+
+```text
+nextRefreshAt
+due
+```
+
+A referência usa a última tentativa conhecida e a cadência configurada.
+
+Fontes nunca verificadas entram como vencidas. Fontes pausadas nunca ficam `due`.
+
+Esse estado é somente uma indicação operacional. Nenhum polling automático foi introduzido nesta rodada.
+
+### Radar por grupos
+
+As fontes passam a ser apresentadas agrupadas pelo tema/categoria editorial.
+
+Cada grupo informa quantidade de fontes e quantas estão vencidas, e pode ser capturado isoladamente.
+
+Também foi adicionada a ação:
+
+```text
+Capturar vencidas
+```
+
+que executa somente as fontes ativas cujo health está fora da janela desejada.
+
+### Preparação para MOBI Core
+
+O contrato agora já contém o necessário para um job externo decidir o que deve ser atualizado:
+
+- fonte ativa;
+- cadência;
+- próxima janela;
+- estado `due`;
+- limite por captura;
+- health anterior.
+
+O scheduler continua fora do frontend e fora do runtime público. Quando conectado ao MOBI Core, ele poderá usar essas políticas sem criar outra autoridade de configuração.
+
+Próximo ponto de maior valor: criar uma capability/job autenticada para o MOBI Core disparar apenas capturas vencidas, mantendo o endpoint administrativo do browser separado do caminho machine-to-machine.

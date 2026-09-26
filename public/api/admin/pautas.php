@@ -126,6 +126,21 @@ function nj_pautas_feed_state_public(array $source, array $state): array
         $status = 'never';
     }
 
+    $refreshMinutes = max(60, min(1440, (int) ($source['refreshMinutes'] ?? 180)));
+    $enabled = ($source['enabled'] ?? true) === true;
+    $basisAt = $lastAttemptAt !== '' ? $lastAttemptAt : $lastSuccessAt;
+    $nextRefreshAt = '';
+    $due = $enabled;
+
+    if ($basisAt !== '') {
+        $basisTimestamp = strtotime($basisAt);
+        if ($basisTimestamp !== false) {
+            $nextTimestamp = $basisTimestamp + ($refreshMinutes * 60);
+            $nextRefreshAt = gmdate('c', $nextTimestamp);
+            $due = $enabled && time() >= $nextTimestamp;
+        }
+    }
+
     return [
         'status' => $status,
         'lastAttemptAt' => $lastAttemptAt,
@@ -135,6 +150,8 @@ function nj_pautas_feed_state_public(array $source, array $state): array
         'lastCaptured' => max(0, (int) ($entry['lastCaptured'] ?? 0)),
         'totalCaptured' => max(0, (int) ($entry['totalCaptured'] ?? 0)),
         'consecutiveFailures' => $consecutiveFailures,
+        'nextRefreshAt' => $nextRefreshAt,
+        'due' => $due,
     ];
 }
 
@@ -252,6 +269,10 @@ function nj_pautas_default_sources(): array
         static function (array $source): array {
             $source['id'] = 'default-' . substr(hash('sha256', (string) $source['feedUrl']), 0, 16);
             $source['enabled'] = true;
+            $source['refreshMinutes'] = in_array((string) $source['kind'], ['radar', 'agregador'], true)
+                ? 180
+                : 60;
+            $source['maxItems'] = 12;
             return $source;
         },
         $sources
@@ -271,6 +292,8 @@ function nj_pautas_catalog_source(array $source): ?array
     }
     $priority = max(0, min(100, (int) ($source['priority'] ?? 70)));
     $enabled = ($source['enabled'] ?? true) === true;
+    $refreshMinutes = max(60, min(1440, (int) ($source['refreshMinutes'] ?? 180)));
+    $maxItems = max(1, min(30, (int) ($source['maxItems'] ?? 12)));
 
     if (
         $id === ''
@@ -292,6 +315,8 @@ function nj_pautas_catalog_source(array $source): ?array
         'kind' => $kind !== '' ? $kind : 'jornalística',
         'priority' => $priority,
         'enabled' => $enabled,
+        'refreshMinutes' => $refreshMinutes,
+        'maxItems' => $maxItems,
     ];
 }
 
@@ -547,8 +572,9 @@ function nj_pautas_feed_datetime(string $value): string
     }
 }
 
-function nj_pautas_parse_feed(string $xmlBody): array
+function nj_pautas_parse_feed(string $xmlBody, int $limit = 12): array
 {
+    $limit = max(1, min(30, $limit));
     if (!function_exists('simplexml_load_string')) {
         throw new NjApiHttpException(500, 'feed_parser_unavailable');
     }
@@ -588,7 +614,7 @@ function nj_pautas_parse_feed(string $xmlBody): array
                 'publishedAt' => $publishedAt,
             ];
 
-            if (count($items) >= 12) {
+            if (count($items) >= $limit) {
                 break;
             }
         }
@@ -631,7 +657,7 @@ function nj_pautas_parse_feed(string $xmlBody): array
                 'publishedAt' => $publishedAt,
             ];
 
-            if (count($items) >= 12) {
+            if (count($items) >= $limit) {
                 break;
             }
         }
@@ -645,7 +671,10 @@ function nj_pautas_capture(PDO $pdo, array $user, array $source): array
     $posts = nj_table('posts');
     $postmeta = nj_table('postmeta');
     $feedResponse = nj_pautas_fetch_feed((string) $source['feedUrl']);
-    $feedItems = nj_pautas_parse_feed((string) $feedResponse['body']);
+    $feedItems = nj_pautas_parse_feed(
+        (string) $feedResponse['body'],
+        max(1, min(30, (int) ($source['maxItems'] ?? 12)))
+    );
     $captured = 0;
 
     $duplicate = $pdo->prepare(<<<SQL
@@ -927,6 +956,8 @@ nj_admin_run(['GET', 'POST'], static function (string $method): array {
         }
         $priority = max(0, min(100, (int) ($input['priority'] ?? 70)));
         $enabled = ($input['enabled'] ?? true) === true;
+        $refreshMinutes = max(60, min(1440, (int) ($input['refreshMinutes'] ?? 180)));
+        $maxItems = max(1, min(30, (int) ($input['maxItems'] ?? 12)));
         $target = nj_pautas_validate_feed_url((string) ($input['feedUrl'] ?? ''));
         $feedUrl = (string) $target['url'];
 
@@ -971,6 +1002,8 @@ nj_admin_run(['GET', 'POST'], static function (string $method): array {
             'kind' => $kind !== '' ? $kind : 'jornalística',
             'priority' => $priority,
             'enabled' => $enabled,
+            'refreshMinutes' => $refreshMinutes,
+            'maxItems' => $maxItems,
         ];
 
         if ($existingIndex === null) {
