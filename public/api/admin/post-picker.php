@@ -29,6 +29,11 @@ nj_admin_run(['GET'], static function (): array {
     ];
     $params = [];
 
+    if (!in_array('edit_others_posts', $user['capabilities'], true)) {
+        $where[] = 'post_author = :author_id';
+        $params['author_id'] = (int) $user['id'];
+    }
+
     if ($exclude > 0) {
         $where[] = 'ID <> :exclude';
         $params['exclude'] = $exclude;
