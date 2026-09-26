@@ -95,8 +95,9 @@ export function resolvePublicRoute(pathname: string): PublicRoute {
   if (clean === '/') return { kind: 'home' };
   if (clean === '/ultimas') return { kind: 'latest' };
   if (clean === '/busca') return { kind: 'search' };
-  if (clean === '/sobre') return { kind: 'static', slug: 'sobre' };
+  if (clean === '/sobre' || clean === '/quem-somos') return { kind: 'static', slug: 'sobre' };
   if (clean === '/contato') return { kind: 'static', slug: 'contato' };
+  if (clean === '/noticias') return { kind: 'latest' };
   if (clean === '/classificados') return { kind: 'service', slug: 'classificados' };
   if (clean === '/comunicados') return { kind: 'service', slug: 'comunicados' };
 
@@ -105,6 +106,9 @@ export function resolvePublicRoute(pathname: string): PublicRoute {
 
   const category = clean.match(/^\/categoria\/([^/]+)$/);
   if (category) return { kind: 'category', slug: decodeURIComponent(category[1]) };
+
+  const legacyArticle = clean.match(/^\/([^/]+)$/);
+  if (legacyArticle) return { kind: 'article', slug: decodeURIComponent(legacyArticle[1]) };
 
   return { kind: 'not-found' };
 }
