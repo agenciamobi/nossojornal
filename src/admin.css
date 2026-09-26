@@ -5115,6 +5115,11 @@
   box-shadow: 0 1px 1px rgba(0,0,0,.03);
 }
 
+.admin-source-card--active {
+  border-color: #2271b1;
+  box-shadow: 0 0 0 1px #2271b1;
+}
+
 .admin-source-card__main {
   width: 100%;
   display: grid;
@@ -5170,6 +5175,32 @@
   font-weight: 700;
 }
 
+.admin-source-card__updated {
+  display: block;
+  margin-top: 8px;
+  color: #8c8f94;
+  font-size: 7px;
+}
+
+.admin-inline-field-action {
+  justify-self: start;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: #2271b1;
+  font-size: 8px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.admin-inline-field-action:hover,
+.admin-inline-field-action:focus-visible {
+  color: #135e96;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+
 .admin-source-card__contacts {
   display: flex;
   flex-wrap: wrap;
@@ -5199,6 +5230,18 @@
   .admin-source-cards,
   .admin-source-editor__row {
     grid-template-columns: 1fr;
+  }
+
+  .admin-toolbar--sources,
+  .admin-toolbar--sources .admin-search {
+    width: 100%;
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .admin-toolbar--sources .admin-search input {
+    width: 100%;
+    min-width: 0;
   }
 }
 
