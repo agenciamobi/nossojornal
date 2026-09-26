@@ -313,6 +313,25 @@
   line-height: 1.35;
 }
 
+.article-gallery__count {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255,255,255,.28);
+  border-radius: 999px;
+  padding: 0 12px;
+  background: rgba(5, 13, 27, .78);
+  backdrop-filter: blur(8px);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .04em;
+}
+
 .article-gallery__more {
   margin-top: 12px;
 }
