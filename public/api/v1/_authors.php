@@ -50,7 +50,39 @@ SELECT
         SELECT COUNT(*)
         FROM {$posts} p
         WHERE
-            p.post_author = u.ID
+            (
+                p.post_author = u.ID
+                OR EXISTS (
+                    SELECT 1
+                    FROM {$postmeta} coauthor_meta
+                    WHERE
+                        coauthor_meta.post_id = p.ID
+                        AND coauthor_meta.meta_key = '_nj_coauthors'
+                        AND FIND_IN_SET(
+                            CAST(u.ID AS CHAR),
+                            REPLACE(
+                                REPLACE(
+                                    REPLACE(
+                                        REPLACE(
+                                            REPLACE(
+                                                REPLACE(coauthor_meta.meta_value, '[', ''),
+                                                ']', ''
+                                            ),
+                                            ' ',
+                                            ''
+                                        ),
+                                        CHAR(10),
+                                        ''
+                                    ),
+                                    CHAR(13),
+                                    ''
+                                ),
+                                CHAR(9),
+                                ''
+                            )
+                        ) > 0
+                )
+            )
             AND p.post_type = 'post'
             AND p.post_status = 'publish'
             AND p.post_password = ''
@@ -61,7 +93,39 @@ SELECT
         SELECT MAX(p.post_date)
         FROM {$posts} p
         WHERE
-            p.post_author = u.ID
+            (
+                p.post_author = u.ID
+                OR EXISTS (
+                    SELECT 1
+                    FROM {$postmeta} coauthor_meta
+                    WHERE
+                        coauthor_meta.post_id = p.ID
+                        AND coauthor_meta.meta_key = '_nj_coauthors'
+                        AND FIND_IN_SET(
+                            CAST(u.ID AS CHAR),
+                            REPLACE(
+                                REPLACE(
+                                    REPLACE(
+                                        REPLACE(
+                                            REPLACE(
+                                                REPLACE(coauthor_meta.meta_value, '[', ''),
+                                                ']', ''
+                                            ),
+                                            ' ',
+                                            ''
+                                        ),
+                                        CHAR(10),
+                                        ''
+                                    ),
+                                    CHAR(13),
+                                    ''
+                                ),
+                                CHAR(9),
+                                ''
+                            )
+                        ) > 0
+                )
+            )
             AND p.post_type = 'post'
             AND p.post_status = 'publish'
             AND p.post_password = ''
