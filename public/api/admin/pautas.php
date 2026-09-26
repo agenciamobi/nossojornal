@@ -255,13 +255,17 @@ function nj_pautas_capture(PDO $pdo, array $user, array $source): int
     $captured = 0;
 
     $duplicate = $pdo->prepare(<<<SQL
-SELECT p.ID
+SELECT DISTINCT p.ID
 FROM {$posts} p
 INNER JOIN {$postmeta} pm
     ON pm.post_id = p.ID
-    AND pm.meta_key = '_nj_pauta_source_url'
-    AND pm.meta_value = :source_url
-WHERE p.post_type = 'nj_pauta'
+WHERE
+    p.post_type = 'nj_pauta'
+    AND (
+        (pm.meta_key = '_nj_pauta_source_url' AND pm.meta_value = :source_url)
+        OR (pm.meta_key = '_nj_pauta_external_id' AND pm.meta_value = :external_id)
+        OR (pm.meta_key = '_nj_pauta_source_hash' AND pm.meta_value = :source_hash)
+    )
 LIMIT 1
 SQL);
 
@@ -284,7 +288,20 @@ SQL);
         : ($numericPriority >= 80 ? 'high' : ($numericPriority >= 60 ? 'normal' : 'low'));
 
     foreach ($feedItems as $feedItem) {
-        $duplicate->execute(['source_url' => $feedItem['link']]);
+        $externalId = trim((string) ($feedItem['externalId'] ?? ''));
+        $sourceHash = hash('sha256', implode("\n", [
+            $externalId,
+            (string) $feedItem['link'],
+            (string) $feedItem['title'],
+            (string) $feedItem['description'],
+            (string) ($feedItem['publishedAt'] ?? ''),
+        ]));
+
+        $duplicate->execute([
+            'source_url' => (string) $feedItem['link'],
+            'external_id' => $externalId,
+            'source_hash' => $sourceHash,
+        ]);
 
         if ($duplicate->fetchColumn()) {
             continue;
@@ -305,19 +322,12 @@ SQL);
         nj_admin_upsert_postmeta($pdo, $pautaId, NJ_PAUTA_META_STAGE, 'inbox');
         nj_admin_upsert_postmeta($pdo, $pautaId, NJ_PAUTA_META_PRIORITY, $priority);
         $capturedAt = gmdate('c');
-        $sourceHash = hash('sha256', implode("\n", [
-            (string) ($feedItem['externalId'] ?? ''),
-            (string) $feedItem['link'],
-            (string) $feedItem['title'],
-            (string) $feedItem['description'],
-            (string) ($feedItem['publishedAt'] ?? ''),
-        ]));
 
         nj_admin_upsert_postmeta($pdo, $pautaId, NJ_PAUTA_META_TOPIC, (string) $source['category']);
         nj_admin_upsert_postmeta($pdo, $pautaId, NJ_PAUTA_META_SOURCE_NAME, (string) $source['name']);
         nj_admin_upsert_postmeta($pdo, $pautaId, NJ_PAUTA_META_SOURCE_URL, (string) $feedItem['link']);
         nj_admin_upsert_postmeta($pdo, $pautaId, NJ_PAUTA_META_FEED_URL, (string) $source['feedUrl']);
-        nj_admin_upsert_postmeta($pdo, $pautaId, NJ_PAUTA_META_EXTERNAL_ID, (string) ($feedItem['externalId'] ?? ''));
+        nj_admin_upsert_postmeta($pdo, $pautaId, NJ_PAUTA_META_EXTERNAL_ID, $externalId);
         nj_admin_upsert_postmeta($pdo, $pautaId, NJ_PAUTA_META_SOURCE_PUBLISHED_AT, (string) ($feedItem['publishedAt'] ?? ''));
         nj_admin_upsert_postmeta($pdo, $pautaId, NJ_PAUTA_META_CAPTURED_AT, $capturedAt);
         nj_admin_upsert_postmeta($pdo, $pautaId, NJ_PAUTA_META_SOURCE_HASH, $sourceHash);
