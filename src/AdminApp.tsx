@@ -875,6 +875,15 @@ function roleLabel(role: string) {
   return labels[role] ?? role;
 }
 
+function generateAdminPassword(length = 22) {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%*-_';
+  const size = Math.max(16, Math.min(64, length));
+  const values = new Uint32Array(size);
+  window.crypto.getRandomValues(values);
+
+  return Array.from(values, (value) => alphabet[value % alphabet.length]).join('');
+}
+
 function statusLabel(status: string) {
   const labels: Record<string, string> = {
     publish: 'Publicado',
@@ -6288,6 +6297,399 @@ function UsersView() {
   );
 }
 
+function NewUserView({ csrfToken }: { csrfToken: string }) {
+  const [data, setData] = useState<UsersPayload['data']>();
+  const [login, setLogin] = useState('');
+  const [displayName, setDisplayName] = useState('');
+  const [email, setEmail] = useState('');
+  const [role, setRole] = useState('author');
+  const [password, setPassword] = useState('');
+  const [passwordConfirm, setPasswordConfirm] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [created, setCreated] = useState<{
+    id: number;
+    adminUrl: string;
+    login: string;
+    displayName: string;
+    email: string;
+  } | null>(null);
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [errorMessage, setErrorMessage] = useState('');
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    void adminFetch<UsersPayload>('/api/admin/users.php')
+      .then((payload) => {
+        if (!payload.ok || !payload.data) throw new Error('users_invalid');
+        if (!payload.data.canCreate) throw new Error('user_create_not_allowed');
+
+        setData(payload.data);
+        if (!payload.data.roles.some((item) => item.key === 'author')) {
+          setRole(payload.data.roles[0]?.key ?? '');
+        }
+      })
+      .catch(() => setError(true));
+  }, []);
+
+  if (error) return <AdminAccessDenied />;
+  if (!data) return <AdminLoading />;
+
+  const normalizedLogin = login.trim().toLowerCase();
+  const loginValid = /^[a-z0-9][a-z0-9._-]{2,59}$/.test(normalizedLogin);
+  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+  const passwordValid = password.length >= 12;
+  const passwordsMatch = password !== '' && password === passwordConfirm;
+  const canSubmit =
+    displayName.trim() !== ''
+    && loginValid
+    && emailValid
+    && passwordValid
+    && passwordsMatch
+    && role !== ''
+    && saveState !== 'saving';
+
+  const dirty = !created && [
+    login,
+    displayName,
+    email,
+    password,
+    passwordConfirm,
+  ].some((value) => value.trim() !== '');
+
+  function generatePassword() {
+    const next = generateAdminPassword();
+    setPassword(next);
+    setPasswordConfirm(next);
+    setShowPassword(true);
+    setCopied(false);
+    setSaveState('idle');
+  }
+
+  async function copyCredentials() {
+    const credentialPassword = password;
+    if (!created || !credentialPassword) return;
+
+    const text = [
+      'Nosso Jornal',
+      'Login: ' + created.login,
+      'E-mail: ' + created.email,
+      'Senha inicial: ' + credentialPassword,
+      'Acesso: ' + window.location.origin + '/sistema',
+    ].join('\n');
+
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  }
+
+  async function createUser(event?: FormEvent) {
+    event?.preventDefault();
+    if (!canSubmit) return;
+
+    setSaveState('saving');
+    setErrorMessage('');
+    setCopied(false);
+
+    try {
+      const payload = await adminFetch<{
+        ok: boolean;
+        data?: {
+          user: AdminUser;
+          adminUrl: string;
+        };
+      }>('/api/admin/user-create.php', {
+        method: 'POST',
+        headers: { 'X-CSRF-Token': csrfToken },
+        body: JSON.stringify({
+          login: normalizedLogin,
+          displayName: displayName.trim(),
+          email: email.trim(),
+          password,
+          role,
+        }),
+      });
+
+      if (!payload.ok || !payload.data) {
+        throw new Error('user_create_invalid_response');
+      }
+
+      setCreated({
+        id: payload.data.user.id,
+        adminUrl: payload.data.adminUrl,
+        login: payload.data.user.login,
+        displayName: payload.data.user.displayName,
+        email: payload.data.user.email,
+      });
+      setSaveState('saved');
+    } catch (cause) {
+      const code = cause instanceof Error ? cause.message : '';
+      const messages: Record<string, string> = {
+        user_already_exists: 'Já existe um usuário com este login ou e-mail.',
+        invalid_user_login: 'Use um login com 3 a 60 caracteres: letras minúsculas, números, ponto, hífen ou sublinhado.',
+        invalid_user_email: 'Informe um e-mail válido.',
+        invalid_user_password: 'A senha precisa ter pelo menos 12 caracteres.',
+        invalid_user_role: 'A função escolhida não está disponível.',
+        administrator_role_not_allowed: 'Sua conta não pode cadastrar outro administrador.',
+        database_write_unavailable: 'O banco está em modo sem escrita para este recurso.',
+      };
+
+      setErrorMessage(messages[code] ?? 'Não foi possível cadastrar o usuário. Revise os campos e tente novamente.');
+      setSaveState('error');
+    }
+  }
+
+  if (created) {
+    return (
+      <>
+        <header className="admin-editor-header">
+          <div>
+            <a href="/sistema/usuarios" className="admin-editor-header__back">← Usuários</a>
+            <div className="admin-editor-header__title">
+              <span className="admin-avatar">{initials(created.displayName)}</span>
+              <h1>Usuário cadastrado</h1>
+            </div>
+            <p>A conta já está gravada no banco e pronta para uso conforme a função atribuída.</p>
+          </div>
+
+          <div className="admin-editor-header__actions">
+            <a href={created.adminUrl}>Editar perfil</a>
+            <button
+              type="button"
+              className="admin-button--primary"
+              onClick={() => {
+                setCreated(null);
+                setLogin('');
+                setDisplayName('');
+                setEmail('');
+                setRole(data.roles.some((item) => item.key === 'author') ? 'author' : data.roles[0]?.key ?? '');
+                setPassword('');
+                setPasswordConfirm('');
+                setShowPassword(false);
+                setSaveState('idle');
+                setCopied(false);
+              }}
+            >
+              Cadastrar outro
+            </button>
+          </div>
+        </header>
+
+        <section className="admin-user-created">
+          <div className="admin-user-created__status">
+            <span>Cadastro concluído</span>
+            <strong>{created.displayName}</strong>
+            <p>
+              Entregue a senha inicial por um canal seguro. Por segurança, ela não será recuperada pelo Sistema depois que você sair desta tela.
+            </p>
+          </div>
+
+          <dl>
+            <div><dt>Login</dt><dd><code>{created.login}</code></dd></div>
+            <div><dt>E-mail</dt><dd>{created.email}</dd></div>
+            <div>
+              <dt>Senha inicial</dt>
+              <dd><code>{showPassword ? password : '••••••••••••••••'}</code></dd>
+            </div>
+          </dl>
+
+          <div className="admin-user-created__actions">
+            <button type="button" onClick={() => setShowPassword((current) => !current)}>
+              {showPassword ? 'Ocultar senha' : 'Mostrar senha'}
+            </button>
+            <button type="button" className="admin-button--primary" onClick={() => void copyCredentials()}>
+              {copied ? 'Credenciais copiadas' : 'Copiar credenciais'}
+            </button>
+          </div>
+        </section>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <AdminEditorGuard
+        dirty={dirty}
+        saving={saveState === 'saving'}
+        onSave={() => createUser()}
+      />
+
+      <header className="admin-editor-header">
+        <div>
+          <a href="/sistema/usuarios" className="admin-editor-header__back">← Usuários</a>
+          <div className="admin-editor-header__title">
+            <span className="admin-avatar">{initials(displayName || login)}</span>
+            <h1>Novo usuário</h1>
+          </div>
+          <p>Crie uma conta nativa usando o mesmo banco de usuários preservado do WordPress.</p>
+        </div>
+
+        <div className="admin-editor-header__actions">
+          <AdminEditorSaveIndicator dirty={dirty} state={saveState} />
+          <button
+            type="button"
+            className="admin-button--primary"
+            disabled={!canSubmit}
+            onClick={() => void createUser()}
+          >
+            {saveState === 'saving' ? 'Criando…' : 'Criar usuário'}
+          </button>
+        </div>
+      </header>
+
+      {saveState === 'error' && (
+        <div className="admin-save-feedback admin-save-feedback--error" role="alert">
+          {errorMessage}
+        </div>
+      )}
+
+      <form className="admin-user-new" onSubmit={(event) => void createUser(event)}>
+        <section className="admin-editor-card">
+          <div className="admin-editor-card__head">
+            <span>Conta</span>
+            <strong>Identidade e acesso</strong>
+          </div>
+
+          <div className="admin-editor-card__body admin-editor-card__body--fields">
+            <label className="admin-editor-field">
+              <span>Nome de exibição</span>
+              <input
+                value={displayName}
+                autoFocus
+                required
+                maxLength={250}
+                placeholder="Nome que aparece na redação"
+                onChange={(event) => {
+                  setDisplayName(event.target.value);
+                  setSaveState('idle');
+                }}
+              />
+            </label>
+
+            <label className="admin-editor-field">
+              <span>Login</span>
+              <input
+                value={login}
+                required
+                maxLength={60}
+                autoComplete="username"
+                spellCheck={false}
+                placeholder="nome.sobrenome"
+                aria-invalid={login !== '' && !loginValid}
+                onChange={(event) => {
+                  setLogin(
+                    event.target.value
+                      .toLowerCase()
+                      .replace(/[^a-z0-9._-]+/g, '-')
+                      .replace(/^-+/, ''),
+                  );
+                  setSaveState('idle');
+                }}
+              />
+              <small className="admin-field-help">
+                Mínimo de 3 caracteres. Esse login também vira o slug inicial do perfil público.
+              </small>
+            </label>
+
+            <label className="admin-editor-field">
+              <span>E-mail</span>
+              <input
+                type="email"
+                value={email}
+                required
+                maxLength={100}
+                autoComplete="email"
+                aria-invalid={email !== '' && !emailValid}
+                onChange={(event) => {
+                  setEmail(event.target.value);
+                  setSaveState('idle');
+                }}
+              />
+            </label>
+
+            <label className="admin-editor-field">
+              <span>Função</span>
+              <select
+                value={role}
+                required
+                onChange={(event) => {
+                  setRole(event.target.value);
+                  setSaveState('idle');
+                }}
+              >
+                {data.roles.map((item) => (
+                  <option value={item.key} key={item.key}>{roleLabel(item.key)}</option>
+                ))}
+              </select>
+              <small className="admin-field-help">
+                Autores e editores acessam a redação conforme as capabilities herdadas do papel WordPress.
+              </small>
+            </label>
+          </div>
+        </section>
+
+        <section className="admin-editor-card">
+          <div className="admin-editor-card__head">
+            <span>Segurança</span>
+            <strong>Senha inicial</strong>
+          </div>
+
+          <div className="admin-editor-card__body admin-editor-card__body--fields">
+            <label className="admin-editor-field">
+              <span>Senha</span>
+              <div className="admin-password-field">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  required
+                  minLength={12}
+                  autoComplete="new-password"
+                  aria-invalid={password !== '' && !passwordValid}
+                  onChange={(event) => {
+                    setPassword(event.target.value);
+                    setCopied(false);
+                    setSaveState('idle');
+                  }}
+                />
+                <button type="button" onClick={() => setShowPassword((current) => !current)}>
+                  {showPassword ? 'Ocultar' : 'Mostrar'}
+                </button>
+              </div>
+            </label>
+
+            <label className="admin-editor-field">
+              <span>Confirmar senha</span>
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={passwordConfirm}
+                required
+                minLength={12}
+                autoComplete="new-password"
+                aria-invalid={passwordConfirm !== '' && !passwordsMatch}
+                onChange={(event) => {
+                  setPasswordConfirm(event.target.value);
+                  setSaveState('idle');
+                }}
+              />
+              {passwordConfirm !== '' && !passwordsMatch && (
+                <small className="admin-field-error">As senhas ainda não são iguais.</small>
+              )}
+            </label>
+
+            <div className="admin-password-tools">
+              <button type="button" onClick={generatePassword}>Gerar senha forte</button>
+              <span>A senha precisa ter pelo menos 12 caracteres.</span>
+            </div>
+          </div>
+        </section>
+      </form>
+    </>
+  );
+}
+
 function UserEditorView({
   user,
   csrfToken,
@@ -8777,6 +9179,11 @@ export function AdminApp() {
               : <AdminAccessDenied />
           )}
           {view === 'users' && <UsersView />}
+          {view === 'userNew' && (
+            user.capabilities.includes('create_users') && user.capabilities.includes('promote_users')
+              ? <NewUserView csrfToken={csrfToken} />
+              : <AdminAccessDenied />
+          )}
           {view === 'user' && <UserEditorView user={user} csrfToken={csrfToken} />}
           {view === 'settings' && <SettingsView csrfToken={csrfToken} />}
           {view === 'wordpress' && (
