@@ -2261,3 +2261,52 @@ Foi adicionado `src/navigation.ts` como cliente compartilhado e cacheado para He
 A mudança é incremental e fail-safe: nenhum menu WordPress passa a ser autoridade obrigatória enquanto o acervo não estiver devidamente configurado.
 
 Próxima capacidade WordPress-native de maior valor: usar `_wp_attachment_metadata` para mídia responsiva, dimensões conhecidas e escolha de derivados adequados.
+
+## 41. Mídia WordPress responsiva
+
+O acervo de attachments passa a ser utilizado além da URL original.
+
+### Leitura segura de metadata
+
+Novo helper:
+
+```text
+public/api/v1/_media.php
+```
+
+Ele interpreta `_wp_attachment_metadata` sem permitir classes PHP e valida os caminhos relativos antes de produzir URLs públicas.
+
+### Descriptor responsivo
+
+As APIs públicas passam a devolver, quando disponíveis:
+
+```text
+featuredImage.url
+featuredImage.alt
+featuredImage.width
+featuredImage.height
+featuredImage.srcSet
+featuredImage.variants[]
+```
+
+Os derivados continuam sendo os arquivos já existentes em `wp-content/uploads`. Nenhuma cópia ou migração física é executada.
+
+### Frontend
+
+Capa, cards, arquivos e matéria usam `srcset`, `sizes` e dimensões intrínsecas.
+
+A manchete principal deixa de usar lazy loading; imagens secundárias continuam lazy.
+
+### Biblioteca
+
+A administração de Mídia passa a exibir dimensões e derivados registrados pelo WordPress. Isso aproxima a biblioteca do padrão de asset inventory adotado no MOBI CMS, onde dimensões fazem parte do contrato do recurso.
+
+### SEO
+
+Quando conhecidos, largura e altura da imagem destacada são incluídas nas tags Open Graph.
+
+### Fail-safe
+
+Attachments sem metadata válida continuam funcionando pela URL original. Metadata quebrada ou serialização inesperada não interrompe a resposta.
+
+A próxima frente WordPress-native é automatizar redirects seguros quando o slug de uma matéria publicada for alterado.
