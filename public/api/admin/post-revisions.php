@@ -20,6 +20,7 @@ function nj_revision_payload(array $row): array
         'kind' => (string) ($decoded['kind'] ?? 'save'),
         'source' => 'nossojornal',
         'restorable' => true,
+        'restoreMode' => 'snapshot',
         'createdAt' => nj_content_iso8601((string) $row['post_date']),
         'modifiedAt' => nj_content_iso8601((string) $row['post_modified']),
         'author' => [
@@ -58,7 +59,8 @@ function nj_wordpress_revision_payload(array $row): array
         'id' => (int) $row['ID'],
         'kind' => $isAutosave ? 'wordpress_autosave' : 'wordpress_revision',
         'source' => 'wordpress',
-        'restorable' => false,
+        'restorable' => true,
+        'restoreMode' => 'content_merge',
         'createdAt' => nj_content_iso8601((string) $row['post_date']),
         'modifiedAt' => nj_content_iso8601((string) $row['post_modified']),
         'author' => [
@@ -300,6 +302,108 @@ SQL);
             'autosave' => [
                 'id' => $revisionId,
                 'savedAt' => (new DateTimeImmutable('now', new DateTimeZone('America/Sao_Paulo')))->format(DATE_ATOM),
+            ],
+        ];
+    }
+
+    if ($action === 'restore_wordpress') {
+        $revisionId = filter_var(
+            $body['revisionId'] ?? null,
+            FILTER_VALIDATE_INT,
+            ['options' => ['min_range' => 1]]
+        );
+
+        if (!is_int($revisionId) || $revisionId <= 0) {
+            throw new NjApiHttpException(422, 'invalid_revision_id');
+        }
+
+        $revisionStatement = $pdo->prepare(<<<SQL
+SELECT
+    post_title,
+    post_excerpt,
+    post_content
+FROM {$posts}
+WHERE
+    ID = :id
+    AND post_type = 'revision'
+    AND post_parent = :post_id
+    AND post_status = 'inherit'
+LIMIT 1
+SQL);
+        $revisionStatement->execute([
+            'id' => $revisionId,
+            'post_id' => $postId,
+        ]);
+        $revision = $revisionStatement->fetch();
+
+        if (!is_array($revision)) {
+            throw new NjApiHttpException(404, 'revision_not_found');
+        }
+
+        $title = (string) ($revision['post_title'] ?? '');
+        $excerpt = (string) ($revision['post_excerpt'] ?? '');
+        $content = (string) ($revision['post_content'] ?? '');
+
+        if ($title === '' && $excerpt === '' && $content === '') {
+            throw new NjApiHttpException(422, 'invalid_revision_snapshot');
+        }
+
+        try {
+            $pdo->beginTransaction();
+
+            nj_admin_create_revision($pdo, $postId, (int) $user['id'], 'before_wordpress_restore');
+
+            $update = $pdo->prepare(<<<SQL
+UPDATE {$posts}
+SET
+    post_title = :title,
+    post_excerpt = :excerpt,
+    post_content = :content,
+    post_modified = NOW(),
+    post_modified_gmt = UTC_TIMESTAMP()
+WHERE ID = :id
+LIMIT 1
+SQL);
+            $update->execute([
+                'title' => $title,
+                'excerpt' => $excerpt,
+                'content' => $content,
+                'id' => $postId,
+            ]);
+
+            nj_admin_log_post_activity(
+                $pdo,
+                $postId,
+                (int) $user['id'],
+                'wordpress_revision_restored',
+                [
+                    'revisionId' => $revisionId,
+                    'restoredFields' => ['title', 'excerpt', 'content'],
+                    'preservedFields' => [
+                        'slug',
+                        'status',
+                        'categories',
+                        'tags',
+                        'seo',
+                        'featured_image',
+                        'editorial_metadata',
+                    ],
+                ]
+            );
+
+            $pdo->commit();
+        } catch (Throwable $error) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            throw $error;
+        }
+
+        return [
+            'snapshot' => nj_admin_post_snapshot($pdo, $postId),
+            'restore' => [
+                'mode' => 'content_merge',
+                'restoredFields' => ['title', 'excerpt', 'content'],
             ],
         ];
     }
