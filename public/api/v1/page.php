@@ -12,10 +12,7 @@ nj_run(static function (): array {
     $legacySlug = $aliases[$slug] ?? $slug;
 
     if ($legacySlug === '' || !preg_match('/^[a-z0-9-]+$/', $legacySlug)) {
-        nj_json_response(400, [
-            'ok' => false,
-            'error' => ['code' => 'invalid_page_slug'],
-        ]);
+        throw new NjApiHttpException(400, 'invalid_page_slug');
     }
 
     $pdo = nj_db();
@@ -41,10 +38,7 @@ SQL);
     $row = $statement->fetch();
 
     if (!$row) {
-        nj_json_response(404, [
-            'ok' => false,
-            'error' => ['code' => 'page_not_found'],
-        ]);
+        throw new NjApiHttpException(404, 'page_not_found');
     }
 
     $contentHtml = nj_content_sanitize_html((string) $row['content']);
