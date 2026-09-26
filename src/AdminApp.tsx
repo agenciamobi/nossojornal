@@ -1,4 +1,5 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { AdminRichEditor, type RichEditorMediaItem } from './AdminRichEditor';
 import './admin.css';
 
 type AdminUser = {
@@ -434,6 +435,32 @@ async function adminFetch<T>(url: string, init?: RequestInit): Promise<T> {
   }
 
   return payload;
+}
+
+async function loadAdminEditorMedia(query: string): Promise<RichEditorMediaItem[]> {
+  const search = new URLSearchParams({
+    page: '1',
+    per_page: '60',
+  });
+
+  if (query.trim()) {
+    search.set('q', query.trim());
+  }
+
+  const payload = await adminFetch<MediaPayload>('/api/admin/media.php?' + search.toString());
+
+  if (!payload.ok || !payload.data) {
+    throw new Error('media_invalid');
+  }
+
+  return payload.data.items
+    .filter((item) => item.mimeType.startsWith('image/'))
+    .map((item) => ({
+      id: item.id,
+      title: item.title,
+      url: item.url,
+      alt: item.alt,
+    }));
 }
 
 function AdminLogin({
@@ -1653,19 +1680,19 @@ function PostEditorView({
             />
           </label>
 
-          <label className="admin-editor-field">
-            <span>Conteúdo</span>
-            <textarea
-              className="admin-editor-content"
-              value={content}
-              readOnly={!canEdit}
-              rows={28}
-              onChange={(event) => {
-                setContent(event.target.value);
-                setSaveState('idle');
-              }}
-            />
-          </label>
+          <AdminRichEditor
+            label="Conteúdo da notícia"
+            value={content}
+            disabled={!canEdit}
+            minHeight={620}
+            loadMedia={loadAdminEditorMedia}
+            canSave={canEdit && changed && saveState !== 'saving'}
+            onSave={() => void savePost()}
+            onChange={(html) => {
+              setContent(html);
+              setSaveState('idle');
+            }}
+          />
 
           <section className="admin-editor-card">
             <div className="admin-editor-card__head">
@@ -2200,19 +2227,19 @@ function PageEditorView({
             />
           </label>
 
-          <label className="admin-editor-field">
-            <span>Conteúdo</span>
-            <textarea
-              className="admin-editor-content"
-              value={content}
-              readOnly={!canEdit}
-              rows={28}
-              onChange={(event) => {
-                setContent(event.target.value);
-                setSaveState('idle');
-              }}
-            />
-          </label>
+          <AdminRichEditor
+            label="Conteúdo da página"
+            value={content}
+            disabled={!canEdit}
+            minHeight={520}
+            loadMedia={loadAdminEditorMedia}
+            canSave={canEdit && changed && saveState !== 'saving'}
+            onSave={() => void savePage()}
+            onChange={(html) => {
+              setContent(html);
+              setSaveState('idle');
+            }}
+          />
 
           <section className="admin-editor-card">
             <div className="admin-editor-card__head">
