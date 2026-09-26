@@ -218,7 +218,7 @@ Explorar:
 
 Objetivo: image picker melhor, responsivo e capaz de escolher tamanho adequado em vez de entregar sempre o original.
 
-### 5. Coautoria e perfis
+### 5. Coautoria e perfis — aplicada na Rodada 10
 
 Além dos usuários nativos:
 
@@ -401,7 +401,7 @@ Nenhum desses projetos deve ser copiado diretamente. A utilidade está nos padr�
 3. menus WordPress → header/footer com fallback — concluída;
 4. mídia responsiva baseada em attachment metadata — primeira camada concluída;
 5. redirects automáticos ao alterar slug — concluída;
-6. perfis públicos de autor;
+6. perfis públicos de autor — concluída;
 7. comentários públicos, se houver decisão editorial;
 8. proveniência/importação e sincronização;
 9. arquivos por autor/taxonomia;
@@ -673,3 +673,109 @@ O restore WordPress em modo `content_merge` não altera slug, portanto não prec
 
 O suporte também foi conectado ao save de páginas quando uma rota pública mapeada puder mudar. Páginas estruturais atualmente protegidas continuam com slug bloqueado.
 
+## Rodada 10 — perfis públicos de autor
+
+O portal passa a transformar usuários WordPress que possuem participação em matérias publicadas em perfis editoriais públicos.
+
+### Rotas e API
+
+Nova rota pública:
+
+```text
+/autor/:user_nicename
+```
+
+Novo endpoint:
+
+```text
+GET /api/v1/author.php?slug=:user_nicename&page=1&per_page=12
+```
+
+O slug usa `users.user_nicename`, que já é o identificador público nativo do WordPress para autores.
+
+O perfil só existe publicamente quando o usuário participa de pelo menos uma matéria publicada, seja como autor principal em `post_author` ou como coautor em `_nj_coauthors`.
+
+### Allowlist pública de usermeta
+
+Nenhum usermeta arbitrário é exposto.
+
+A projeção pública lê somente:
+
+```text
+description
+_nj_public_bio
+_nj_public_role
+_nj_public_avatar_id
+_nj_public_instagram
+_nj_public_facebook
+_nj_public_linkedin
+_nj_public_x
+```
+
+Também pode usar `users.user_url` como site público.
+
+Nunca entram no contrato público:
+
+- e-mail;
+- login;
+- senha/hash;
+- roles;
+- capabilities;
+- session tokens;
+- usermeta de plugins fora da allowlist;
+- options ou configurações privadas.
+
+`_nj_public_bio` tem prioridade sobre a biografia `description` preservada do WordPress. Isso permite evoluir o perfil sem destruir o conteúdo legado.
+
+### Coautoria
+
+A página de autor lista:
+
+- matérias onde o usuário é `post_author`;
+- matérias publicadas onde seu ID aparece em `_nj_coauthors`.
+
+Assim, um colaborador não precisa ser o autor principal de uma notícia para possuir arquivo público válido.
+
+As matérias e cards passam a carregar:
+
+```text
+author.slug
+author.url
+```
+
+e coautores também recebem URL pública quando possuem `user_nicename`.
+
+### SEO e schema
+
+Perfis possuem:
+
+- canonical próprio;
+- metadados sociais;
+- JSON-LD `Person`;
+- `worksFor = Nosso Jornal`;
+- `sameAs` somente com URLs explicitamente allowlisted;
+- foto responsiva quando existir `_nj_public_avatar_id`.
+
+O `NewsArticle` passa a apontar o autor principal para sua URL pública.
+
+### Administração
+
+`/sistema/usuarios/:id` passa a editar, separadamente das credenciais e permissões:
+
+- função editorial pública;
+- biografia;
+- site;
+- Instagram;
+- Facebook;
+- LinkedIn;
+- X/Twitter.
+
+A tela também mostra o slug público, quantidade de matérias e link de preview quando o perfil está elegível.
+
+URLs sociais são validadas por protocolo e host esperado antes da gravação.
+
+### Compatibilidade
+
+Perfis sem foto usam fallback visual por inicial.
+
+Usuários sem publicações continuam existentes no Sistema, mas não ganham página pública. A camada pública nunca usa e-mail para avatar ou identidade.

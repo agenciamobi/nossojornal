@@ -31,6 +31,21 @@ type AdminUser = {
   };
 };
 
+type AdminPublicProfile = {
+  slug: string;
+  url: string | null;
+  publishedCount: number;
+  bio: string;
+  bioSource: 'nossojornal' | 'wordpress' | 'empty';
+  role: string;
+  website: string;
+  instagram: string;
+  facebook: string;
+  linkedin: string;
+  x: string;
+};
+
+
 type AdminPost = {
   id: number;
   title: string;
@@ -309,6 +324,7 @@ type UserDetailPayload = {
   ok: boolean;
   data?: {
     user: AdminUser;
+    publicProfile: AdminPublicProfile;
     roles: Array<{ key: string; name: string }>;
     canChangeRole: boolean;
   };
@@ -5963,6 +5979,13 @@ function UserEditorView({
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
   const [role, setRole] = useState('');
+  const [publicBio, setPublicBio] = useState('');
+  const [publicRole, setPublicRole] = useState('');
+  const [website, setWebsite] = useState('');
+  const [instagram, setInstagram] = useState('');
+  const [facebook, setFacebook] = useState('');
+  const [linkedin, setLinkedin] = useState('');
+  const [xProfile, setXProfile] = useState('');
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [error, setError] = useState(false);
 
@@ -5980,6 +6003,13 @@ function UserEditorView({
         setDisplayName(payload.data.user.displayName);
         setEmail(payload.data.user.email);
         setRole(payload.data.user.roles[0] ?? '');
+        setPublicBio(payload.data.publicProfile.bio);
+        setPublicRole(payload.data.publicProfile.role);
+        setWebsite(payload.data.publicProfile.website);
+        setInstagram(payload.data.publicProfile.instagram);
+        setFacebook(payload.data.publicProfile.facebook);
+        setLinkedin(payload.data.publicProfile.linkedin);
+        setXProfile(payload.data.publicProfile.x);
       })
       .catch(() => setError(true));
   }, [userId]);
@@ -5993,7 +6023,14 @@ function UserEditorView({
   const changed =
     displayName !== data.user.displayName
     || email !== data.user.email
-    || role !== originalRole;
+    || role !== originalRole
+    || publicBio !== data.publicProfile.bio
+    || publicRole !== data.publicProfile.role
+    || website !== data.publicProfile.website
+    || instagram !== data.publicProfile.instagram
+    || facebook !== data.publicProfile.facebook
+    || linkedin !== data.publicProfile.linkedin
+    || xProfile !== data.publicProfile.x;
 
   async function saveUser() {
     if (!profileCanSave || !changed || saveState === 'saving') return;
@@ -6004,7 +6041,10 @@ function UserEditorView({
     try {
       const payload = await adminFetch<{
         ok: boolean;
-        data?: { user: AdminUser };
+        data?: {
+          user: AdminUser;
+          publicProfile: AdminPublicProfile;
+        };
       }>('/api/admin/user-save.php', {
         method: 'POST',
         headers: { 'X-CSRF-Token': csrfToken },
@@ -6013,6 +6053,13 @@ function UserEditorView({
           displayName,
           email,
           role,
+          publicBio,
+          publicRole,
+          website,
+          instagram,
+          facebook,
+          linkedin,
+          x: xProfile,
         }),
       });
 
@@ -6024,12 +6071,20 @@ function UserEditorView({
         ? {
             ...current,
             user: payload.data!.user,
+            publicProfile: payload.data!.publicProfile,
           }
         : current
       );
       setDisplayName(payload.data.user.displayName);
       setEmail(payload.data.user.email);
       setRole(payload.data.user.roles[0] ?? role);
+      setPublicBio(payload.data.publicProfile.bio);
+      setPublicRole(payload.data.publicProfile.role);
+      setWebsite(payload.data.publicProfile.website);
+      setInstagram(payload.data.publicProfile.instagram);
+      setFacebook(payload.data.publicProfile.facebook);
+      setLinkedin(payload.data.publicProfile.linkedin);
+      setXProfile(payload.data.publicProfile.x);
       setSaveState('saved');
     } catch {
       setSaveState('error');
@@ -6073,6 +6128,7 @@ function UserEditorView({
       )}
 
       <div className="admin-user-editor">
+        <div className="admin-user-editor__main">
         <section className="admin-editor-card">
           <div className="admin-editor-card__head">
             <span>Perfil</span>
@@ -6129,6 +6185,143 @@ function UserEditorView({
             </label>
           </div>
         </section>
+
+        <section className="admin-editor-card">
+          <div className="admin-editor-card__head">
+            <span>Perfil público</span>
+            <strong>Autoria e apresentação</strong>
+          </div>
+
+          <div className="admin-author-profile-status">
+            <div>
+              <strong>
+                {data.publicProfile.publishedCount.toLocaleString('pt-BR')}
+                {' '}
+                {data.publicProfile.publishedCount === 1 ? 'publicação' : 'publicações'}
+              </strong>
+              <span>
+                {data.publicProfile.url
+                  ? 'Perfil público ativo'
+                  : 'O perfil ficará público quando houver matéria publicada.'}
+              </span>
+            </div>
+            {data.publicProfile.url && (
+              <a href={data.publicProfile.url} target="_blank" rel="noopener noreferrer">
+                Ver perfil ↗
+              </a>
+            )}
+          </div>
+
+          <div className="admin-editor-card__body admin-editor-card__body--fields">
+            <label className="admin-editor-field">
+              <span>Slug público</span>
+              <input value={data.publicProfile.slug} readOnly />
+            </label>
+
+            <label className="admin-editor-field">
+              <span>Função editorial pública</span>
+              <input
+                value={publicRole}
+                readOnly={!profileCanSave}
+                placeholder="Ex.: Repórter, Colunista, Editor"
+                onChange={(event) => {
+                  setPublicRole(event.target.value);
+                  setSaveState('idle');
+                }}
+              />
+            </label>
+
+            <label className="admin-editor-field admin-editor-field--wide">
+              <span>Biografia pública</span>
+              <textarea
+                value={publicBio}
+                readOnly={!profileCanSave}
+                rows={5}
+                placeholder="Apresentação curta do autor para leitores e mecanismos de busca."
+                onChange={(event) => {
+                  setPublicBio(event.target.value);
+                  setSaveState('idle');
+                }}
+              />
+              {data.publicProfile.bioSource === 'wordpress' && (
+                <small>
+                  Esta biografia veio do perfil WordPress legado. Ao salvar, o Nosso Jornal passa a manter uma versão pública própria.
+                </small>
+              )}
+            </label>
+
+            <label className="admin-editor-field admin-editor-field--wide">
+              <span>Site</span>
+              <input
+                type="url"
+                value={website}
+                readOnly={!profileCanSave}
+                placeholder="https://"
+                onChange={(event) => {
+                  setWebsite(event.target.value);
+                  setSaveState('idle');
+                }}
+              />
+            </label>
+
+            <label className="admin-editor-field">
+              <span>Instagram</span>
+              <input
+                type="url"
+                value={instagram}
+                readOnly={!profileCanSave}
+                placeholder="https://instagram.com/..."
+                onChange={(event) => {
+                  setInstagram(event.target.value);
+                  setSaveState('idle');
+                }}
+              />
+            </label>
+
+            <label className="admin-editor-field">
+              <span>Facebook</span>
+              <input
+                type="url"
+                value={facebook}
+                readOnly={!profileCanSave}
+                placeholder="https://facebook.com/..."
+                onChange={(event) => {
+                  setFacebook(event.target.value);
+                  setSaveState('idle');
+                }}
+              />
+            </label>
+
+            <label className="admin-editor-field">
+              <span>LinkedIn</span>
+              <input
+                type="url"
+                value={linkedin}
+                readOnly={!profileCanSave}
+                placeholder="https://linkedin.com/..."
+                onChange={(event) => {
+                  setLinkedin(event.target.value);
+                  setSaveState('idle');
+                }}
+              />
+            </label>
+
+            <label className="admin-editor-field">
+              <span>X / Twitter</span>
+              <input
+                type="url"
+                value={xProfile}
+                readOnly={!profileCanSave}
+                placeholder="https://x.com/..."
+                onChange={(event) => {
+                  setXProfile(event.target.value);
+                  setSaveState('idle');
+                }}
+              />
+            </label>
+          </div>
+        </section>
+        </div>
 
         <aside className="admin-editor-card">
           <div className="admin-editor-card__head">

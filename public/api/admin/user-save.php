@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require __DIR__ . '/_admin.php';
+require_once __DIR__ . '/../v1/_authors.php';
 
 nj_admin_run(['POST'], static function (): array {
     $currentUser = nj_admin_current_user(true);
@@ -17,6 +18,13 @@ nj_admin_run(['POST'], static function (): array {
     $displayName = trim((string) ($body['displayName'] ?? ''));
     $email = trim((string) ($body['email'] ?? ''));
     $requestedRole = trim((string) ($body['role'] ?? ''));
+    $publicBio = trim((string) ($body['publicBio'] ?? ''));
+    $publicRole = trim((string) ($body['publicRole'] ?? ''));
+    $websiteInput = trim((string) ($body['website'] ?? ''));
+    $instagramInput = trim((string) ($body['instagram'] ?? ''));
+    $facebookInput = trim((string) ($body['facebook'] ?? ''));
+    $linkedinInput = trim((string) ($body['linkedin'] ?? ''));
+    $xInput = trim((string) ($body['x'] ?? ''));
 
     if (!is_int($id) || $id <= 0) {
         throw new NjApiHttpException(422, 'invalid_user_id');
@@ -28,6 +36,50 @@ nj_admin_run(['POST'], static function (): array {
 
     if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
         throw new NjApiHttpException(422, 'invalid_user_email');
+    }
+
+    if ((function_exists('mb_strlen') ? mb_strlen($publicBio, 'UTF-8') : strlen($publicBio)) > 3000) {
+        throw new NjApiHttpException(422, 'public_bio_too_large');
+    }
+
+    if ((function_exists('mb_strlen') ? mb_strlen($publicRole, 'UTF-8') : strlen($publicRole)) > 160) {
+        throw new NjApiHttpException(422, 'public_role_too_large');
+    }
+
+    $website = nj_author_external_url($websiteInput);
+    if ($websiteInput !== '' && $website === '') {
+        throw new NjApiHttpException(422, 'invalid_public_website');
+    }
+
+    $socialInputs = [
+        'instagram' => [
+            'value' => $instagramInput,
+            'hosts' => ['instagram.com', 'www.instagram.com'],
+        ],
+        'facebook' => [
+            'value' => $facebookInput,
+            'hosts' => ['facebook.com', 'www.facebook.com'],
+        ],
+        'linkedin' => [
+            'value' => $linkedinInput,
+            'hosts' => ['linkedin.com', 'www.linkedin.com'],
+        ],
+        'x' => [
+            'value' => $xInput,
+            'hosts' => ['x.com', 'www.x.com', 'twitter.com', 'www.twitter.com'],
+        ],
+    ];
+
+    $socialUrls = [];
+    foreach ($socialInputs as $key => $definition) {
+        $value = (string) $definition['value'];
+        $normalized = nj_author_external_url($value, $definition['hosts']);
+
+        if ($value !== '' && $normalized === '') {
+            throw new NjApiHttpException(422, 'invalid_public_' . $key);
+        }
+
+        $socialUrls[$key] = $normalized;
     }
 
     $pdo = nj_db();
@@ -42,6 +94,8 @@ SELECT
     user_email,
     user_registered,
     user_status,
+    user_nicename,
+    user_url,
     display_name
 FROM {$users}
 WHERE ID = :id
@@ -100,15 +154,24 @@ SQL);
 UPDATE {$users}
 SET
     display_name = :display_name,
-    user_email = :email
+    user_email = :email,
+    user_url = :user_url
 WHERE ID = :id
 LIMIT 1
 SQL);
         $updateUser->execute([
             'display_name' => $displayName,
             'email' => $email,
+            'user_url' => $website,
             'id' => $id,
         ]);
+
+        nj_admin_upsert_usermeta($pdo, $id, '_nj_public_bio', $publicBio);
+        nj_admin_upsert_usermeta($pdo, $id, '_nj_public_role', $publicRole);
+        nj_admin_upsert_usermeta($pdo, $id, '_nj_public_instagram', $socialUrls['instagram']);
+        nj_admin_upsert_usermeta($pdo, $id, '_nj_public_facebook', $socialUrls['facebook']);
+        nj_admin_upsert_usermeta($pdo, $id, '_nj_public_linkedin', $socialUrls['linkedin']);
+        nj_admin_upsert_usermeta($pdo, $id, '_nj_public_x', $socialUrls['x']);
 
         if ($role !== $currentRole) {
             $capabilityKey = $prefix . 'capabilities';
@@ -183,6 +246,8 @@ SELECT
     user_email,
     user_registered,
     user_status,
+    user_nicename,
+    user_url,
     display_name
 FROM {$users}
 WHERE ID = :id
@@ -195,6 +260,7 @@ SQL);
             !$persisted
             || (string) $persisted['display_name'] !== $displayName
             || (string) $persisted['user_email'] !== $email
+            || (string) $persisted['user_url'] !== $website
         ) {
             throw new RuntimeException('user_readback_mismatch');
         }
@@ -225,7 +291,73 @@ SQL);
         throw $error;
     }
 
+    $posts = nj_table('posts');
+    $postmeta = nj_table('postmeta');
+    $publishedStatement = $pdo->prepare(
+        "SELECT COUNT(*)
+         FROM {$posts} p
+         WHERE
+             (
+                 p.post_author = :primary_author_id
+                 OR EXISTS (
+                     SELECT 1
+                     FROM {$postmeta} coauthor_meta
+                     WHERE
+                         coauthor_meta.post_id = p.ID
+                         AND coauthor_meta.meta_key = '_nj_coauthors'
+                         AND FIND_IN_SET(
+                             CAST(:coauthor_id AS CHAR),
+                             REPLACE(
+                                 REPLACE(
+                                     REPLACE(
+                                         REPLACE(
+                                             REPLACE(
+                                                 REPLACE(coauthor_meta.meta_value, '[', ''),
+                                                 ']', ''
+                                             ),
+                                             ' ',
+                                             ''
+                                         ),
+                                         CHAR(10),
+                                         ''
+                                     ),
+                                     CHAR(13),
+                                     ''
+                                 ),
+                                 CHAR(9),
+                                 ''
+                             )
+                         ) > 0
+                 )
+             )
+             AND p.post_type = 'post'
+             AND p.post_status = 'publish'
+             AND p.post_password = ''
+             AND p.post_name <> ''"
+    );
+    $publishedStatement->execute([
+        'primary_author_id' => $id,
+        'coauthor_id' => $id,
+    ]);
+    $publishedCount = (int) $publishedStatement->fetchColumn();
+    $publicSlug = trim((string) ($persisted['user_nicename'] ?? ''));
+
     return [
         'user' => nj_admin_user_payload($pdo, $persisted),
+        'publicProfile' => [
+            'slug' => $publicSlug,
+            'url' => $publicSlug !== '' && $publishedCount > 0
+                ? '/autor/' . rawurlencode($publicSlug)
+                : null,
+            'publishedCount' => $publishedCount,
+            'bio' => $publicBio,
+            'bioSource' => $publicBio !== '' ? 'nossojornal' : 'empty',
+            'role' => $publicRole,
+            'website' => $website,
+            'instagram' => $socialUrls['instagram'],
+            'facebook' => $socialUrls['facebook'],
+            'linkedin' => $socialUrls['linkedin'],
+            'x' => $socialUrls['x'],
+        ],
     ];
 });

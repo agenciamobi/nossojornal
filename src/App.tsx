@@ -37,6 +37,8 @@ type Article = {
   author: {
     id: number;
     name: string;
+    slug: string;
+    url: string | null;
   };
   featuredImage: FeaturedImage | null;
   views: number;
@@ -133,7 +135,11 @@ function StoryMeta({ article, showViews = false }: { article: Article; showViews
   return (
     <div className="home-story-meta">
       <span>{formatPublishedAt(article.publishedAt)}</span>
-      {article.author.name && <span>{article.author.name}</span>}
+      {article.author.name && (
+        article.author.url
+          ? <a href={article.author.url}>{article.author.name}</a>
+          : <span>{article.author.name}</span>
+      )}
       {showViews && article.views > 0 && <span>{formatViews(article.views)} visualizações</span>}
     </div>
   );

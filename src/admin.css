@@ -1798,6 +1798,57 @@
   align-items: start;
 }
 
+.admin-user-editor__main {
+  min-width: 0;
+  display: grid;
+  gap: 20px;
+}
+
+.admin-author-profile-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 14px;
+  border-bottom: 1px solid #f0f0f1;
+  background: #f6f7f7;
+}
+
+.admin-author-profile-status > div {
+  display: grid;
+  gap: 2px;
+}
+
+.admin-author-profile-status strong {
+  color: #1d2327;
+  font-size: 10px;
+}
+
+.admin-author-profile-status span {
+  color: #646970;
+  font-size: 9px;
+}
+
+.admin-author-profile-status a {
+  flex: 0 0 auto;
+  color: #2271b1;
+  font-size: 9px;
+  font-weight: 750;
+}
+
+.admin-author-profile-status a:hover,
+.admin-author-profile-status a:focus-visible {
+  color: #135e96;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.admin-editor-field small {
+  color: #787c82;
+  font-size: 8px;
+  line-height: 1.45;
+}
+
 .admin-user-permissions {
   display: grid;
   gap: 1px;

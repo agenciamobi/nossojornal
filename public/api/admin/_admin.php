@@ -601,6 +601,69 @@ SQL);
     ]);
 }
 
+function nj_admin_upsert_usermeta(
+    PDO $pdo,
+    int $userId,
+    string $key,
+    string $value
+): void {
+    $usermeta = nj_table('usermeta');
+
+    $find = $pdo->prepare(<<<SQL
+SELECT umeta_id
+FROM {$usermeta}
+WHERE
+    user_id = :user_id
+    AND meta_key = :meta_key
+ORDER BY umeta_id DESC
+LIMIT 1
+SQL);
+    $find->execute([
+        'user_id' => $userId,
+        'meta_key' => $key,
+    ]);
+    $metaId = (int) ($find->fetchColumn() ?: 0);
+
+    if ($value === '') {
+        if ($metaId > 0) {
+            $delete = $pdo->prepare(
+                "DELETE FROM {$usermeta} WHERE user_id = :user_id AND meta_key = :meta_key"
+            );
+            $delete->execute([
+                'user_id' => $userId,
+                'meta_key' => $key,
+            ]);
+        }
+
+        return;
+    }
+
+    if ($metaId > 0) {
+        $update = $pdo->prepare(<<<SQL
+UPDATE {$usermeta}
+SET meta_value = :meta_value
+WHERE umeta_id = :meta_id
+LIMIT 1
+SQL);
+        $update->execute([
+            'meta_value' => $value,
+            'meta_id' => $metaId,
+        ]);
+
+        return;
+    }
+
+    $insert = $pdo->prepare(<<<SQL
+INSERT INTO {$usermeta} (user_id, meta_key, meta_value)
+VALUES (:user_id, :meta_key, :meta_value)
+SQL);
+    $insert->execute([
+        'user_id' => $userId,
+        'meta_key' => $key,
+        'meta_value' => $value,
+    ]);
+}
+
 function nj_admin_recount_categories(PDO $pdo, array $termTaxonomyIds): void
 {
     $termTaxonomyIds = array_values(array_unique(array_filter(array_map(

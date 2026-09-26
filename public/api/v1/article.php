@@ -96,7 +96,7 @@ SQL);
     if ($coauthorIds !== []) {
         $placeholders = implode(',', array_fill(0, count($coauthorIds), '?'));
         $coauthorStatement = $pdo->prepare(
-            "SELECT ID, user_login, display_name
+            "SELECT ID, user_login, user_nicename, display_name
              FROM {$users}
              WHERE ID IN ({$placeholders})
              ORDER BY display_name ASC, user_login ASC"
@@ -104,11 +104,17 @@ SQL);
         $coauthorStatement->execute($coauthorIds);
 
         foreach ($coauthorStatement->fetchAll() as $coauthor) {
+            $coauthorSlug = trim((string) ($coauthor['user_nicename'] ?? ''));
+
             $coauthors[] = [
                 'id' => (int) $coauthor['ID'],
                 'name' => trim((string) $coauthor['display_name']) !== ''
                     ? (string) $coauthor['display_name']
                     : (string) $coauthor['user_login'],
+                'slug' => $coauthorSlug,
+                'url' => $coauthorSlug !== ''
+                    ? '/autor/' . rawurlencode($coauthorSlug)
+                    : null,
             ];
         }
     }
