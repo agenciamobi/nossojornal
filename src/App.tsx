@@ -20,6 +20,9 @@ type Category = {
 type FeaturedImage = {
   url: string;
   alt: string;
+  width: number | null;
+  height: number | null;
+  srcSet: string;
 };
 
 type Article = {
@@ -93,9 +96,13 @@ function homeTitle(article: Article) {
 function StoryMedia({
   article,
   className = '',
+  sizes = '(max-width: 720px) 100vw, 33vw',
+  priority = false,
 }: {
   article: Article;
   className?: string;
+  sizes?: string;
+  priority?: boolean;
 }) {
   const category = article.primaryCategory?.name ?? 'Nosso Jornal';
 
@@ -104,8 +111,12 @@ function StoryMedia({
       <div className={`home-media ${className}`}>
         <img
           src={article.featuredImage.url}
+          srcSet={article.featuredImage.srcSet || undefined}
+          sizes={article.featuredImage.srcSet ? sizes : undefined}
+          width={article.featuredImage.width ?? undefined}
+          height={article.featuredImage.height ?? undefined}
           alt={article.featuredImage.alt}
-          loading="lazy"
+          loading={priority ? 'eager' : 'lazy'}
         />
       </div>
     );
@@ -249,7 +260,12 @@ function PublicSite() {
               style={editorialStyle(hero.primaryCategory?.color)}
             >
               <a href={hero.url} className="home-hero__media-link" aria-label={homeTitle(hero)}>
-                <StoryMedia article={hero} className="home-hero__media" />
+                <StoryMedia
+                  article={hero}
+                  className="home-hero__media"
+                  sizes="(max-width: 980px) 100vw, 70vw"
+                  priority
+                />
               </a>
 
               <div className="home-hero__content">
@@ -317,7 +333,11 @@ function PublicSite() {
                     style={editorialStyle(article.primaryCategory?.color)}
                   >
                     <a href={article.url} aria-label={homeTitle(article)}>
-                      <StoryMedia article={article} className="home-story-card__media" />
+                      <StoryMedia
+                        article={article}
+                        className="home-story-card__media"
+                        sizes="(max-width: 720px) 100vw, (max-width: 1100px) 50vw, 360px"
+                      />
                     </a>
 
                     <div className="home-story-card__body">
@@ -384,7 +404,15 @@ function PublicSite() {
                       style={editorialStyle(article.primaryCategory?.color)}
                     >
                       <a href={article.url} aria-label={homeTitle(article)}>
-                        <StoryMedia article={article} className="home-category-card__media" />
+                        <StoryMedia
+                          article={article}
+                          className="home-category-card__media"
+                          sizes={
+                            index === 0
+                              ? '(max-width: 720px) 100vw, (max-width: 1100px) 55vw, 620px'
+                              : '(max-width: 720px) 100vw, 320px'
+                          }
+                        />
                       </a>
 
                       <div className="home-category-card__body">
