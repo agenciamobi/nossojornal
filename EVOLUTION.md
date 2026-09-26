@@ -1075,3 +1075,128 @@ docs/EDITORIAL_COLORS.md
 O SQL é reexecutável e altera somente a chave `nj_editorial_color` nos termos conhecidos.
 
 Enquanto o MOBI Core ainda expuser MySQL como read-only, a paleta funciona integralmente via fallback em código. Assim que SQL write estiver disponível, persistir os valores em `termmeta` não exige mudança no frontend.
+
+
+## 20. Painel administrativo /sistema
+
+O portal passa a possuir um painel administrativo próprio em:
+
+```text
+/sistema
+```
+
+O MVP mantém a linguagem operacional do wp-admin sem reutilizar sua interface ou depender do WordPress em runtime.
+
+### Fonte de identidade
+
+A autenticação reutiliza as contas existentes em:
+
+```text
+njsite_users
+njsite_usermeta
+```
+
+Roles e capabilities são derivadas de:
+
+```text
+njsite_capabilities
+njsite_user_roles
+```
+
+Nenhuma tabela paralela de usuário é criada.
+
+O verificador de senha suporta:
+
+- hashes WordPress modernos `$wp$2y$...`;
+- bcrypt nativo;
+- hashes portáteis legados `$P$` / `$H$`.
+
+### Segurança
+
+O painel usa:
+
+- sessão PHP própria;
+- cookie Secure + HttpOnly + SameSite=Lax;
+- regeneração de session id no login;
+- vínculo leve com User-Agent;
+- CSRF token para mutations administrativas;
+- endpoints com `Cache-Control: no-store`;
+- `X-Robots-Tag: noindex,nofollow`;
+- checagem de capabilities por endpoint;
+- resposta genérica para credenciais inválidas.
+
+A rota pública `/sistema` também recebe `noindex,nofollow` no shell server-side.
+
+### Endpoints administrativos
+
+```text
+POST /api/admin/login.php
+GET  /api/admin/session.php
+POST /api/admin/logout.php
+GET  /api/admin/dashboard.php
+GET  /api/admin/posts.php
+GET  /api/admin/categories.php
+GET  /api/admin/users.php
+```
+
+### Interface MVP
+
+Menu lateral:
+
+- Painel;
+- Notícias;
+- Categorias;
+- Usuários.
+
+Dashboard:
+
+- publicadas;
+- rascunhos;
+- categorias;
+- usuários;
+- posts recentes;
+- pendentes/agendados;
+- comentários pendentes.
+
+Notícias:
+
+- paginação;
+- busca;
+- filtros por status;
+- autor;
+- categorias;
+- link para publicação no site.
+
+Categorias:
+
+- nome;
+- slug;
+- parent;
+- cor editorial;
+- origem da cor (`termmeta` ou fallback);
+- contagem;
+- link público.
+
+Usuários:
+
+- display name;
+- login;
+- e-mail;
+- roles;
+- data de cadastro.
+
+### Estado de escrita
+
+O MVP é deliberadamente read-only.
+
+O usuário MySQL runtime atual do portal possui leitura do legado e o MOBI Core ainda reporta `raw_sql_available=false` / `database_write_authorized=false`.
+
+Quando write for homologado, o próximo estágio deve adicionar:
+
+1. criar/editar notícia;
+2. salvar rascunho;
+3. publicar/agendar;
+4. editar categoria e cor;
+5. criar/editar usuário;
+6. mídia/upload;
+7. autosave/revisions.
