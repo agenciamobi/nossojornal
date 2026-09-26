@@ -2045,3 +2045,103 @@ php -l public/api/**/*.php
 O frontend usa Node 22, conforme `package.json`, e a API é validada com PHP 8.4. O workflow possui concorrência cancelável para evitar gastar execução com commits antigos do mesmo PR.
 
 Também foi adicionado `.github/dependabot.yml`, com atualizações semanais agrupadas para dependências npm e GitHub Actions. Isso permite tratar alertas de segurança e versões defasadas por PR, sem aplicar atualizações forçadas diretamente na aplicação.
+
+
+## 37. WordPress Native Toolkit
+
+A quarta rodada assume explicitamente que o banco WordPress legado é patrimônio de produto, não apenas uma fonte temporária de posts.
+
+### Inventário vivo do banco
+
+Nova área administrativa:
+
+```text
+/sistema/wordpress
+GET /api/admin/wp-capabilities.php
+```
+
+Ela lê o banco real e projeta, sem valores sensíveis:
+
+- tipos de post e distribuição por status;
+- taxonomias;
+- chaves de postmeta mais usadas;
+- usuários;
+- comentários;
+- attachments;
+- revisões;
+- menus e itens de menu;
+- presença de options nativas relevantes;
+- relações órfãs;
+- taxonomias órfãs;
+- oportunidades de produto derivadas da estrutura disponível.
+
+O objetivo é parar de tratar o legado por suposição e transformar o próprio banco em mapa de evolução.
+
+### Redirecionamentos WordPress-backed
+
+Inspirado no padrão arquitetural do Safe Redirect Manager da 10up, o Nosso Jornal passa a armazenar regras como conteúdo:
+
+```text
+post_type = nj_redirect
+```
+
+Metadados:
+
+```text
+_nj_redirect_from
+_nj_redirect_to
+_nj_redirect_status
+```
+
+Admin:
+
+```text
+GET/POST /api/admin/redirects.php
+/sistema/wordpress
+```
+
+Recursos iniciais:
+
+- 301;
+- 302;
+- 307;
+- 308;
+- 410;
+- ativar/desativar;
+- nota interna;
+- prevenção de origem duplicada;
+- prevenção de loop direto;
+- proteção das rotas internas `/api` e `/sistema`.
+
+O `public/meta.php` consulta a regra antes da renderização do shell React. Redirecionamentos, portanto, acontecem no servidor e preservam corretamente migração, SEO e URLs históricas.
+
+### Roadmap nativo documentado
+
+Novo documento:
+
+```text
+docs/WORDPRESS_NATIVE_CAPABILITIES.md
+```
+
+Prioridades mapeadas:
+
+1. revisões nativas;
+2. menus WordPress alimentando header/footer;
+3. sticky posts como sinal editorial complementar;
+4. attachment metadata para mídia responsiva;
+5. redirects automáticos ao trocar slug;
+6. perfis públicos de autor;
+7. comentários públicos quando houver política editorial;
+8. proveniência/importação;
+9. paginação e conexões bounded;
+10. otimização baseada em métricas reais.
+
+Referências conceituais estudadas nesta rodada:
+
+- WordPress Core;
+- PublishPress Planner;
+- 10up Safe Redirect Manager;
+- 10up Distributor;
+- WPGraphQL.
+
+A implementação não copia esses projetos; reaproveita padrões maduros compatíveis com a arquitetura própria do Nosso Jornal.
