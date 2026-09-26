@@ -524,6 +524,71 @@ type EditorialWorkflowPayload = {
   };
 };
 
+type PostRevisionsPayload = {
+  ok: boolean;
+  data?: {
+    items: Array<{
+      id: number;
+      kind: string;
+      createdAt: string;
+      modifiedAt: string;
+      author: { id: number; name: string };
+      summary: { title: string; status: string; words: number };
+      snapshot: {
+        title?: string;
+        slug?: string;
+        excerpt?: string;
+        content?: string;
+        status?: string;
+        categoryIds?: number[];
+        seo?: {
+          title?: string;
+          description?: string;
+          primaryCategoryId?: number;
+        };
+      };
+    }>;
+    autosave?: { id: number; savedAt: string };
+    snapshot?: Record<string, unknown>;
+  };
+};
+
+type CollaborationPayload = {
+  ok: boolean;
+  data?: {
+    comments: Array<{
+      id: number;
+      text: string;
+      resolved: boolean;
+      createdAt: string;
+      modifiedAt: string;
+      author: { id: number; name: string };
+    }>;
+    corrections: Array<{
+      id: number;
+      type: 'update' | 'correction';
+      text: string;
+      public: boolean;
+      createdAt: string;
+      modifiedAt: string;
+      author: { id: number; name: string };
+    }>;
+  };
+};
+
+type ActivityPayload = {
+  ok: boolean;
+  data?: {
+    items: Array<{
+      id: number;
+      action: string;
+      payload: Record<string, unknown>;
+      createdAt: string;
+      author: { id: number; name: string };
+    }>;
+  };
+};
+
 type HomeLayoutItem = {
   id: number;
   title: string;
@@ -2204,6 +2269,19 @@ function PostEditorView({
   const [imageState, setImageState] = useState<'idle' | 'working' | 'error'>('idle');
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [statusState, setStatusState] = useState<'idle' | 'working' | 'saved' | 'error'>('idle');
+  const [revisions, setRevisions] = useState<NonNullable<PostRevisionsPayload['data']>['items']>([]);
+  const [collaboration, setCollaboration] = useState<NonNullable<CollaborationPayload['data']>>({
+    comments: [],
+    corrections: [],
+  });
+  const [activity, setActivity] = useState<NonNullable<ActivityPayload['data']>['items']>([]);
+  const [autosaveState, setAutosaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [autosavedAt, setAutosavedAt] = useState('');
+  const [commentText, setCommentText] = useState('');
+  const [correctionText, setCorrectionText] = useState('');
+  const [correctionType, setCorrectionType] = useState<'update' | 'correction'>('update');
+  const [correctionPublic, setCorrectionPublic] = useState(true);
+  const [collaborationState, setCollaborationState] = useState<'idle' | 'working' | 'error'>('idle');
   const [error, setError] = useState(false);
 
   useEffect(() => {
@@ -2236,6 +2314,106 @@ function PostEditorView({
       })
       .catch(() => setError(true));
   }, [postId]);
+
+  useEffect(() => {
+    if (!postId) return;
+
+    void Promise.allSettled([
+      adminFetch<PostRevisionsPayload>('/api/admin/post-revisions.php?id=' + postId),
+      adminFetch<CollaborationPayload>('/api/admin/post-collaboration.php?id=' + postId),
+      adminFetch<ActivityPayload>('/api/admin/post-activity.php?id=' + postId),
+    ]).then(([revisionResult, collaborationResult, activityResult]) => {
+      if (
+        revisionResult.status === 'fulfilled'
+        && revisionResult.value.ok
+        && revisionResult.value.data
+      ) {
+        setRevisions(revisionResult.value.data.items);
+      }
+
+      if (
+        collaborationResult.status === 'fulfilled'
+        && collaborationResult.value.ok
+        && collaborationResult.value.data
+      ) {
+        setCollaboration(collaborationResult.value.data);
+      }
+
+      if (
+        activityResult.status === 'fulfilled'
+        && activityResult.value.ok
+        && activityResult.value.data
+      ) {
+        setActivity(activityResult.value.data.items);
+      }
+    });
+  }, [postId]);
+
+  useEffect(() => {
+    if (!data || !postId || !user.permissions.editPosts) return;
+
+    const currentCategoryIds = [...categoryIds].sort((a, b) => a - b);
+    const savedCategoryIds = data.post.categories.map((category) => category.id).sort((a, b) => a - b);
+    const hasChanges =
+      title !== data.post.title
+      || slug !== data.post.slug
+      || excerpt !== data.post.excerpt
+      || content !== data.post.content
+      || seoTitle !== data.post.seo.title
+      || seoDescription !== data.post.seo.description
+      || primaryCategoryId !== data.post.seo.primaryCategoryId
+      || JSON.stringify(currentCategoryIds) !== JSON.stringify(savedCategoryIds);
+
+    if (!hasChanges) {
+      setAutosaveState('idle');
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setAutosaveState('saving');
+
+      void adminFetch<PostRevisionsPayload>('/api/admin/post-revisions.php', {
+        method: 'POST',
+        headers: { 'X-CSRF-Token': csrfToken },
+        body: JSON.stringify({
+          action: 'autosave',
+          postId,
+          title,
+          slug,
+          excerpt,
+          content,
+          categoryIds,
+          seoTitle,
+          seoDescription,
+          primaryCategoryId,
+        }),
+      })
+        .then((payload) => {
+          if (!payload.ok || !payload.data?.autosave) {
+            throw new Error('autosave_invalid');
+          }
+
+          setAutosavedAt(payload.data.autosave.savedAt);
+          setAutosaveState('saved');
+        })
+        .catch(() => setAutosaveState('error'));
+    }, 30000);
+
+    return () => window.clearTimeout(timer);
+  }, [
+    data,
+    postId,
+    user.permissions.editPosts,
+    csrfToken,
+    title,
+    slug,
+    excerpt,
+    content,
+    categoryIds,
+    seoTitle,
+    seoDescription,
+    primaryCategoryId,
+  ]);
 
   if (error) return <AdminError />;
   if (!data || !editorialData || !editorial) return <AdminLoading />;
@@ -2424,6 +2602,98 @@ function PostEditorView({
     }
   }
 
+  async function refreshHistoryAndCollaboration() {
+    const [revisionResult, collaborationResult, activityResult] = await Promise.allSettled([
+      adminFetch<PostRevisionsPayload>('/api/admin/post-revisions.php?id=' + post.id),
+      adminFetch<CollaborationPayload>('/api/admin/post-collaboration.php?id=' + post.id),
+      adminFetch<ActivityPayload>('/api/admin/post-activity.php?id=' + post.id),
+    ]);
+
+    if (revisionResult.status === 'fulfilled' && revisionResult.value.data) {
+      setRevisions(revisionResult.value.data.items);
+    }
+
+    if (collaborationResult.status === 'fulfilled' && collaborationResult.value.data) {
+      setCollaboration(collaborationResult.value.data);
+    }
+
+    if (activityResult.status === 'fulfilled' && activityResult.value.data) {
+      setActivity(activityResult.value.data.items);
+    }
+  }
+
+  async function mutateCollaboration(payload: Record<string, unknown>) {
+    if (collaborationState === 'working') return;
+
+    setCollaborationState('working');
+
+    try {
+      const response = await adminFetch<CollaborationPayload>('/api/admin/post-collaboration.php', {
+        method: 'POST',
+        headers: { 'X-CSRF-Token': csrfToken },
+        body: JSON.stringify({
+          postId: post.id,
+          ...payload,
+        }),
+      });
+
+      if (!response.ok || !response.data) {
+        throw new Error('collaboration_invalid_response');
+      }
+
+      setCollaboration(response.data);
+      setCollaborationState('idle');
+      await refreshHistoryAndCollaboration();
+    } catch {
+      setCollaborationState('error');
+    }
+  }
+
+  async function addInternalComment() {
+    const text = commentText.trim();
+    if (!text) return;
+
+    await mutateCollaboration({ action: 'comment_add', text });
+    setCommentText('');
+  }
+
+  async function addCorrection() {
+    const text = correctionText.trim();
+    if (!text) return;
+
+    await mutateCollaboration({
+      action: 'correction_add',
+      type: correctionType,
+      text,
+      public: correctionPublic,
+    });
+    setCorrectionText('');
+  }
+
+  async function restoreRevision(revisionId: number) {
+    if (!window.confirm('Restaurar esta versão? A versão atual será preservada no histórico.')) return;
+
+    try {
+      const response = await adminFetch<PostRevisionsPayload>('/api/admin/post-revisions.php', {
+        method: 'POST',
+        headers: { 'X-CSRF-Token': csrfToken },
+        body: JSON.stringify({
+          action: 'restore',
+          postId: post.id,
+          revisionId,
+        }),
+      });
+
+      if (!response.ok || !response.data?.snapshot) {
+        throw new Error('revision_restore_invalid');
+      }
+
+      window.location.reload();
+    } catch {
+      setSaveState('error');
+    }
+  }
+
   async function savePost() {
     if (!canEdit || !changed || saveState === 'saving') return;
 
@@ -2511,6 +2781,8 @@ function PostEditorView({
       }
 
       setSaveState('saved');
+      setAutosaveState('idle');
+      await refreshHistoryAndCollaboration();
     } catch {
       setSaveState('error');
     }
@@ -2582,6 +2854,7 @@ function PostEditorView({
       );
       setSlug(saved.slug);
       await refreshEditorialState();
+      await refreshHistoryAndCollaboration();
       setStatusState('saved');
     } catch {
       setStatusState('error');
@@ -2840,6 +3113,50 @@ function PostEditorView({
             }}
           />
 
+          <section className="admin-editor-card admin-history-card">
+            <div className="admin-editor-card__head">
+              <span>Segurança editorial</span>
+              <strong>Histórico e autosave</strong>
+            </div>
+
+            <div className="admin-autosave-status">
+              <span className={'admin-autosave-status__dot admin-autosave-status__dot--' + autosaveState} />
+              <strong>
+                {autosaveState === 'saving'
+                  ? 'Salvando rascunho automático…'
+                  : autosaveState === 'saved'
+                    ? 'Rascunho automático salvo'
+                    : autosaveState === 'error'
+                      ? 'Autosave indisponível'
+                      : 'Autosave pronto'}
+              </strong>
+              {autosavedAt && <small>{formatAdminDate(autosavedAt)}</small>}
+            </div>
+
+            <div className="admin-revision-list">
+              {revisions.length === 0 ? (
+                <p>Nenhuma versão anterior registrada ainda.</p>
+              ) : (
+                revisions.slice(0, 8).map((revision) => (
+                  <article key={revision.id}>
+                    <div>
+                      <strong>{revision.kind === 'autosave' ? 'Autosave' : 'Versão salva'}</strong>
+                      <span>{revision.author.name || 'Redação'} • {formatAdminDate(revision.modifiedAt)}</span>
+                      <small>{revision.summary.words.toLocaleString('pt-BR')} palavras</small>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={!canEdit}
+                      onClick={() => void restoreRevision(revision.id)}
+                    >
+                      Restaurar
+                    </button>
+                  </article>
+                ))
+              )}
+            </div>
+          </section>
+
           <section className="admin-editor-card admin-editorial-notebook">
             <div className="admin-editor-card__head">
               <span>Apuração</span>
@@ -2935,6 +3252,125 @@ function PostEditorView({
                   </article>
                 ))}
               </div>
+            </div>
+          </section>
+
+          <section className="admin-editor-card admin-collaboration-card">
+            <div className="admin-editor-card__head">
+              <span>Redação</span>
+              <strong>Comentários internos</strong>
+            </div>
+
+            <div className="admin-collaboration-compose">
+              <textarea
+                rows={3}
+                value={commentText}
+                disabled={!canEdit || collaborationState === 'working'}
+                placeholder="Deixe uma observação para a redação…"
+                onChange={(event) => setCommentText(event.target.value)}
+              />
+              <button
+                type="button"
+                disabled={!canEdit || !commentText.trim() || collaborationState === 'working'}
+                onClick={() => void addInternalComment()}
+              >
+                Comentar
+              </button>
+            </div>
+
+            <div className="admin-collaboration-list">
+              {collaboration.comments.length === 0 ? (
+                <p>Nenhum comentário interno.</p>
+              ) : (
+                collaboration.comments.map((comment) => (
+                  <article className={comment.resolved ? 'resolved' : ''} key={comment.id}>
+                    <header>
+                      <strong>{comment.author.name || 'Redação'}</strong>
+                      <span>{formatAdminDate(comment.createdAt)}</span>
+                    </header>
+                    <p>{comment.text}</p>
+                    <button
+                      type="button"
+                      disabled={!canEdit || collaborationState === 'working'}
+                      onClick={() => void mutateCollaboration({
+                        action: 'comment_toggle',
+                        commentId: comment.id,
+                        resolved: !comment.resolved,
+                      })}
+                    >
+                      {comment.resolved ? 'Reabrir' : 'Resolver'}
+                    </button>
+                  </article>
+                ))
+              )}
+            </div>
+          </section>
+
+          <section className="admin-editor-card admin-corrections-card">
+            <div className="admin-editor-card__head">
+              <span>Transparência</span>
+              <strong>Correções e atualizações</strong>
+            </div>
+
+            <div className="admin-correction-compose">
+              <div>
+                <select
+                  value={correctionType}
+                  disabled={!canEdit}
+                  onChange={(event) => setCorrectionType(event.target.value as 'update' | 'correction')}
+                >
+                  <option value="update">Atualização</option>
+                  <option value="correction">Correção</option>
+                </select>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={correctionPublic}
+                    disabled={!canEdit}
+                    onChange={(event) => setCorrectionPublic(event.target.checked)}
+                  />
+                  <span>Exibir ao leitor</span>
+                </label>
+              </div>
+              <textarea
+                rows={3}
+                value={correctionText}
+                disabled={!canEdit || collaborationState === 'working'}
+                placeholder="Descreva objetivamente o que foi atualizado ou corrigido."
+                onChange={(event) => setCorrectionText(event.target.value)}
+              />
+              <button
+                type="button"
+                disabled={!canEdit || !correctionText.trim() || collaborationState === 'working'}
+                onClick={() => void addCorrection()}
+              >
+                Registrar
+              </button>
+            </div>
+
+            <div className="admin-correction-list">
+              {collaboration.corrections.map((item) => (
+                <article key={item.id}>
+                  <header>
+                    <strong>{item.type === 'correction' ? 'Correção' : 'Atualização'}</strong>
+                    <span>{formatAdminDate(item.createdAt)} • {item.author.name || 'Redação'}</span>
+                  </header>
+                  <p>{item.text}</p>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={item.public}
+                      disabled={!canEdit || collaborationState === 'working'}
+                      onChange={(event) => void mutateCollaboration({
+                        action: 'correction_public',
+                        correctionId: item.id,
+                        public: event.target.checked,
+                      })}
+                    />
+                    <span>Visível na matéria</span>
+                  </label>
+                </article>
+              ))}
             </div>
           </section>
 
@@ -3259,6 +3695,43 @@ function PostEditorView({
               </div>
             </section>
           )}
+          <section className="admin-editor-card admin-activity-card">
+            <div className="admin-editor-card__head">
+              <span>Histórico</span>
+              <strong>Atividade da matéria</strong>
+            </div>
+
+            <div className="admin-activity-list">
+              {activity.length === 0 ? (
+                <p>A atividade registrada aparecerá aqui.</p>
+              ) : (
+                activity.slice(0, 12).map((item) => {
+                  const labels: Record<string, string> = {
+                    post_saved: 'salvou a matéria',
+                    status_changed: 'alterou a publicação',
+                    comment_added: 'adicionou um comentário interno',
+                    comment_resolved: 'resolveu um comentário',
+                    comment_reopened: 'reabriu um comentário',
+                    correction_added: 'registrou uma correção/atualização',
+                    correction_visibility_changed: 'alterou a visibilidade de uma correção',
+                    revision_restored: 'restaurou uma versão anterior',
+                  };
+
+                  return (
+                    <article key={item.id}>
+                      <i aria-hidden="true" />
+                      <div>
+                        <strong>{item.author.name || 'Redação'}</strong>
+                        <span>{labels[item.action] ?? item.action.replaceAll('_', ' ')}</span>
+                        <small>{formatAdminDate(item.createdAt)}</small>
+                      </div>
+                    </article>
+                  );
+                })
+              )}
+            </div>
+          </section>
+
         </aside>
       </div>
 
