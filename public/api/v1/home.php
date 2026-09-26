@@ -219,6 +219,14 @@ SQL;
             $primaryCategory = $categories[0];
         }
 
+        $imageUrl = trim((string) $row['featured_image_url']);
+        if ($imageUrl !== '') {
+            $imagePath = parse_url($imageUrl, PHP_URL_PATH);
+            if (is_string($imagePath) && str_starts_with($imagePath, '/wp-content/uploads/')) {
+                $imageUrl = $imagePath;
+            }
+        }
+
         $articles[] = [
             'id' => $id,
             'title' => trim(html_entity_decode(
@@ -235,9 +243,9 @@ SQL;
                 'id' => (int) $row['author_id'],
                 'name' => trim((string) $row['author_name']),
             ],
-            'featuredImage' => trim((string) $row['featured_image_url']) !== ''
+            'featuredImage' => $imageUrl !== ''
                 ? [
-                    'url' => (string) $row['featured_image_url'],
+                    'url' => $imageUrl,
                     'alt' => trim((string) $row['featured_image_alt']) !== ''
                         ? (string) $row['featured_image_alt']
                         : trim(html_entity_decode(strip_tags((string) $row['title']), ENT_QUOTES | ENT_HTML5, 'UTF-8')),
@@ -322,10 +330,6 @@ SQL;
         $stories = [];
 
         foreach ($articles as $article) {
-            if ($article['id'] === $hero['id']) {
-                continue;
-            }
-
             $belongs = false;
             foreach ($article['categories'] as $articleCategory) {
                 if ($articleCategory['slug'] === $slug) {
