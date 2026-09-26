@@ -1902,6 +1902,418 @@ function PostEditorView({
   );
 }
 
+function PagesView() {
+  const params = useMemo(() => new URLSearchParams(window.location.search), []);
+  const status = params.get('status') ?? 'all';
+  const query = params.get('q') ?? '';
+  const page = Math.max(1, Number.parseInt(params.get('page') ?? '1', 10) || 1);
+
+  const [data, setData] = useState<PagesPayload['data']>();
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    const search = new URLSearchParams({ status, page: String(page) });
+    if (query) search.set('q', query);
+
+    void adminFetch<PagesPayload>('/api/admin/pages.php?' + search.toString())
+      .then((payload) => {
+        if (!payload.ok || !payload.data) throw new Error('pages_invalid');
+        setData(payload.data);
+      })
+      .catch(() => setError(true));
+  }, [page, query, status]);
+
+  if (error) return <AdminError />;
+  if (!data) return <AdminLoading />;
+
+  return (
+    <>
+      <AdminPageHeader
+        eyebrow="Conteúdo institucional"
+        title="Páginas"
+        description="Edite as páginas fixas usadas pelo portal."
+      />
+
+      <form className="admin-toolbar" method="get" action="/sistema/paginas">
+        <div className="admin-filter-tabs" aria-label="Filtrar páginas por status">
+          {[
+            ['all', 'Todas'],
+            ['publish', 'Publicadas'],
+            ['draft', 'Rascunhos'],
+            ['pending', 'Pendentes'],
+            ['future', 'Agendadas'],
+            ['trash', 'Lixeira'],
+          ].map(([value, label]) => (
+            <a
+              key={value}
+              className={status === value ? 'active' : ''}
+              href={'/sistema/paginas?status=' + value}
+            >
+              {label}
+            </a>
+          ))}
+        </div>
+
+        <div className="admin-search">
+          <input
+            type="search"
+            name="q"
+            defaultValue={query}
+            placeholder="Buscar páginas"
+            aria-label="Buscar páginas"
+          />
+          {status !== 'all' && <input type="hidden" name="status" value={status} />}
+          <button type="submit">Buscar</button>
+        </div>
+      </form>
+
+      <div className="admin-table-wrap">
+        <table className="admin-table">
+          <thead>
+            <tr>
+              <th>Título</th>
+              <th>Autor</th>
+              <th>Status</th>
+              <th>Atualização</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.items.map((item) => (
+              <tr key={item.id}>
+                <td className="admin-table__primary">
+                  <strong>
+                    <a href={'/sistema/paginas/' + item.id}>{item.title}</a>
+                  </strong>
+                  <div className="admin-row-actions">
+                    <a href={'/sistema/paginas/' + item.id}>Editar</a>
+                    {item.publicUrl && item.status === 'publish' && (
+                      <a href={item.publicUrl} target="_blank" rel="noopener noreferrer">Ver ↗</a>
+                    )}
+                  </div>
+                </td>
+                <td>{typeof item.author === 'string' ? item.author : item.author.name}</td>
+                <td>
+                  <span className={'admin-status admin-status--' + item.status}>
+                    {statusLabel(item.status)}
+                  </span>
+                </td>
+                <td>{formatAdminDate(item.modifiedAt)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <AdminPagination
+        page={data.pagination.page}
+        totalPages={data.pagination.totalPages}
+        base="/sistema/paginas"
+        params={{ status, q: query }}
+      />
+    </>
+  );
+}
+
+function PageEditorView({
+  user,
+  csrfToken,
+}: {
+  user: AdminUser;
+  csrfToken: string;
+}) {
+  const match = window.location.pathname.match(/^\/sistema\/paginas\/(\d+)\/?$/);
+  const pageId = match ? Number.parseInt(match[1], 10) : 0;
+
+  const [data, setData] = useState<PageDetailPayload['data']>();
+  const [writeReadiness, setWriteReadiness] = useState<WriteReadinessPayload['data']>();
+  const [title, setTitle] = useState('');
+  const [slug, setSlug] = useState('');
+  const [excerpt, setExcerpt] = useState('');
+  const [content, setContent] = useState('');
+  const [seoTitle, setSeoTitle] = useState('');
+  const [seoDescription, setSeoDescription] = useState('');
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    if (!pageId) {
+      setError(true);
+      return;
+    }
+
+    void adminFetch<PageDetailPayload>('/api/admin/page-item.php?id=' + pageId)
+      .then((payload) => {
+        if (!payload.ok || !payload.data) throw new Error('page_invalid');
+
+        const item = payload.data.page;
+        setData(payload.data);
+        setTitle(item.title);
+        setSlug(item.slug);
+        setExcerpt(item.excerpt);
+        setContent(item.content);
+        setSeoTitle(item.seo.title);
+        setSeoDescription(item.seo.description);
+      })
+      .catch(() => setError(true));
+
+    void adminFetch<WriteReadinessPayload>('/api/admin/write-readiness.php')
+      .then((payload) => {
+        if (payload.ok && payload.data) setWriteReadiness(payload.data);
+      })
+      .catch(() => {
+        // A edição permanece indisponível quando a verificação não responder.
+      });
+  }, [pageId]);
+
+  if (error) return <AdminError />;
+  if (!data) return <AdminLoading />;
+
+  const item = data.page;
+  const ownsPage = item.author.id === user.id;
+  const canEditOthers = user.capabilities.includes('edit_others_pages');
+  const canEditPublished = user.capabilities.includes('edit_published_pages');
+  const publishedLike = ['publish', 'future', 'private'].includes(item.status);
+
+  const canEdit = Boolean(
+    writeReadiness?.database.insert.available
+      && writeReadiness.database.update.available
+      && writeReadiness.database.delete.available,
+  )
+    && (ownsPage || canEditOthers)
+    && (!publishedLike || canEditPublished)
+    && item.status !== 'trash';
+
+  const changed =
+    title !== item.title
+    || slug !== item.slug
+    || excerpt !== item.excerpt
+    || content !== item.content
+    || seoTitle !== item.seo.title
+    || seoDescription !== item.seo.description;
+
+  async function savePage() {
+    if (!canEdit || !changed || saveState === 'saving') return;
+
+    setSaveState('saving');
+
+    try {
+      const payload = await adminFetch<{
+        ok: boolean;
+        data?: {
+          page: {
+            id: number;
+            title: string;
+            slug: string;
+            slugLocked: boolean;
+            excerpt: string;
+            content: string;
+            status: string;
+            seo: {
+              title: string;
+              description: string;
+            };
+            modifiedAt: string;
+            publicUrl: string | null;
+          };
+        };
+      }>('/api/admin/page-save.php', {
+        method: 'POST',
+        headers: { 'X-CSRF-Token': csrfToken },
+        body: JSON.stringify({
+          pageId: item.id,
+          title,
+          slug,
+          excerpt,
+          content,
+          seoTitle,
+          seoDescription,
+        }),
+      });
+
+      if (!payload.ok || !payload.data) {
+        throw new Error('page_save_invalid_response');
+      }
+
+      const saved = payload.data.page;
+      setData((current) => current
+        ? {
+            ...current,
+            page: {
+              ...current.page,
+              ...saved,
+              author: current.page.author,
+              publishedAt: current.page.publishedAt,
+            },
+          }
+        : current
+      );
+      setTitle(saved.title);
+      setSlug(saved.slug);
+      setExcerpt(saved.excerpt);
+      setContent(saved.content);
+      setSeoTitle(saved.seo.title);
+      setSeoDescription(saved.seo.description);
+      setSaveState('saved');
+    } catch {
+      setSaveState('error');
+    }
+  }
+
+  return (
+    <>
+      <header className="admin-editor-header">
+        <div>
+          <a href="/sistema/paginas" className="admin-editor-header__back">← Páginas</a>
+          <div className="admin-editor-header__title">
+            <span className={'admin-status admin-status--' + item.status}>
+              {statusLabel(item.status)}
+            </span>
+            <h1>Editar página</h1>
+          </div>
+          <p>Última alteração {formatAdminDate(item.modifiedAt)}</p>
+        </div>
+
+        <div className="admin-editor-header__actions">
+          {item.publicUrl && item.status === 'publish' && (
+            <a href={item.publicUrl} target="_blank" rel="noopener noreferrer">Ver no site ↗</a>
+          )}
+          <button
+            type="button"
+            className="admin-button--primary"
+            disabled={!canEdit || !changed || saveState === 'saving'}
+            onClick={() => void savePage()}
+          >
+            {saveState === 'saving' ? 'Salvando…' : 'Salvar'}
+          </button>
+        </div>
+      </header>
+
+      {saveState === 'saved' && (
+        <div className="admin-save-feedback admin-save-feedback--success" role="status">
+          Página atualizada.
+        </div>
+      )}
+
+      {saveState === 'error' && (
+        <div className="admin-save-feedback admin-save-feedback--error" role="alert">
+          Não foi possível salvar a página. Tente novamente.
+        </div>
+      )}
+
+      <div className="admin-editor-layout">
+        <section className="admin-editor-main">
+          <label className="admin-editor-field admin-editor-field--title">
+            <span>Título</span>
+            <input
+              value={title}
+              readOnly={!canEdit}
+              onChange={(event) => {
+                setTitle(event.target.value);
+                setSaveState('idle');
+              }}
+            />
+          </label>
+
+          <label className="admin-editor-field">
+            <span>Endereço</span>
+            <input
+              value={slug}
+              readOnly={!canEdit || item.slugLocked}
+              onChange={(event) => {
+                setSlug(event.target.value);
+                setSaveState('idle');
+              }}
+            />
+            {item.slugLocked && (
+              <small className="admin-field-help">
+                Este endereço é usado por uma rota fixa do portal.
+              </small>
+            )}
+          </label>
+
+          <label className="admin-editor-field">
+            <span>Resumo</span>
+            <textarea
+              value={excerpt}
+              readOnly={!canEdit}
+              rows={4}
+              onChange={(event) => {
+                setExcerpt(event.target.value);
+                setSaveState('idle');
+              }}
+            />
+          </label>
+
+          <label className="admin-editor-field">
+            <span>Conteúdo</span>
+            <textarea
+              className="admin-editor-content"
+              value={content}
+              readOnly={!canEdit}
+              rows={28}
+              onChange={(event) => {
+                setContent(event.target.value);
+                setSaveState('idle');
+              }}
+            />
+          </label>
+
+          <section className="admin-editor-card">
+            <div className="admin-editor-card__head">
+              <span>Busca e compartilhamento</span>
+              <strong>SEO</strong>
+            </div>
+
+            <div className="admin-editor-card__body admin-editor-card__body--fields">
+              <label className="admin-editor-field">
+                <span>Título SEO</span>
+                <input
+                  value={seoTitle}
+                  readOnly={!canEdit}
+                  placeholder={title}
+                  onChange={(event) => {
+                    setSeoTitle(event.target.value);
+                    setSaveState('idle');
+                  }}
+                />
+              </label>
+
+              <label className="admin-editor-field">
+                <span>Descrição SEO</span>
+                <textarea
+                  value={seoDescription}
+                  readOnly={!canEdit}
+                  rows={4}
+                  placeholder={excerpt}
+                  onChange={(event) => {
+                    setSeoDescription(event.target.value);
+                    setSaveState('idle');
+                  }}
+                />
+              </label>
+            </div>
+          </section>
+        </section>
+
+        <aside className="admin-editor-sidebar">
+          <section className="admin-editor-card">
+            <div className="admin-editor-card__head">
+              <span>Página</span>
+              <strong>{statusLabel(item.status)}</strong>
+            </div>
+
+            <dl className="admin-editor-meta">
+              <div><dt>Autor</dt><dd>{item.author.name}</dd></div>
+              <div><dt>Publicação</dt><dd>{formatAdminDate(item.publishedAt)}</dd></div>
+              <div><dt>Atualização</dt><dd>{formatAdminDate(item.modifiedAt)}</dd></div>
+            </dl>
+          </section>
+        </aside>
+      </div>
+    </>
+  );
+}
+
 function CategoriesView() {
   const [data, setData] = useState<CategoriesPayload['data']>();
   const [error, setError] = useState(false);
@@ -3812,6 +4224,8 @@ export function AdminApp() {
           {view === 'dashboard' && <DashboardView user={user} />}
           {view === 'posts' && <PostsView user={user} csrfToken={csrfToken} />}
           {view === 'post' && <PostEditorView user={user} csrfToken={csrfToken} />}
+          {view === 'pages' && user.permissions.editPages && <PagesView />}
+          {view === 'page' && user.permissions.editPages && <PageEditorView user={user} csrfToken={csrfToken} />}
           {view === 'categories' && <CategoriesView />}
           {view === 'categoryNew' && <NewCategoryView csrfToken={csrfToken} />}
           {view === 'category' && <CategoryEditorView csrfToken={csrfToken} />}
