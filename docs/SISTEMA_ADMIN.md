@@ -1780,3 +1780,31 @@ O save cria um redirecionamento `301` WordPress-backed dentro da mesma transaç�
 Regras manuais possuem prioridade. Se a URL anterior já estiver coberta por uma regra manual, o Sistema não a substitui e exibe um aviso após salvar.
 
 A área `/sistema/wordpress` identifica regras automáticas e manuais. Editar uma regra automática manualmente transfere sua autoridade ao operador e ela deixa de ser sobrescrita por mudanças futuras de slug.
+
+## Perfil público de autor
+
+A tela de edição de usuários também controla a apresentação editorial pública do autor.
+
+Campos disponíveis:
+
+```text
+Função editorial pública
+Biografia
+Site
+Instagram
+Facebook
+LinkedIn
+X / Twitter
+```
+
+O slug público vem de `user_nicename` e permanece somente leitura no Sistema.
+
+Quando o usuário possui ao menos uma matéria publicada como autor ou coautor, o perfil fica disponível em:
+
+```text
+/autor/:slug
+```
+
+Credenciais, e-mail, roles e capabilities nunca fazem parte da API pública do perfil.
+
+A biografia antiga do WordPress pode aparecer como fallback. Ao salvar uma versão no bloco público, o Sistema passa a usar `_nj_public_bio` sem apagar a descrição histórica.
