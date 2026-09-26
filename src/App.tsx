@@ -269,7 +269,11 @@ export function App() {
 
               <div className="home-cover__latest">
                 {heroSide.map((article, index) => (
-                  <article className="home-compact-story" key={article.id}>
+                  <article
+                    className="home-compact-story"
+                    key={article.id}
+                    style={editorialStyle(article.primaryCategory?.color)}
+                  >
                     <span className="home-compact-story__index">
                       {String(index + 1).padStart(2, '0')}
                     </span>
@@ -298,7 +302,11 @@ export function App() {
             <div className="home-latest__layout">
               <div className="home-latest__grid">
                 {latest.map((article) => (
-                  <article className="home-story-card" key={article.id}>
+                  <article
+                    className="home-story-card"
+                    key={article.id}
+                    style={editorialStyle(article.primaryCategory?.color)}
+                  >
                     <a href={article.url} aria-label={article.title}>
                       <StoryMedia article={article} className="home-story-card__media" />
                     </a>
@@ -324,7 +332,10 @@ export function App() {
 
                   <ol>
                     {mostRead.map((article) => (
-                      <li key={article.id}>
+                      <li
+                        key={article.id}
+                        style={editorialStyle(article.primaryCategory?.color)}
+                      >
                         <div>
                           <CategoryBadge category={article.primaryCategory} />
                           <h3>
@@ -361,6 +372,7 @@ export function App() {
                     <article
                       className={index === 0 ? 'home-category-card home-category-card--lead' : 'home-category-card'}
                       key={article.id}
+                      style={editorialStyle(article.primaryCategory?.color)}
                     >
                       <a href={article.url} aria-label={article.title}>
                         <StoryMedia article={article} className="home-category-card__media" />
