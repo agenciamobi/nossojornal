@@ -2027,3 +2027,19 @@ O JSON-LD `NewsArticle` passa a incluir:
 
 Todos os novos recursos são opt-in e possuem fallback. O acervo existente continua válido sem migração em massa. Tags reutilizam a taxonomia WordPress, enquanto relações e séries permanecem em metadados `_nj_*`.
 
+
+
+### Quality gate no GitHub
+
+A rodada também adiciona `.github/workflows/ci.yml`.
+
+Todo pull request e push na `main` passa a executar:
+
+```text
+npm ci
+npm run typecheck
+npm run build
+php -l public/api/**/*.php
+```
+
+O frontend usa Node 22, conforme `package.json`, e a API é validada com PHP 8.4. O workflow possui concorrência cancelável para evitar gastar execução com commits antigos do mesmo PR.
