@@ -2565,3 +2565,62 @@ Miniflux foi usado como referência para separar refresh manual, saúde do feed 
 O Sistema ainda não agenda polling próprio.
 
 O botão de captura continua sendo uma ação humana. O próximo passo pode ser conectar o Radar ao control plane/jobs do MOBI Core para refresh periódico, mantendo a mesma API e a mesma trilha de health.
+
+## 46. Triagem editorial e cursor de revisão da Mesa de Pautas
+
+A Mesa de Pautas deixa de ser apenas um kanban por etapa e passa a funcionar também como caixa de entrada editorial.
+
+### Cursor de revisão
+
+Foi adicionada uma option privada:
+
+```text
+nj_pautas_last_review_at
+```
+
+O valor registra somente a data/hora UTC da última vez em que o operador marcou a Mesa como revisada.
+
+Cada pauta passa a receber um estado calculado `isNew` comparando sua chegada com esse cursor.
+
+Para pautas capturadas por feed, a chegada usa:
+
+```text
+_nj_pauta_captured_at
+```
+
+Para pautas manuais antigas sem esse metadata, o Sistema usa `post_date` como fallback.
+
+Nenhuma pauta é alterada, apagada ou movida ao marcar a revisão. O cursor apenas separa o que já foi visto do que entrou depois.
+
+### Filtros de newsroom
+
+A UI passa a combinar:
+
+- busca textual;
+- etapa;
+- prioridade;
+- fonte;
+- tema;
+- idade: 24h, 3 dias, 7 dias ou mais antigas;
+- somente novas;
+- ordenação por recência ou prioridade.
+
+Os filtros são client-side nesta fase porque a Mesa já possui limite operacional de 300 itens. Isso evita ampliar a superfície da API antes de haver necessidade real de paginação server-side.
+
+### Sinalização
+
+Pautas novas recebem marcador visual próprio e horário de captura/origem quando disponível.
+
+O resumo superior exibe a quantidade de itens novos desde a última revisão e funciona como atalho para o filtro “somente novas”.
+
+### Referências
+
+FreshRSS foi usado como referência para a separação clara entre itens lidos/não lidos e filtros por estado.
+
+Miniflux foi usado como referência para a ideia de uma caixa de entrada com estado de leitura separado do lifecycle do feed.
+
+No Nosso Jornal, “revisado” não significa “descartado” nem “lido” no sentido de leitor RSS. É apenas um cursor de triagem da redação.
+
+### Próximo ponto
+
+A próxima evolução de maior valor é remover o catálogo de feeds hardcoded de `pautas.php` e transformá-lo em configuração editorial administrável, reaproveitando o mesmo health/provenance sem permitir URL arbitrária na captura.
