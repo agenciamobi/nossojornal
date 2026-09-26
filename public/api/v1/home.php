@@ -170,6 +170,10 @@ SQL;
                 (string) $row['slug'],
                 $colorOverrides
             ),
+            'colorSource' => nj_category_color_source_for(
+                (int) $row['id'],
+                $colorOverrides
+            ),
         ];
 
         $postId = (int) $row['post_id'];
