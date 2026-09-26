@@ -345,7 +345,9 @@ SQL);
                 $url = '/noticia/' . rawurlencode($slug);
                 $kind = 'post';
             } elseif ($postType === 'page') {
-                $url = '/' . rawurlencode($slug);
+                $url = in_array($slug, ['home', 'inicio'], true)
+                    ? '/'
+                    : '/' . rawurlencode($slug);
                 $kind = 'page';
             } else {
                 continue;
