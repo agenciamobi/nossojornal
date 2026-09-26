@@ -1884,3 +1884,43 @@ O editor de Notícias e Páginas recebeu uma camada de diagnóstico editorial in
 - métricas de estrutura diretamente na barra inferior do editor rico.
 
 A implementação é local ao frontend administrativo e não altera conteúdo automaticamente. O operador continua responsável por redação, revisão e publicação.
+
+
+## 35. Metadados editoriais de magazine
+
+A edição de Notícias foi ampliada com uma camada persistente de metadados editoriais no mesmo banco legado, usando chaves `_nj_*` em `postmeta`. Não foi criada tabela paralela porque o modelo atual já oferece consistência, versionamento operacional e compatibilidade com o acervo.
+
+### Campos adicionados
+
+- tipo editorial: notícia, análise, opinião, entrevista, serviço ou cobertura ao vivo;
+- chapéu;
+- linha fina independente do resumo;
+- local/dateline;
+- coautores;
+- crédito e legenda da imagem destacada;
+- URL da fonte original;
+- canonical personalizado;
+- título social;
+- descrição social.
+
+### Regras
+
+- URLs são validadas server-side;
+- textos têm limites explícitos;
+- coautores só podem referenciar usuários aptos a editar notícias;
+- alterações geram atividade editorial;
+- os campos não publicam nem reescrevem conteúdo automaticamente.
+
+### Portal público
+
+`/api/v1/article.php` expõe a camada editorial e o frontend passa a usar:
+
+- chapéu e tipo editorial no cabeçalho;
+- linha fina como deck quando disponível;
+- dateline e coautores na assinatura;
+- legenda e crédito da imagem destacada;
+- referência para fonte original;
+- canonical personalizado;
+- título e descrição sociais independentes do SEO;
+- canonical também no JSON-LD da matéria.
+
