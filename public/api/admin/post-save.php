@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require __DIR__ . '/_admin.php';
+require_once __DIR__ . '/_redirects.php';
 
 nj_admin_run(['POST'], static function (): array {
     $user = nj_admin_current_user(true);
@@ -104,6 +105,7 @@ SQL);
 
     $status = (string) $current['post_status'];
     $authorId = (int) $current['post_author'];
+    $currentSlug = (string) $current['post_name'];
 
     if ($authorId !== (int) $user['id'] && !in_array('edit_others_posts', $user['capabilities'], true)) {
         throw new NjApiHttpException(403, 'insufficient_permissions');
@@ -147,6 +149,8 @@ SQL);
     if ($primaryCategoryId > 0 && !in_array($primaryCategoryId, $categoryIds, true)) {
         throw new NjApiHttpException(422, 'invalid_primary_category');
     }
+
+    $redirectResult = null;
 
     try {
         $pdo->beginTransaction();
@@ -335,6 +339,22 @@ SQL);
             array_merge($oldTagTaxonomyIds, $newTagTaxonomyIds)
         );
 
+        if (
+            $status === 'publish'
+            && $currentSlug !== ''
+            && $slug !== ''
+            && $currentSlug !== $slug
+        ) {
+            $redirectResult = nj_redirect_ensure_slug_change(
+                $pdo,
+                (int) $user['id'],
+                '/noticia/' . rawurlencode($currentSlug),
+                '/noticia/' . rawurlencode($slug),
+                'post',
+                $postId
+            );
+        }
+
         nj_admin_log_post_activity(
             $pdo,
             $postId,
@@ -342,7 +362,10 @@ SQL);
             'post_saved',
             [
                 'titleChanged' => (string) $current['post_title'] !== $title,
-                'slugChanged' => (string) $current['post_name'] !== $slug,
+                'slugChanged' => $currentSlug !== $slug,
+                'redirectState' => is_array($redirectResult)
+                    ? (string) ($redirectResult['state'] ?? '')
+                    : '',
                 'categoryCount' => count($categoryIds),
                 'tagCount' => count($newTagTaxonomyIds),
             ]
@@ -417,6 +440,7 @@ SQL);
     );
 
     return [
+        'redirect' => $redirectResult,
         'post' => [
             'id' => $postId,
             'title' => $title,
