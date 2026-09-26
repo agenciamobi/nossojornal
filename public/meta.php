@@ -220,6 +220,11 @@ $status = 200;
 try {
     if ($path === '/') {
         $meta['canonical'] = '/';
+    } elseif ($path === '/sistema' || str_starts_with($path, '/sistema/')) {
+        $meta['title'] = 'Sistema';
+        $meta['description'] = 'Administração editorial do Nosso Jornal.';
+        $meta['canonical'] = '/sistema';
+        $meta['robots'] = 'noindex,nofollow';
     } elseif ($path === '/ultimas' || $path === '/noticias') {
         $meta['title'] = 'Últimas notícias';
         $meta['description'] = 'As notícias mais recentes publicadas pelo Nosso Jornal.';
