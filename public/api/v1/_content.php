@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/_category_theme.php';
+
 function nj_content_clean_text_source(string $source): string
 {
     $source = preg_replace('/\[embedyt\].*?\[\/embedyt\]/is', ' ', $source) ?? $source;
@@ -524,6 +526,10 @@ SQL;
     $statement = $pdo->prepare($sql);
     $statement->execute($postIds);
     $rows = $statement->fetchAll();
+    $colorOverrides = nj_category_color_overrides(
+        $pdo,
+        array_map(static fn (array $row): int => (int) $row['id'], $rows)
+    );
 
     $result = [];
     foreach ($rows as $row) {
@@ -534,6 +540,11 @@ SQL;
             'slug' => (string) $row['slug'],
             'parentId' => (int) $row['parent_id'] > 0 ? (int) $row['parent_id'] : null,
             'url' => '/categoria/' . rawurlencode((string) $row['slug']),
+            'color' => nj_category_color_for(
+                (int) $row['id'],
+                (string) $row['slug'],
+                $colorOverrides
+            ),
         ];
     }
 
