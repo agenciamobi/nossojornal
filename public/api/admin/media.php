@@ -66,7 +66,21 @@ SELECT
         WHERE alt.post_id = p.ID AND alt.meta_key = '_wp_attachment_image_alt'
         ORDER BY alt.meta_id DESC
         LIMIT 1
-    ), '') AS alt_text
+    ), '') AS alt_text,
+    COALESCE((
+        SELECT file.meta_value
+        FROM {$postmeta} file
+        WHERE file.post_id = p.ID AND file.meta_key = '_wp_attached_file'
+        ORDER BY file.meta_id DESC
+        LIMIT 1
+    ), '') AS attached_file,
+    COALESCE((
+        SELECT metadata.meta_value
+        FROM {$postmeta} metadata
+        WHERE metadata.post_id = p.ID AND metadata.meta_key = '_wp_attachment_metadata'
+        ORDER BY metadata.meta_id DESC
+        LIMIT 1
+    ), '') AS attachment_metadata
 FROM {$posts} p
 WHERE {$whereSql}
 ORDER BY p.post_date DESC, p.ID DESC
@@ -77,17 +91,31 @@ SQL);
     $items = [];
 
     foreach ($statement->fetchAll() as $row) {
-        $url = (string) $row['guid'];
-        $path = parse_url($url, PHP_URL_PATH);
+        $title = trim((string) $row['title']) !== ''
+            ? (string) $row['title']
+            : '(sem título)';
+        $image = nj_media_descriptor(
+            (string) $row['guid'],
+            (string) $row['attached_file'],
+            (string) $row['attachment_metadata'],
+            (string) $row['alt_text'],
+            $title
+        );
 
         $items[] = [
             'id' => (int) $row['id'],
-            'title' => trim((string) $row['title']) !== '' ? (string) $row['title'] : '(sem título)',
+            'title' => $title,
             'mimeType' => (string) $row['mime_type'],
-            'url' => is_string($path) && str_starts_with($path, '/wp-content/uploads/')
-                ? $path
-                : $url,
-            'alt' => (string) $row['alt_text'],
+            'url' => is_array($image)
+                ? (string) $image['url']
+                : nj_media_local_url((string) $row['guid']),
+            'alt' => is_array($image)
+                ? (string) $image['alt']
+                : (string) $row['alt_text'],
+            'width' => is_array($image) ? $image['width'] : null,
+            'height' => is_array($image) ? $image['height'] : null,
+            'srcSet' => is_array($image) ? (string) $image['srcSet'] : '',
+            'variants' => is_array($image) ? $image['variants'] : [],
             'createdAt' => nj_content_iso8601((string) $row['created_at']),
             'modifiedAt' => nj_content_iso8601((string) $row['modified_at']),
             'parentId' => (int) $row['parent_id'],
