@@ -944,7 +944,11 @@ function StaticPage({ slug }: { slug: 'sobre' | 'contato' }) {
   if (slug === 'contato') {
     const contacts = page.contacts ?? [];
     const whatsapp = contacts.find((contact) => contact.type === 'whatsapp');
-    const email = contacts.find((contact) => contact.type === 'email');
+    const email =
+      contacts.find(
+        (contact) =>
+          contact.type === 'email' && contact.value.toLowerCase().endsWith('@nossojornal.com.br'),
+      ) ?? contacts.find((contact) => contact.type === 'email');
     const phone = contacts.find((contact) => contact.type === 'phone');
     const location = contacts.find((contact) => contact.type === 'location');
 
