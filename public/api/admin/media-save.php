@@ -42,6 +42,7 @@ nj_admin_run(['POST'], static function (): array {
 
     $pdo = nj_db();
     $posts = nj_table('posts');
+    $postmeta = nj_table('postmeta');
 
     $exists = $pdo->prepare(<<<SQL
 SELECT ID
@@ -90,7 +91,7 @@ SELECT
     p.post_modified AS modified_at,
     COALESCE((
         SELECT alt.meta_value
-        FROM {$postmeta = nj_table('postmeta')} alt
+        FROM {$postmeta} alt
         WHERE alt.post_id = p.ID
           AND alt.meta_key = '_wp_attachment_image_alt'
         ORDER BY alt.meta_id DESC
