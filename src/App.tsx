@@ -412,7 +412,24 @@ export function App() {
 
         <div className="container site-footer__bottom">
           <span>© {new Date().getFullYear()} Nosso Jornal</span>
-          <span>Jornalismo local • cobertura regional</span>
+
+          <span
+            className="site-footer__credit"
+            itemScope
+            itemType="https://schema.org/Organization"
+          >
+            Site desenvolvido por{' '}
+            <a
+              href="https://agenciamobi.com.br/"
+              target="_blank"
+              rel="noopener noreferrer external"
+              aria-label="Visitar o site da MOBI - Marketing Inteligente em nova aba"
+              title="MOBI - Marketing Inteligente"
+              itemProp="url"
+            >
+              <span itemProp="name">MOBI - Marketing Inteligente</span>
+            </a>
+          </span>
         </div>
       </footer>
     </div>
