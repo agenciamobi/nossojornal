@@ -158,7 +158,7 @@ function HomeSkeleton() {
   );
 }
 
-export function App() {
+function PublicSite() {
   const isSystemRoute =
     window.location.pathname === '/sistema'
     || window.location.pathname.startsWith('/sistema/');
@@ -408,4 +408,12 @@ export function App() {
       <SiteFooter />
     </div>
   );
+}
+
+
+export function App() {
+  const isAdmin = window.location.pathname === '/sistema'
+    || window.location.pathname.startsWith('/sistema/');
+
+  return isAdmin ? <AdminApp /> : <PublicSite />;
 }
