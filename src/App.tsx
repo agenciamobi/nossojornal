@@ -25,6 +25,7 @@ type FeaturedImage = {
 type Article = {
   id: number;
   title: string;
+  homeHeadline?: string;
   slug: string;
   url: string;
   excerpt: string;
@@ -240,7 +241,7 @@ function PublicSite() {
               className="home-hero"
               style={editorialStyle(hero.primaryCategory?.color)}
             >
-              <a href={hero.url} className="home-hero__media-link" aria-label={hero.title}>
+              <a href={hero.url} className="home-hero__media-link" aria-label={homeTitle(hero)}>
                 <StoryMedia article={hero} className="home-hero__media" />
               </a>
 
@@ -251,7 +252,7 @@ function PublicSite() {
                 </div>
 
                 <h1 id="home-cover-title">
-                  <a href={hero.url}>{hero.title}</a>
+                  <a href={hero.url}>{homeTitle(hero)}</a>
                 </h1>
 
                 {cleanLegacyText(hero.excerpt) && <p>{cleanLegacyText(hero.excerpt)}</p>}
@@ -281,7 +282,7 @@ function PublicSite() {
                     <div>
                       <CategoryBadge category={article.primaryCategory} />
                       <h3>
-                        <a href={article.url}>{article.title}</a>
+                        <a href={article.url}>{homeTitle(article)}</a>
                       </h3>
                       <StoryMeta article={article} />
                     </div>
@@ -308,14 +309,14 @@ function PublicSite() {
                     key={article.id}
                     style={editorialStyle(article.primaryCategory?.color)}
                   >
-                    <a href={article.url} aria-label={article.title}>
+                    <a href={article.url} aria-label={homeTitle(article)}>
                       <StoryMedia article={article} className="home-story-card__media" />
                     </a>
 
                     <div className="home-story-card__body">
                       <CategoryBadge category={article.primaryCategory} />
                       <h3>
-                        <a href={article.url}>{article.title}</a>
+                        <a href={article.url}>{homeTitle(article)}</a>
                       </h3>
                       {cleanLegacyText(article.excerpt) && <p>{cleanLegacyText(article.excerpt)}</p>}
                       <StoryMeta article={article} />
@@ -340,7 +341,7 @@ function PublicSite() {
                         <div>
                           <CategoryBadge category={article.primaryCategory} />
                           <h3>
-                            <a href={article.url}>{article.title}</a>
+                            <a href={article.url}>{homeTitle(article)}</a>
                           </h3>
                           <StoryMeta article={article} showViews />
                         </div>
@@ -375,14 +376,14 @@ function PublicSite() {
                       key={article.id}
                       style={editorialStyle(article.primaryCategory?.color)}
                     >
-                      <a href={article.url} aria-label={article.title}>
+                      <a href={article.url} aria-label={homeTitle(article)}>
                         <StoryMedia article={article} className="home-category-card__media" />
                       </a>
 
                       <div className="home-category-card__body">
                         <CategoryBadge category={article.primaryCategory} />
                         <h3>
-                          <a href={article.url}>{article.title}</a>
+                          <a href={article.url}>{homeTitle(article)}</a>
                         </h3>
                         {index === 0 && cleanLegacyText(article.excerpt) && (
                           <p>{cleanLegacyText(article.excerpt)}</p>
