@@ -511,6 +511,21 @@ type EditorialWorkflow = {
     until: string;
     headline: string;
   };
+  identity: {
+    articleType: 'news' | 'analysis' | 'opinion' | 'interview' | 'service' | 'live';
+    kicker: string;
+    standfirst: string;
+    dateline: string;
+    coauthorIds: number[];
+    imageCredit: string;
+    imageCaption: string;
+  };
+  distribution: {
+    originalSourceUrl: string;
+    canonicalUrl: string;
+    socialTitle: string;
+    socialDescription: string;
+  };
 };
 
 type EditorialWorkflowPayload = {
@@ -2477,6 +2492,39 @@ function PostEditorView({
     setSaveState('idle');
   }
 
+  function patchIdentity(patch: Partial<EditorialWorkflow['identity']>) {
+    setEditorial((current) => current
+      ? { ...current, identity: { ...current.identity, ...patch } }
+      : current
+    );
+    setSaveState('idle');
+  }
+
+  function patchDistribution(patch: Partial<EditorialWorkflow['distribution']>) {
+    setEditorial((current) => current
+      ? { ...current, distribution: { ...current.distribution, ...patch } }
+      : current
+    );
+    setSaveState('idle');
+  }
+
+  function toggleCoauthor(userId: number) {
+    setEditorial((current) => {
+      if (!current) return current;
+      const exists = current.identity.coauthorIds.includes(userId);
+      return {
+        ...current,
+        identity: {
+          ...current.identity,
+          coauthorIds: exists
+            ? current.identity.coauthorIds.filter((id) => id !== userId)
+            : [...current.identity.coauthorIds, userId],
+        },
+      };
+    });
+    setSaveState('idle');
+  }
+
   function patchChecklist(key: keyof EditorialChecklist, value: boolean) {
     setEditorial((current) => current
       ? {
@@ -2598,6 +2646,17 @@ function PostEditorView({
         homeRank: editorial.home.rank,
         homeUntil: editorial.home.until,
         homeHeadline: editorial.home.headline,
+        articleType: editorial.identity.articleType,
+        kicker: editorial.identity.kicker,
+        standfirst: editorial.identity.standfirst,
+        dateline: editorial.identity.dateline,
+        coauthorIds: editorial.identity.coauthorIds,
+        imageCredit: editorial.identity.imageCredit,
+        imageCaption: editorial.identity.imageCaption,
+        originalSourceUrl: editorial.distribution.originalSourceUrl,
+        canonicalUrl: editorial.distribution.canonicalUrl,
+        socialTitle: editorial.distribution.socialTitle,
+        socialDescription: editorial.distribution.socialDescription,
       }),
     });
 
@@ -3116,6 +3175,69 @@ function PostEditorView({
             />
           </label>
 
+          <section className="admin-editor-card admin-magazine-fields">
+            <div className="admin-editor-card__head">
+              <span>Apresentação</span>
+              <strong>Identidade da matéria</strong>
+            </div>
+
+            <div className="admin-editor-card__body admin-editor-card__body--fields">
+              <div className="admin-editorial-field-grid">
+                <label className="admin-editor-field">
+                  <span>Tipo editorial</span>
+                  <select
+                    value={editorial.identity.articleType}
+                    disabled={!canEdit}
+                    onChange={(event) => patchIdentity({
+                      articleType: event.target.value as EditorialWorkflow['identity']['articleType'],
+                    })}
+                  >
+                    <option value="news">Notícia</option>
+                    <option value="analysis">Análise</option>
+                    <option value="opinion">Opinião</option>
+                    <option value="interview">Entrevista</option>
+                    <option value="service">Serviço</option>
+                    <option value="live">Cobertura ao vivo</option>
+                  </select>
+                </label>
+
+                <label className="admin-editor-field">
+                  <span>Chapéu</span>
+                  <input
+                    value={editorial.identity.kicker}
+                    disabled={!canEdit}
+                    maxLength={160}
+                    placeholder="Ex.: Tecnologia, Pelotas, Ciência"
+                    onChange={(event) => patchIdentity({ kicker: event.target.value })}
+                  />
+                </label>
+
+                <label className="admin-editor-field">
+                  <span>Local / dateline</span>
+                  <input
+                    value={editorial.identity.dateline}
+                    disabled={!canEdit}
+                    maxLength={160}
+                    placeholder="Ex.: Pelotas, RS"
+                    onChange={(event) => patchIdentity({ dateline: event.target.value })}
+                  />
+                </label>
+              </div>
+
+              <label className="admin-editor-field">
+                <span>Linha fina</span>
+                <textarea
+                  rows={3}
+                  value={editorial.identity.standfirst}
+                  disabled={!canEdit}
+                  maxLength={1000}
+                  placeholder="Complemento editorial do título. Pode ser mais informativo que o resumo usado em listagens."
+                  onChange={(event) => patchIdentity({ standfirst: event.target.value })}
+                />
+              </label>
+            </div>
+          </section>
+
           <AdminEditorialDiagnostics
             title={title}
             slug={slug}
@@ -3449,6 +3571,64 @@ function PostEditorView({
               </label>
             </div>
           </section>
+          
+          <section className="admin-editor-card">
+            <div className="admin-editor-card__head">
+              <span>Distribuição</span>
+              <strong>Origem, canonical e redes sociais</strong>
+            </div>
+
+            <div className="admin-editor-card__body admin-editor-card__body--fields">
+              <div className="admin-editorial-field-grid admin-editorial-field-grid--two">
+                <label className="admin-editor-field">
+                  <span>Fonte original</span>
+                  <input
+                    type="url"
+                    value={editorial.distribution.originalSourceUrl}
+                    disabled={!canEdit}
+                    placeholder="https://..."
+                    onChange={(event) => patchDistribution({ originalSourceUrl: event.target.value })}
+                  />
+                  <small className="admin-field-help">Use quando a matéria nasceu de comunicado, agência, documento ou fonte publicada.</small>
+                </label>
+
+                <label className="admin-editor-field">
+                  <span>Canonical personalizado</span>
+                  <input
+                    type="url"
+                    value={editorial.distribution.canonicalUrl}
+                    disabled={!canEdit}
+                    placeholder="Vazio = URL desta matéria"
+                    onChange={(event) => patchDistribution({ canonicalUrl: event.target.value })}
+                  />
+                  <small className="admin-field-help">Preencha apenas quando outra URL deve ser considerada a versão canônica.</small>
+                </label>
+              </div>
+
+              <label className="admin-editor-field">
+                <span>Título social</span>
+                <input
+                  value={editorial.distribution.socialTitle}
+                  disabled={!canEdit}
+                  maxLength={300}
+                  placeholder={seoTitle || title}
+                  onChange={(event) => patchDistribution({ socialTitle: event.target.value })}
+                />
+              </label>
+
+              <label className="admin-editor-field">
+                <span>Descrição social</span>
+                <textarea
+                  rows={3}
+                  value={editorial.distribution.socialDescription}
+                  disabled={!canEdit}
+                  maxLength={1000}
+                  placeholder={seoDescription || excerpt}
+                  onChange={(event) => patchDistribution({ socialDescription: event.target.value })}
+                />
+              </label>
+            </div>
+          </section>
         </section>
 
         <aside className="admin-editor-sidebar">
@@ -3549,6 +3729,25 @@ function PostEditorView({
                 />
               </label>
             </div>
+
+            <div className="admin-coauthors">
+              <span>Coautores</span>
+              <div>
+                {editorialData.assignees
+                  .filter((assignee) => assignee.id !== post.author.id)
+                  .map((assignee) => (
+                    <label key={assignee.id}>
+                      <input
+                        type="checkbox"
+                        checked={editorial.identity.coauthorIds.includes(assignee.id)}
+                        disabled={!canEdit}
+                        onChange={() => toggleCoauthor(assignee.id)}
+                      />
+                      <span>{assignee.name}</span>
+                    </label>
+                  ))}
+              </div>
+            </div>
           </section>
 
           <section className="admin-editor-card">
@@ -3636,6 +3835,30 @@ function PostEditorView({
             {imageState === 'error' && (
               <p className="admin-editor-media-error">Não foi possível atualizar a imagem.</p>
             )}
+
+            <div className="admin-editor-card__body admin-editor-card__body--fields admin-image-editorial-meta">
+              <label className="admin-editor-field">
+                <span>Crédito da imagem</span>
+                <input
+                  value={editorial.identity.imageCredit}
+                  disabled={!canEdit}
+                  maxLength={300}
+                  placeholder="Fotógrafo, agência ou acervo"
+                  onChange={(event) => patchIdentity({ imageCredit: event.target.value })}
+                />
+              </label>
+              <label className="admin-editor-field">
+                <span>Legenda</span>
+                <textarea
+                  rows={3}
+                  value={editorial.identity.imageCaption}
+                  disabled={!canEdit}
+                  maxLength={1200}
+                  placeholder="Contextualize a imagem destacada."
+                  onChange={(event) => patchIdentity({ imageCaption: event.target.value })}
+                />
+              </label>
+            </div>
           </section>
 
           <section className="admin-editor-card">
