@@ -424,3 +424,43 @@ Próximo passo recomendado:
 2. restauração nativa com merge controlado dos campos cobertos;
 3. registro da restauração na timeline humana;
 4. retenção do estado atual antes de qualquer restore.
+
+## Rodada 6 — comparação e restauração controlada
+
+A timeline unificada passa a oferecer comparação antes de qualquer restauração.
+
+O editor compara lado a lado:
+
+- título;
+- resumo;
+- conteúdo textual.
+
+A comparação é feita contra o estado atual aberto no editor e sinaliza quais campos diferem.
+
+### Revisões WordPress
+
+Revisões nativas deixam de ser apenas consultivas e passam a aceitar restauração em modo `content_merge`.
+
+O restore WordPress altera somente:
+
+```text
+post_title
+post_excerpt
+post_content
+```
+
+Continuam preservados:
+
+```text
+post_name / slug
+post_status
+categorias e tags
+SEO
+imagem destacada
+metadados editoriais _nj_*
+demais postmeta
+```
+
+Antes da mutation, o estado atual é gravado como `nj_revision`. A operação roda em transação e registra atividade editorial própria.
+
+A UI bloqueia restauração quando existem alterações não salvas no editor.

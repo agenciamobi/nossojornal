@@ -569,6 +569,7 @@ type PostRevisionsPayload = {
       kind: string;
       source: 'nossojornal' | 'wordpress';
       restorable: boolean;
+      restoreMode: 'snapshot' | 'content_merge';
       createdAt: string;
       modifiedAt: string;
       author: { id: number; name: string };
@@ -591,6 +592,25 @@ type PostRevisionsPayload = {
     snapshot?: Record<string, unknown>;
   };
 };
+
+type PostRevisionItem = NonNullable<PostRevisionsPayload['data']>['items'][number];
+
+function revisionPlainText(value: string) {
+  if (!value) return '';
+
+  const node = document.createElement('div');
+  node.innerHTML = value;
+
+  return (node.textContent ?? '')
+    .replace(/\u00a0/g, ' ')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function normalizedRevisionText(value: string) {
+  return value.replace(/\s+/g, ' ').trim();
+}
 
 type CollaborationPayload = {
   ok: boolean;
@@ -2338,7 +2358,8 @@ function PostEditorView({
   const [imageState, setImageState] = useState<'idle' | 'working' | 'error'>('idle');
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [statusState, setStatusState] = useState<'idle' | 'working' | 'saved' | 'error'>('idle');
-  const [revisions, setRevisions] = useState<NonNullable<PostRevisionsPayload['data']>['items']>([]);
+  const [revisions, setRevisions] = useState<PostRevisionItem[]>([]);
+  const [revisionToCompare, setRevisionToCompare] = useState<PostRevisionItem | null>(null);
   const [collaboration, setCollaboration] = useState<NonNullable<CollaborationPayload['data']>>({
     comments: [],
     corrections: [],
@@ -2804,17 +2825,27 @@ function PostEditorView({
     setCorrectionText('');
   }
 
-  async function restoreRevision(revisionId: number) {
-    if (!window.confirm('Restaurar esta versão? A versão atual será preservada no histórico.')) return;
+  async function restoreRevision(revision: PostRevisionItem) {
+    if (changed) {
+      window.alert('Salve ou descarte as alterações atuais antes de restaurar uma versão.');
+      return;
+    }
+
+    const isWordPress = revision.source === 'wordpress';
+    const confirmation = isWordPress
+      ? 'Restaurar título, resumo e conteúdo desta revisão do WordPress? Slug, status, categorias, tags, SEO, imagem destacada e metadados editoriais serão preservados. A versão atual será salva no histórico antes da restauração.'
+      : 'Restaurar esta versão? A versão atual será preservada no histórico.';
+
+    if (!window.confirm(confirmation)) return;
 
     try {
       const response = await adminFetch<PostRevisionsPayload>('/api/admin/post-revisions.php', {
         method: 'POST',
         headers: { 'X-CSRF-Token': csrfToken },
         body: JSON.stringify({
-          action: 'restore',
+          action: isWordPress ? 'restore_wordpress' : 'restore',
           postId: post.id,
-          revisionId,
+          revisionId: revision.id,
         }),
       });
 
@@ -2822,6 +2853,7 @@ function PostEditorView({
         throw new Error('revision_restore_invalid');
       }
 
+      setRevisionToCompare(null);
       window.location.reload();
     } catch {
       setSaveState('error');
@@ -3388,20 +3420,15 @@ function PostEditorView({
                         )}
                         <small>
                           {revision.summary.words.toLocaleString('pt-BR')} palavras
-                          {isWordPress ? ' • preservada somente para consulta' : ''}
+                          {isWordPress ? ' • restauração preserva metadados atuais' : ''}
                         </small>
                       </div>
-                      {revision.restorable ? (
-                        <button
-                          type="button"
-                          disabled={!canEdit}
-                          onClick={() => void restoreRevision(revision.id)}
-                        >
-                          Restaurar
-                        </button>
-                      ) : (
-                        <span className="admin-revision-readonly">Somente leitura</span>
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => setRevisionToCompare(revision)}
+                      >
+                        Comparar
+                      </button>
                     </article>
                   );
                 })
@@ -4099,6 +4126,7 @@ function PostEditorView({
                     correction_added: 'registrou uma correção/atualização',
                     correction_visibility_changed: 'alterou a visibilidade de uma correção',
                     revision_restored: 'restaurou uma versão anterior',
+                    wordpress_revision_restored: 'restaurou conteúdo de uma revisão do WordPress',
                   };
 
                   return (
@@ -4118,6 +4146,124 @@ function PostEditorView({
 
         </aside>
       </div>
+
+      {revisionToCompare && (() => {
+        const currentContent = revisionPlainText(content);
+        const revisionContent = revisionPlainText(revisionToCompare.snapshot.content ?? '');
+        const fields = [
+          {
+            key: 'title',
+            label: 'Título',
+            current: title,
+            previous: revisionToCompare.snapshot.title ?? '',
+          },
+          {
+            key: 'excerpt',
+            label: 'Resumo',
+            current: excerpt,
+            previous: revisionToCompare.snapshot.excerpt ?? '',
+          },
+          {
+            key: 'content',
+            label: 'Conteúdo',
+            current: currentContent,
+            previous: revisionContent,
+          },
+        ];
+        const changedFields = fields.filter(
+          (field) => normalizedRevisionText(field.current) !== normalizedRevisionText(field.previous),
+        );
+        const isWordPress = revisionToCompare.source === 'wordpress';
+
+        return (
+          <div
+            className="admin-revision-compare"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Comparar versão da matéria"
+          >
+            <div className="admin-revision-compare__panel">
+              <header>
+                <div>
+                  <span>Histórico editorial</span>
+                  <h2>Comparar versão</h2>
+                  <p>
+                    {revisionToCompare.author.name || 'Redação'} • {formatAdminDate(revisionToCompare.modifiedAt)}
+                  </p>
+                </div>
+                <button type="button" onClick={() => setRevisionToCompare(null)} aria-label="Fechar">×</button>
+              </header>
+
+              <div className="admin-revision-compare__summary">
+                <em className={'admin-revision-source admin-revision-source--' + revisionToCompare.source}>
+                  {isWordPress ? 'Acervo legado' : 'Nosso Jornal'}
+                </em>
+                <strong>
+                  {changedFields.length === 0
+                    ? 'Esta versão coincide com o conteúdo atual.'
+                    : changedFields.length + (changedFields.length === 1 ? ' campo alterado' : ' campos alterados')}
+                </strong>
+                {isWordPress && (
+                  <span>
+                    Ao restaurar, somente título, resumo e conteúdo são substituídos. O restante da matéria permanece como está hoje.
+                  </span>
+                )}
+              </div>
+
+              <div className="admin-revision-compare__fields">
+                {fields.map((field) => {
+                  const fieldChanged =
+                    normalizedRevisionText(field.current) !== normalizedRevisionText(field.previous);
+
+                  return (
+                    <section
+                      key={field.key}
+                      className={'admin-revision-compare__field' + (fieldChanged ? ' is-changed' : '')}
+                    >
+                      <div className="admin-revision-compare__field-head">
+                        <strong>{field.label}</strong>
+                        <span>{fieldChanged ? 'Alterado' : 'Sem alteração'}</span>
+                      </div>
+                      <div className="admin-revision-compare__columns">
+                        <div>
+                          <small>Versão selecionada</small>
+                          <pre>{field.previous || 'Sem conteúdo'}</pre>
+                        </div>
+                        <div>
+                          <small>Versão atual</small>
+                          <pre>{field.current || 'Sem conteúdo'}</pre>
+                        </div>
+                      </div>
+                    </section>
+                  );
+                })}
+              </div>
+
+              <footer>
+                <div>
+                  {changed && (
+                    <strong>Existem alterações não salvas. Salve ou descarte antes de restaurar.</strong>
+                  )}
+                  {!changed && isWordPress && (
+                    <span>Slug, publicação, categorias, tags, SEO, imagem e metadados editoriais serão preservados.</span>
+                  )}
+                </div>
+                <button type="button" onClick={() => setRevisionToCompare(null)}>
+                  Fechar
+                </button>
+                <button
+                  type="button"
+                  className="admin-revision-compare__restore"
+                  disabled={!canEdit || changed || !revisionToCompare.restorable}
+                  onClick={() => void restoreRevision(revisionToCompare)}
+                >
+                  {isWordPress ? 'Restaurar conteúdo' : 'Restaurar esta versão'}
+                </button>
+              </footer>
+            </div>
+          </div>
+        );
+      })()}
 
       {sourcePickerOpen && (
         <div className="admin-source-picker" role="dialog" aria-modal="true" aria-label="Adicionar fonte da Central">
