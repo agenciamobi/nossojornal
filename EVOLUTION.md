@@ -845,3 +845,41 @@ As rotas e layouts existem, mas permanecem explicitamente sem registros até o i
 4. testar editoria, últimas, busca, sobre e contato;
 5. corrigir HTML legado que exigir adaptadores específicos;
 6. inventariar fontes reais de classificados e comunicados.
+
+
+## 16. Refinamento editorial das internas
+
+A segunda passada das páginas internas aplica linguagem de revista e reduz dependência visual do WordPress legado.
+
+### Matéria
+
+A página de notícia passa a oferecer:
+
+- headline e deck com escala editorial;
+- autoria, publicação e atualização em bloco próprio;
+- estimativa de tempo de leitura;
+- visualizações quando o legado possuir contador;
+- compartilhamento por WhatsApp, Web Share API e cópia de link;
+- imagem principal em escala ampla;
+- corpo com tipografia para leitura longa e drop cap no primeiro parágrafo;
+- rail de editorias;
+- retorno para a editoria principal;
+- relacionadas ao fim da leitura.
+
+A camada de descoberta também inclui Open Graph editorial, Twitter Card, datas de publicação/atualização, seção, canonical, JSON-LD `NewsArticle` e `BreadcrumbList`.
+
+### HTML legado
+
+O sanitizador compartilhado remove scripts, formulários, iframes arbitrários, handlers inline, estilos inline, SVGs de widgets e atributos específicos do Elementor. URLs de mídia do acervo continuam normalizadas para `/wp-content/uploads/...`.
+
+### Sobre
+
+`/sobre` continua usando o conteúdo histórico real de `quem-somos`, mas passa a apresentá-lo em composição editorial própria, com texto principal e rail de marcos institucionais.
+
+### Contato
+
+`/contato` deixa de despejar o layout Elementor. A API extrai os canais públicos da própria página legada e o frontend os apresenta em cards nativos. Assim, telefone, WhatsApp e e-mail continuam derivados da fonte histórica, sem duplicação manual de configuração.
+
+### Robustez HTTP
+
+Erros de slug, categoria, matéria ou página inexistente agora usam `NjApiHttpException` e retornam códigos HTTP explícitos em vez de cair em `internal_error`.
