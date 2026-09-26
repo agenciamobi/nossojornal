@@ -15,10 +15,8 @@ function nj_redirect_normalize_source(string $value): string
         throw new NjApiHttpException(422, 'redirect_source_invalid');
     }
 
-    if (preg_match('#^[a-z][a-z0-9+.-]*://#i', $value)) {
-        $path = parse_url($value, PHP_URL_PATH);
-        $value = is_string($path) ? $path : '';
-    }
+    $path = parse_url($value, PHP_URL_PATH);
+    $value = is_string($path) ? $path : '';
 
     $value = '/' . ltrim($value, '/');
     $value = preg_replace('#/+#', '/', $value) ?? $value;
