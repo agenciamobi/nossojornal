@@ -1995,3 +1995,17 @@ Em categorias existentes, o endereço fica bloqueado por padrão. A ação `Alte
 A alteração de slug exige confirmação adicional porque redirects automáticos de categoria ainda não fazem parte deste contrato.
 
 Erros de slug duplicado, hierarquia inválida e demais validações conhecidas são apresentados com mensagem específica em vez de erro genérico.
+
+## Central de Fontes: validação e edição
+
+A Central de Fontes valida e-mail, telefone, WhatsApp, site, assuntos e tamanho das observações antes do save.
+
+E-mail e WhatsApp duplicados em outra fonte ativa são bloqueados para reduzir cadastros repetidos.
+
+Ao editar uma fonte com uma busca ativa, salvar ou arquivar mantém o resultado filtrado.
+
+Trocar de contato enquanto há alterações não salvas pede confirmação. O cartão da fonte em edição fica destacado.
+
+Quando telefone e WhatsApp são iguais, a ação `Usar o telefone` preenche o campo sem redigitação.
+
+A listagem também mostra a última atualização de cada fonte e um resumo de quantos cadastros possuem contato direto.

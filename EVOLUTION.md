@@ -2986,3 +2986,60 @@ Essa proteção reduz mudanças de URL por acidente enquanto preserva a capacida
 O comportamento de slug acompanhando o nome até a primeira edição manual foi reaproveitado do editor de termos do `agenciamobi/mobicms`, sem importar sua arquitetura de dados.
 
 Próximo ponto de maior valor: aplicar o mesmo nível de validação contextual e ergonomia aos cadastros da Central de Fontes e Biblioteca de Mídia.
+
+## 53. Polimento da Central de Fontes
+
+A Central de Fontes recebe validação contextual e comportamento de edição mais previsível.
+
+### Cadastro e edição
+
+O formulário passa a validar no browser e no backend:
+
+- nome;
+- e-mail;
+- telefone;
+- WhatsApp;
+- URL HTTP/HTTPS;
+- quantidade de assuntos;
+- tamanho das observações.
+
+Telefone e WhatsApp continuam sendo armazenados como o operador digitou, mas o backend valida quantidade de dígitos e caracteres permitidos.
+
+Quando o telefone já foi informado, o formulário oferece `Usar o telefone` para preencher o WhatsApp sem redigitação.
+
+### Duplicidades
+
+Antes de salvar, a API verifica fontes ativas existentes.
+
+São bloqueados duplicados exatos de:
+
+```text
+e-mail
+WhatsApp normalizado por dígitos
+```
+
+A edição da própria fonte é excluída dessa comparação.
+
+### Busca preservada
+
+Salvar ou arquivar uma fonte enquanto existe uma pesquisa ativa preserva o filtro do diretório.
+
+O endpoint POST recebe apenas o texto de busca atual e devolve novamente o conjunto filtrado. Não há estado paralelo no browser.
+
+### Proteção de rascunho
+
+Trocar de uma fonte em edição para outro contato pede confirmação quando há alterações não salvas.
+
+A fonte atualmente aberta recebe destaque visual, e o editor mantém o mesmo guard de `Ctrl+S` / `Cmd+S`.
+
+### Diretório
+
+A tela passa a mostrar:
+
+- total de fontes ativas;
+- quantidade no resultado atual;
+- quantas possuem contato direto;
+- data da última atualização;
+- assuntos excedentes resumidos como `+N`.
+
+Próximo ponto de maior valor: polir a Biblioteca de Mídia com busca/seleção mais rápida, qualidade de metadados e ações em lote seguras.
