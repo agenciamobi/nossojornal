@@ -55,6 +55,5 @@ SQL)->fetchAll();
     return [
         'items' => $items,
         'count' => count($items),
-        'mode' => 'read_only',
     ];
 });
