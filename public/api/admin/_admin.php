@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../v1/_bootstrap.php';
+require_once __DIR__ . '/../v1/_content.php';
 
 const NJ_ADMIN_SESSION_NAME = 'nj_admin_session';
 
@@ -81,7 +82,7 @@ function nj_admin_start_session(): void
     session_name(NJ_ADMIN_SESSION_NAME);
     session_set_cookie_params([
         'lifetime' => 0,
-        'path' => '/sistema',
+        'path' => '/',
         'secure' => true,
         'httponly' => true,
         'samesite' => 'Lax',
