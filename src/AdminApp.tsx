@@ -2370,6 +2370,264 @@ function CategoryEditorView({ csrfToken }: { csrfToken: string }) {
   );
 }
 
+function CommentsView({ csrfToken }: { csrfToken: string }) {
+  const params = useMemo(() => new URLSearchParams(window.location.search), []);
+  const status = params.get('status') ?? 'all';
+  const query = params.get('q') ?? '';
+  const page = Math.max(1, Number.parseInt(params.get('page') ?? '1', 10) || 1);
+
+  const [data, setData] = useState<CommentsPayload['data']>();
+  const [actionId, setActionId] = useState(0);
+  const [actionError, setActionError] = useState(false);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    const search = new URLSearchParams({ status, page: String(page) });
+    if (query) search.set('q', query);
+
+    void adminFetch<CommentsPayload>('/api/admin/comments.php?' + search.toString())
+      .then((payload) => {
+        if (!payload.ok || !payload.data) throw new Error('comments_invalid');
+        setData(payload.data);
+      })
+      .catch(() => setError(true));
+  }, [page, query, status]);
+
+  if (error) return <AdminError />;
+  if (!data) return <AdminLoading />;
+
+  async function changeStatus(
+    commentId: number,
+    action: 'approve' | 'pending' | 'spam' | 'trash' | 'restore',
+  ) {
+    if (actionId > 0) return;
+
+    setActionId(commentId);
+    setActionError(false);
+
+    try {
+      const payload = await adminFetch<{
+        ok: boolean;
+        data?: {
+          comment: {
+            id: number;
+            status: 'pending' | 'approved' | 'spam' | 'trash';
+          };
+        };
+      }>('/api/admin/comment-status.php', {
+        method: 'POST',
+        headers: { 'X-CSRF-Token': csrfToken },
+        body: JSON.stringify({ commentId, action }),
+      });
+
+      if (!payload.ok || !payload.data) {
+        throw new Error('comment_status_invalid_response');
+      }
+
+      const nextStatus = payload.data.comment.status;
+
+      setData((current) => {
+        if (!current) return current;
+
+        const previous = current.items.find((item) => item.id === commentId);
+        if (!previous) return current;
+
+        const counts = { ...current.counts };
+        if (previous.status in counts) {
+          counts[previous.status as keyof typeof counts] = Math.max(
+            0,
+            counts[previous.status as keyof typeof counts] - 1,
+          );
+        }
+        if (nextStatus in counts) {
+          counts[nextStatus as keyof typeof counts] += 1;
+        }
+
+        const keep = current.status === 'all'
+          ? nextStatus === 'pending' || nextStatus === 'approved'
+          : current.status === nextStatus;
+
+        return {
+          ...current,
+          counts,
+          items: keep
+            ? current.items.map((item) => item.id === commentId
+                ? { ...item, status: nextStatus }
+                : item)
+            : current.items.filter((item) => item.id !== commentId),
+          pagination: keep
+            ? current.pagination
+            : {
+                ...current.pagination,
+                total: Math.max(0, current.pagination.total - 1),
+              },
+        };
+      });
+    } catch {
+      setActionError(true);
+    } finally {
+      setActionId(0);
+    }
+  }
+
+  const tabs: Array<[string, string, number | null]> = [
+    ['all', 'Todos', null],
+    ['pending', 'Pendentes', data.counts.pending],
+    ['approved', 'Aprovados', data.counts.approved],
+    ['spam', 'Spam', data.counts.spam],
+    ['trash', 'Lixeira', data.counts.trash],
+  ];
+
+  return (
+    <>
+      <AdminPageHeader
+        eyebrow="Comunidade"
+        title="Comentários"
+        description="Modere as conversas publicadas nas notícias."
+      />
+
+      {actionError && (
+        <div className="admin-save-feedback admin-save-feedback--error" role="alert">
+          Não foi possível atualizar o comentário. Tente novamente.
+        </div>
+      )}
+
+      <form className="admin-toolbar" method="get" action="/sistema/comentarios">
+        <div className="admin-filter-tabs" aria-label="Filtrar comentários por status">
+          {tabs.map(([value, label, count]) => (
+            <a
+              key={value}
+              className={status === value ? 'active' : ''}
+              href={'/sistema/comentarios?status=' + value}
+            >
+              {label}{count === null ? '' : ' (' + count + ')'}
+            </a>
+          ))}
+        </div>
+
+        <div className="admin-search">
+          <input
+            type="search"
+            name="q"
+            defaultValue={query}
+            placeholder="Buscar comentários"
+            aria-label="Buscar comentários"
+          />
+          {status !== 'all' && <input type="hidden" name="status" value={status} />}
+          <button type="submit">Buscar</button>
+        </div>
+      </form>
+
+      <section className="admin-comments-list" aria-label="Comentários">
+        {data.items.length === 0 && (
+          <div className="admin-empty-state">
+            Nenhum comentário encontrado.
+          </div>
+        )}
+
+        {data.items.map((comment) => (
+          <article className="admin-comment-card" key={comment.id}>
+            <div className="admin-comment-card__avatar" aria-hidden="true">
+              {initials(comment.author || 'Visitante')}
+            </div>
+
+            <div className="admin-comment-card__content">
+              <header>
+                <div>
+                  <strong>{comment.author || 'Visitante'}</strong>
+                  {comment.email && <a href={'mailto:' + comment.email}>{comment.email}</a>}
+                </div>
+                <span className={'admin-comment-status admin-comment-status--' + comment.status}>
+                  {commentStatusLabel(comment.status)}
+                </span>
+              </header>
+
+              <p>{comment.content}</p>
+
+              <div className="admin-comment-card__meta">
+                <span>{formatAdminDate(comment.createdAt)}</span>
+                <span>em</span>
+                <a href={'/sistema/noticias/' + comment.postId}>{comment.postTitle}</a>
+                {comment.postUrl && (
+                  <a href={comment.postUrl} target="_blank" rel="noopener noreferrer">Ver notícia ↗</a>
+                )}
+              </div>
+
+              <div className="admin-comment-actions">
+                {comment.status !== 'approved' && comment.status !== 'trash' && (
+                  <button
+                    type="button"
+                    disabled={actionId === comment.id}
+                    onClick={() => void changeStatus(comment.id, 'approve')}
+                  >
+                    Aprovar
+                  </button>
+                )}
+
+                {comment.status === 'approved' && (
+                  <button
+                    type="button"
+                    disabled={actionId === comment.id}
+                    onClick={() => void changeStatus(comment.id, 'pending')}
+                  >
+                    Marcar como pendente
+                  </button>
+                )}
+
+                {comment.status !== 'spam' && comment.status !== 'trash' && (
+                  <button
+                    type="button"
+                    disabled={actionId === comment.id}
+                    onClick={() => void changeStatus(comment.id, 'spam')}
+                  >
+                    Spam
+                  </button>
+                )}
+
+                {comment.status === 'spam' && (
+                  <button
+                    type="button"
+                    disabled={actionId === comment.id}
+                    onClick={() => void changeStatus(comment.id, 'pending')}
+                  >
+                    Não é spam
+                  </button>
+                )}
+
+                {comment.status !== 'trash' ? (
+                  <button
+                    type="button"
+                    className="danger"
+                    disabled={actionId === comment.id}
+                    onClick={() => void changeStatus(comment.id, 'trash')}
+                  >
+                    Lixeira
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={actionId === comment.id}
+                    onClick={() => void changeStatus(comment.id, 'restore')}
+                  >
+                    Restaurar
+                  </button>
+                )}
+              </div>
+            </div>
+          </article>
+        ))}
+      </section>
+
+      <AdminPagination
+        page={data.pagination.page}
+        totalPages={data.pagination.totalPages}
+        base="/sistema/comentarios"
+        params={{ status, q: query }}
+      />
+    </>
+  );
+}
+
 function UsersView() {
   const [data, setData] = useState<UsersPayload['data']>();
   const [error, setError] = useState(false);
@@ -2781,6 +3039,263 @@ function MediaView({ csrfToken }: { csrfToken: string }) {
         base="/sistema/midia"
         params={{}}
       />
+    </>
+  );
+}
+
+function MediaItemView({ csrfToken }: { csrfToken: string }) {
+  const match = window.location.pathname.match(/^\/sistema\/midia\/(\d+)\/?$/);
+  const mediaId = match ? Number.parseInt(match[1], 10) : 0;
+
+  const [data, setData] = useState<MediaDetailPayload['data']>();
+  const [writeReadiness, setWriteReadiness] = useState<WriteReadinessPayload['data']>();
+  const [title, setTitle] = useState('');
+  const [alt, setAlt] = useState('');
+  const [caption, setCaption] = useState('');
+  const [description, setDescription] = useState('');
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    if (!mediaId) {
+      setError(true);
+      return;
+    }
+
+    void adminFetch<MediaDetailPayload>('/api/admin/media-item.php?id=' + mediaId)
+      .then((payload) => {
+        if (!payload.ok || !payload.data) throw new Error('media_item_invalid');
+
+        setData(payload.data);
+        setTitle(payload.data.media.title);
+        setAlt(payload.data.media.alt);
+        setCaption(payload.data.media.caption);
+        setDescription(payload.data.media.description);
+      })
+      .catch(() => setError(true));
+
+    void adminFetch<WriteReadinessPayload>('/api/admin/write-readiness.php')
+      .then((payload) => {
+        if (payload.ok && payload.data) setWriteReadiness(payload.data);
+      })
+      .catch(() => {
+        // A edição permanece indisponível quando a verificação não responder.
+      });
+  }, [mediaId]);
+
+  if (error) return <AdminError />;
+  if (!data) return <AdminLoading />;
+
+  const media = data.media;
+  const canEdit = Boolean(writeReadiness?.database.update.available);
+  const changed =
+    title !== media.title
+    || alt !== media.alt
+    || caption !== media.caption
+    || description !== media.description;
+
+  async function saveMedia() {
+    if (!canEdit || !changed || saveState === 'saving') return;
+
+    setSaveState('saving');
+
+    try {
+      const payload = await adminFetch<{
+        ok: boolean;
+        data?: {
+          media: {
+            id: number;
+            title: string;
+            alt: string;
+            caption: string;
+            description: string;
+            modifiedAt: string;
+          };
+        };
+      }>('/api/admin/media-save.php', {
+        method: 'POST',
+        headers: { 'X-CSRF-Token': csrfToken },
+        body: JSON.stringify({
+          mediaId: media.id,
+          title,
+          alt,
+          caption,
+          description,
+        }),
+      });
+
+      if (!payload.ok || !payload.data) {
+        throw new Error('media_save_invalid_response');
+      }
+
+      const saved = payload.data.media;
+      setData((current) => current
+        ? {
+            ...current,
+            media: {
+              ...current.media,
+              title: saved.title,
+              alt: saved.alt,
+              caption: saved.caption,
+              description: saved.description,
+              modifiedAt: saved.modifiedAt,
+            },
+          }
+        : current
+      );
+      setTitle(saved.title);
+      setAlt(saved.alt);
+      setCaption(saved.caption);
+      setDescription(saved.description);
+      setSaveState('saved');
+    } catch {
+      setSaveState('error');
+    }
+  }
+
+  return (
+    <>
+      <header className="admin-editor-header">
+        <div>
+          <a href="/sistema/midia" className="admin-editor-header__back">← Mídia</a>
+          <div className="admin-editor-header__title">
+            <h1>Editar mídia</h1>
+          </div>
+          <p>Adicionada em {formatAdminDate(media.createdAt)}</p>
+        </div>
+
+        <div className="admin-editor-header__actions">
+          <a href={media.url} target="_blank" rel="noopener noreferrer">Abrir arquivo ↗</a>
+          <button
+            type="button"
+            className="admin-button--primary"
+            disabled={!canEdit || !changed || saveState === 'saving'}
+            onClick={() => void saveMedia()}
+          >
+            {saveState === 'saving' ? 'Salvando…' : 'Salvar'}
+          </button>
+        </div>
+      </header>
+
+      {saveState === 'saved' && (
+        <div className="admin-save-feedback admin-save-feedback--success" role="status">
+          Informações da mídia atualizadas.
+        </div>
+      )}
+
+      {saveState === 'error' && (
+        <div className="admin-save-feedback admin-save-feedback--error" role="alert">
+          Não foi possível salvar a mídia. Tente novamente.
+        </div>
+      )}
+
+      <div className="admin-media-editor">
+        <section className="admin-editor-main">
+          <figure className="admin-media-editor__preview">
+            {media.mimeType.startsWith('image/') ? (
+              <img src={media.url} alt={alt || title} />
+            ) : (
+              <div>{media.mimeType || 'Arquivo'}</div>
+            )}
+          </figure>
+
+          <section className="admin-editor-card">
+            <div className="admin-editor-card__head">
+              <span>Arquivo</span>
+              <strong>Informações</strong>
+            </div>
+
+            <div className="admin-editor-card__body admin-editor-card__body--fields">
+              <label className="admin-editor-field">
+                <span>Título</span>
+                <input
+                  value={title}
+                  readOnly={!canEdit}
+                  onChange={(event) => {
+                    setTitle(event.target.value);
+                    setSaveState('idle');
+                  }}
+                />
+              </label>
+
+              <label className="admin-editor-field">
+                <span>Texto alternativo</span>
+                <input
+                  value={alt}
+                  readOnly={!canEdit}
+                  placeholder="Descreva a imagem para acessibilidade"
+                  onChange={(event) => {
+                    setAlt(event.target.value);
+                    setSaveState('idle');
+                  }}
+                />
+              </label>
+
+              <label className="admin-editor-field">
+                <span>Legenda</span>
+                <textarea
+                  value={caption}
+                  readOnly={!canEdit}
+                  rows={3}
+                  onChange={(event) => {
+                    setCaption(event.target.value);
+                    setSaveState('idle');
+                  }}
+                />
+              </label>
+
+              <label className="admin-editor-field">
+                <span>Descrição</span>
+                <textarea
+                  value={description}
+                  readOnly={!canEdit}
+                  rows={6}
+                  onChange={(event) => {
+                    setDescription(event.target.value);
+                    setSaveState('idle');
+                  }}
+                />
+              </label>
+            </div>
+          </section>
+        </section>
+
+        <aside className="admin-editor-sidebar">
+          <section className="admin-editor-card">
+            <div className="admin-editor-card__head">
+              <span>Detalhes</span>
+              <strong>Arquivo</strong>
+            </div>
+
+            <dl className="admin-editor-meta">
+              <div><dt>Tipo</dt><dd>{media.mimeType || '—'}</dd></div>
+              <div><dt>Atualizado</dt><dd>{formatAdminDate(media.modifiedAt)}</dd></div>
+              <div><dt>ID</dt><dd>#{media.id}</dd></div>
+              <div><dt>Arquivo</dt><dd>{media.attachedFile || '—'}</dd></div>
+            </dl>
+          </section>
+
+          <section className="admin-editor-card">
+            <div className="admin-editor-card__head">
+              <span>Uso</span>
+              <strong>Notícias relacionadas</strong>
+            </div>
+
+            <div className="admin-media-usage">
+              {media.usedBy.length === 0 ? (
+                <p>Esta imagem não está definida como destaque de nenhuma notícia.</p>
+              ) : (
+                media.usedBy.map((post) => (
+                  <article key={post.id}>
+                    <a href={post.adminUrl}>{post.title}</a>
+                    <span>{statusLabel(post.status)}</span>
+                  </article>
+                ))
+              )}
+            </div>
+          </section>
+        </aside>
+      </div>
     </>
   );
 }
@@ -3217,12 +3732,14 @@ export function AdminApp() {
 
         <main className="admin-content">
           {view === 'dashboard' && <DashboardView user={user} />}
-          {view === 'posts' && <PostsView csrfToken={csrfToken} />}
+          {view === 'posts' && <PostsView user={user} csrfToken={csrfToken} />}
           {view === 'post' && <PostEditorView user={user} csrfToken={csrfToken} />}
           {view === 'categories' && <CategoriesView />}
           {view === 'categoryNew' && <NewCategoryView csrfToken={csrfToken} />}
           {view === 'category' && <CategoryEditorView csrfToken={csrfToken} />}
           {view === 'media' && <MediaView csrfToken={csrfToken} />}
+          {view === 'mediaItem' && <MediaItemView csrfToken={csrfToken} />}
+          {view === 'comments' && user.permissions.moderateComments && <CommentsView csrfToken={csrfToken} />}
           {view === 'users' && <UsersView />}
           {view === 'user' && <UserEditorView csrfToken={csrfToken} />}
           {view === 'settings' && <SettingsView csrfToken={csrfToken} />}
