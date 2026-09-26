@@ -158,11 +158,5 @@ nj_admin_run(['GET'], static function (): array {
                 'priority' => 65,
             ],
         ],
-        'storage' => [
-            'status' => 'pending_database_write',
-            'feedSourcesTable' => 'nj_feed_sources',
-            'queueTable' => 'nj_news_queue',
-        ],
-        'mode' => 'foundation',
     ];
 });
