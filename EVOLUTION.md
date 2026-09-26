@@ -3143,3 +3143,46 @@ No mobile, o título cromático respeita a largura do viewport e o resumo/contad
 Os novos efeitos de card respeitam `prefers-reduced-motion`.
 
 A cor nunca é o único sinal de estado: textos, hierarquia, bordas e labels continuam presentes.
+
+## 56. Navegação e microcomponentes cromáticos
+
+A identidade das editorias passa a sobreviver também quando o Header usa menus WordPress nativos.
+
+### Menu principal
+
+O Header monta um mapa:
+
+```text
+category.url → category.color
+```
+
+incluindo categorias filhas.
+
+Itens de `nav_menu` cuja URL corresponde a uma categoria recebem a mesma cor editorial usada na homepage e na página da editoria.
+
+O estado ativo do menu nativo ganha filete cromático e o item pai continua destacado quando uma rota filha estiver ativa.
+
+Submenus também exibem um marcador lateral na cor da categoria correspondente.
+
+### Cobertura regional
+
+O rótulo `Cobertura Regional` herda a cor da própria categoria e as cidades continuam usando sua cor individual.
+
+Hover e estado ativo deixam de voltar para um azul genérico quando há uma cor editorial disponível.
+
+### Badges
+
+Badges de categoria na homepage passam de texto solto para chips leves:
+
+- fundo com pequena mistura da cor editorial;
+- texto na cor da categoria;
+- hover preenchido;
+- contraste automático no estado preenchido.
+
+O destaque principal da capa continua usando o tratamento próprio sobre fotografia e não recebe esse fundo.
+
+### Acessibilidade
+
+Estados ativos continuam usando `aria-current`, texto e geometria de linha. A cor não é o único sinal.
+
+Transições novas no menu respeitam `prefers-reduced-motion`.

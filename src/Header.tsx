@@ -119,19 +119,30 @@ function navigationPath(url: string) {
 function NativePrimaryItem({
   item,
   currentPath,
+  categoryColorByPath,
 }: {
   item: NavigationItem;
   currentPath: string;
+  categoryColorByPath: Map<string, string>;
 }) {
   const itemPath = navigationPath(item.url);
   const active = itemPath !== '' && currentPath === itemPath;
   const hasChildren = item.children.length > 0;
+  const descendantActive = item.children.some((child) => {
+    const childPath = navigationPath(child.url);
+    return childPath !== '' && childPath === currentPath;
+  });
+  const itemColor = categoryColorByPath.get(itemPath);
 
   return (
-    <div className={'primary-nav__native-item' + (hasChildren ? ' has-children' : '')}>
+    <div
+      className={'primary-nav__native-item' + (hasChildren ? ' has-children' : '')}
+      data-active={active || descendantActive ? 'true' : undefined}
+    >
       <a
         href={item.url}
         aria-current={active ? 'page' : undefined}
+        style={itemColor ? ({ '--category-color': itemColor } as CSSProperties) : undefined}
         {...navigationLinkProps(item)}
       >
         {item.title}
@@ -142,12 +153,14 @@ function NativePrimaryItem({
           {item.children.map((child) => {
             const childPath = navigationPath(child.url);
             const childActive = childPath !== '' && currentPath === childPath;
+            const childColor = categoryColorByPath.get(childPath);
 
             return (
               <a
                 key={child.id}
                 href={child.url}
                 aria-current={childActive ? 'page' : undefined}
+                style={childColor ? ({ '--category-color': childColor } as CSSProperties) : undefined}
                 {...navigationLinkProps(child)}
               >
                 {child.title}
@@ -299,6 +312,26 @@ export function SiteHeader() {
     [categories],
   );
 
+  const categoryColorByPath = useMemo(() => {
+    const colors = new Map<string, string>();
+
+    const visit = (items: Category[]) => {
+      items.forEach((category) => {
+        const path = navigationPath(category.url);
+        if (path && category.color) {
+          colors.set(path, category.color);
+        }
+
+        if (category.children?.length) {
+          visit(category.children);
+        }
+      });
+    };
+
+    visit(categories);
+    return colors;
+  }, [categories]);
+
   const primaryMenu = useMemo(
     () => selectNavigationMenu(navigationMenus, 'primary'),
     [navigationMenus],
@@ -384,6 +417,7 @@ export function SiteHeader() {
                 key={item.id}
                 item={item}
                 currentPath={currentPath}
+                categoryColorByPath={categoryColorByPath}
               />
             ))
           ) : (
@@ -425,7 +459,14 @@ export function SiteHeader() {
       {regionalCities.length > 0 && (
         <nav className="regional-nav" aria-label="Cobertura regional">
           <div className="container regional-nav__inner">
-            <a className="regional-nav__label" href={regionalCategory?.url}>
+            <a
+              className="regional-nav__label"
+              href={regionalCategory?.url}
+              aria-current={currentPath === regionalCategory?.url ? 'page' : undefined}
+              style={regionalCategory?.color
+                ? ({ '--category-color': regionalCategory.color } as CSSProperties)
+                : undefined}
+            >
               Cobertura Regional
             </a>
             <div className="regional-nav__scroll">
