@@ -98,12 +98,5 @@ SQL)->fetchAll();
     return [
         'category' => $category,
         'parents' => $parents,
-        'mode' => 'read_only',
-        'plannedMutation' => [
-            'termTable' => nj_table('terms'),
-            'taxonomyTable' => nj_table('term_taxonomy'),
-            'colorMetaTable' => nj_table('termmeta'),
-            'colorMetaKey' => NJ_CATEGORY_COLOR_META_KEY,
-        ],
     ];
 });
