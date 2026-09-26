@@ -203,6 +203,8 @@ function nj_meta_block(array $meta): string
     $type = (string) ($meta['type'] ?? 'website');
     $image = nj_meta_absolute_url((string) ($meta['image'] ?? ''));
     $imageAlt = trim((string) ($meta['imageAlt'] ?? ''));
+    $imageWidth = max(0, (int) ($meta['imageWidth'] ?? 0));
+    $imageHeight = max(0, (int) ($meta['imageHeight'] ?? 0));
     $publishedAt = trim((string) ($meta['publishedAt'] ?? ''));
     $modifiedAt = trim((string) ($meta['modifiedAt'] ?? ''));
     $section = trim((string) ($meta['section'] ?? ''));
@@ -224,6 +226,14 @@ function nj_meta_block(array $meta): string
     if ($image !== '') {
         $tags[] = '<meta property="og:image" content="' . nj_meta_escape($image) . '" />';
         $tags[] = '<meta name="twitter:image" content="' . nj_meta_escape($image) . '" />';
+
+        if ($imageWidth > 0) {
+            $tags[] = '<meta property="og:image:width" content="' . $imageWidth . '" />';
+        }
+
+        if ($imageHeight > 0) {
+            $tags[] = '<meta property="og:image:height" content="' . $imageHeight . '" />';
+        }
     }
 
     if ($imageAlt !== '') {
@@ -378,6 +388,12 @@ try {
                 $imageAlt = is_array($article['featuredImage'])
                     ? (string) $article['featuredImage']['alt']
                     : '';
+                $imageWidth = is_array($article['featuredImage'])
+                    ? max(0, (int) ($article['featuredImage']['width'] ?? 0))
+                    : 0;
+                $imageHeight = is_array($article['featuredImage'])
+                    ? max(0, (int) ($article['featuredImage']['height'] ?? 0))
+                    : 0;
 
                 $meta = [
                     'title' => (string) $article['seoTitle'],
@@ -386,6 +402,8 @@ try {
                     'type' => 'article',
                     'image' => $image,
                     'imageAlt' => $imageAlt,
+                    'imageWidth' => $imageWidth,
+                    'imageHeight' => $imageHeight,
                     'publishedAt' => (string) $article['publishedAt'],
                     'modifiedAt' => (string) $article['modifiedAt'],
                     'section' => is_array($category) ? (string) $category['name'] : '',
