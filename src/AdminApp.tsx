@@ -249,7 +249,7 @@ type PautasPayload = {
   };
 };
 
-type AdminView = 'dashboard' | 'posts' | 'post' | 'categories' | 'category' | 'media' | 'users' | 'user' | 'settings' | 'pautas';
+type AdminView = 'dashboard' | 'posts' | 'post' | 'categories' | 'category' | 'categoryNew' | 'media' | 'users' | 'user' | 'settings' | 'pautas';
 
 function resolveAdminView(pathname: string): AdminView {
   const clean = pathname.replace(/\/+$/, '');
@@ -257,6 +257,7 @@ function resolveAdminView(pathname: string): AdminView {
   if (clean === '/sistema/noticias') return 'posts';
   if (/^\/sistema\/noticias\/\d+$/.test(clean)) return 'post';
   if (clean === '/sistema/categorias') return 'categories';
+  if (clean === '/sistema/categorias/nova') return 'categoryNew';
   if (/^\/sistema\/categorias\/\d+$/.test(clean)) return 'category';
   if (clean === '/sistema/midia') return 'media';
   if (clean === '/sistema/usuarios') return 'users';
@@ -574,7 +575,7 @@ function AdminNav({ user, view }: { user: AdminUser; view: AdminView }) {
                   className={
                     view === entry.key
                       || (view === 'post' && entry.key === 'posts')
-                      || (view === 'category' && entry.key === 'categories')
+                      || ((view === 'category' || view === 'categoryNew') && entry.key === 'categories')
                       || (view === 'user' && entry.key === 'users')
                       ? 'admin-nav__item admin-nav__item--active'
                       : 'admin-nav__item'
@@ -582,7 +583,7 @@ function AdminNav({ user, view }: { user: AdminUser; view: AdminView }) {
                   aria-current={
                     view === entry.key
                       || (view === 'post' && entry.key === 'posts')
-                      || (view === 'category' && entry.key === 'categories')
+                      || ((view === 'category' || view === 'categoryNew') && entry.key === 'categories')
                       || (view === 'user' && entry.key === 'users')
                       ? 'page'
                       : undefined
@@ -1658,11 +1659,14 @@ function CategoriesView() {
 
   return (
     <>
-      <AdminPageHeader
-        eyebrow="Taxonomia"
-        title="Categorias"
-        description="Editorias e municípios usados na organização das notícias."
-      />
+      <div className="admin-page-heading-row">
+        <AdminPageHeader
+          eyebrow="Taxonomia"
+          title="Categorias"
+          description="Editorias e municípios usados na organização das notícias."
+        />
+        <a className="admin-create-button" href="/sistema/categorias/nova">+ Nova categoria</a>
+      </div>
 
 
       <div className="admin-table-wrap">
@@ -1707,6 +1711,199 @@ function CategoriesView() {
             ))}
           </tbody>
         </table>
+      </div>
+    </>
+  );
+}
+
+function NewCategoryView({ csrfToken }: { csrfToken: string }) {
+  const [data, setData] = useState<CategoriesPayload['data']>();
+  const [writeReadiness, setWriteReadiness] = useState<WriteReadinessPayload['data']>();
+  const [name, setName] = useState('');
+  const [slug, setSlug] = useState('');
+  const [description, setDescription] = useState('');
+  const [parentId, setParentId] = useState<number | null>(null);
+  const [color, setColor] = useState('#0B57D0');
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'error'>('idle');
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    void adminFetch<CategoriesPayload>('/api/admin/categories.php')
+      .then((payload) => {
+        if (!payload.ok || !payload.data) throw new Error('categories_invalid');
+        setData(payload.data);
+      })
+      .catch(() => setError(true));
+
+    void adminFetch<WriteReadinessPayload>('/api/admin/write-readiness.php')
+      .then((payload) => {
+        if (payload.ok && payload.data) setWriteReadiness(payload.data);
+      })
+      .catch(() => {
+        // O formulário permanece indisponível quando a verificação não responder.
+      });
+  }, []);
+
+  if (error) return <AdminError />;
+  if (!data) return <AdminLoading />;
+
+  const canCreate = Boolean(
+    writeReadiness?.database.insert.available
+      && writeReadiness?.database.update.available,
+  );
+
+  async function createCategory() {
+    if (!canCreate || name.trim() === '' || saveState === 'saving') return;
+
+    setSaveState('saving');
+
+    try {
+      const payload = await adminFetch<{
+        ok: boolean;
+        data?: {
+          category: {
+            id: number;
+            adminUrl: string;
+          };
+        };
+      }>('/api/admin/category-create.php', {
+        method: 'POST',
+        headers: { 'X-CSRF-Token': csrfToken },
+        body: JSON.stringify({
+          name,
+          slug,
+          description,
+          parentId,
+          color,
+        }),
+      });
+
+      if (!payload.ok || !payload.data) {
+        throw new Error('category_create_invalid_response');
+      }
+
+      window.location.href = payload.data.category.adminUrl;
+    } catch {
+      setSaveState('error');
+    }
+  }
+
+  return (
+    <>
+      <header className="admin-editor-header">
+        <div>
+          <a href="/sistema/categorias" className="admin-editor-header__back">← Categorias</a>
+          <div className="admin-editor-header__title">
+            <span className="admin-category-dot" style={{ background: color }} aria-hidden="true" />
+            <h1>Nova categoria</h1>
+          </div>
+          <p>Crie uma nova editoria ou subdivisão regional.</p>
+        </div>
+
+        <div className="admin-editor-header__actions">
+          <button
+            type="button"
+            className="admin-button--primary"
+            disabled={!canCreate || name.trim() === '' || saveState === 'saving'}
+            onClick={() => void createCategory()}
+          >
+            {saveState === 'saving' ? 'Criando…' : 'Criar categoria'}
+          </button>
+        </div>
+      </header>
+
+      {saveState === 'error' && (
+        <div className="admin-save-feedback admin-save-feedback--error" role="alert">
+          Não foi possível criar a categoria. Verifique o nome e o slug.
+        </div>
+      )}
+
+      <div className="admin-category-editor">
+        <section className="admin-editor-card">
+          <div className="admin-editor-card__head">
+            <span>Categoria</span>
+            <strong>Informações</strong>
+          </div>
+
+          <div className="admin-editor-card__body admin-editor-card__body--fields">
+            <label className="admin-editor-field">
+              <span>Nome</span>
+              <input
+                value={name}
+                readOnly={!canCreate}
+                autoFocus
+                onChange={(event) => {
+                  setName(event.target.value);
+                  if (slug === '') {
+                    setSlug(
+                      event.target.value
+                        .normalize('NFD')
+                        .replace(/[\u0300-\u036f]/g, '')
+                        .toLowerCase()
+                        .replace(/[^a-z0-9]+/g, '-')
+                        .replace(/^-+|-+$/g, ''),
+                    );
+                  }
+                }}
+              />
+            </label>
+
+            <label className="admin-editor-field">
+              <span>Slug</span>
+              <input
+                value={slug}
+                readOnly={!canCreate}
+                onChange={(event) => setSlug(event.target.value)}
+              />
+            </label>
+
+            <label className="admin-editor-field">
+              <span>Descrição</span>
+              <textarea
+                value={description}
+                readOnly={!canCreate}
+                rows={6}
+                onChange={(event) => setDescription(event.target.value)}
+              />
+            </label>
+
+            <label className="admin-editor-field">
+              <span>Categoria superior</span>
+              <select
+                value={parentId ?? ''}
+                disabled={!canCreate}
+                onChange={(event) => setParentId(event.target.value === '' ? null : Number(event.target.value))}
+              >
+                <option value="">Nenhuma</option>
+                {data.items.map((item) => (
+                  <option value={item.id} key={item.id}>{item.name}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+        </section>
+
+        <aside className="admin-editor-card">
+          <div className="admin-editor-card__head">
+            <span>Identidade</span>
+            <strong>Cor editorial</strong>
+          </div>
+
+          <div className="admin-category-color-editor">
+            <div className="admin-category-color-editor__swatch" style={{ background: color }} />
+            <div>
+              <strong>{color}</strong>
+              <span>Usada nos detalhes visuais da editoria</span>
+            </div>
+            <input
+              type="color"
+              value={color}
+              disabled={!canCreate}
+              aria-label="Cor editorial"
+              onChange={(event) => setColor(event.target.value.toUpperCase())}
+            />
+          </div>
+        </aside>
       </div>
     </>
   );
@@ -2818,6 +3015,7 @@ export function AdminApp() {
           {view === 'posts' && <PostsView csrfToken={csrfToken} />}
           {view === 'post' && <PostEditorView user={user} csrfToken={csrfToken} />}
           {view === 'categories' && <CategoriesView />}
+          {view === 'categoryNew' && <NewCategoryView csrfToken={csrfToken} />}
           {view === 'category' && <CategoryEditorView csrfToken={csrfToken} />}
           {view === 'media' && <MediaView csrfToken={csrfToken} />}
           {view === 'users' && <UsersView />}
