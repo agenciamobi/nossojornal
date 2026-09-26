@@ -3,7 +3,7 @@
 **Última atualização:** 25/09/2026  
 **Repositório:** `agenciamobi/nossojornal`  
 **Domínio:** `nossojornal.com.br`  
-**Estado:** API real validada em produção; Header conectado à taxonomia real em desenvolvimento
+**Estado:** Header e homepage conectados ao legado real; aguardando publicação e validação visual
 
 Este é o único documento de evolução do projeto. Planos, decisões arquiteturais, fases, pendências e mudanças de direção devem ser consolidados aqui.
 
@@ -714,3 +714,47 @@ Próximo gate do Header:
 2. validar `latest.php?limit=6` contra o MariaDB live;
 3. validar ticker, links, editorias e cobertura regional em desktop/mobile;
 4. encerrar a seção Header antes de avançar para a manchete/capa.
+
+
+## 14. Homepage editorial real
+
+A homepage deixou de depender de conteúdo demonstrativo e passa a ser montada por `GET /api/v1/home.php`.
+
+### Política editorial da capa
+
+- `Capa` é a categoria de controle editorial do hero;
+- quando houver matéria publicada em `Capa`, a mais recente dessa categoria assume a manchete principal;
+- enquanto `Capa` estiver vazia, a publicação mais recente do jornal é usada como fallback;
+- o hero expõe título, resumo real, autor, data, categoria primária e imagem destacada quando existir.
+
+### Últimas notícias
+
+A home recebe as oito publicações seguintes à manchete, em ordem cronológica decrescente. O Header continua usando o endpoint enxuto `/api/v1/latest.php?limit=6` para o ticker.
+
+### Mais lidas
+
+A coluna `Mais lidas` usa o metadado legado `views`, sem estimativas artificiais. Apenas matérias com contador maior que zero participam do ranking.
+
+### Seções por editoria
+
+As seções são derivadas das categorias efetivamente associadas a posts publicados. Categorias técnicas ou históricas de organização não criam seção própria:
+
+```text
+Capa
+Geral
+Outros
+Eleições 2024
+Cobertura Regional
+```
+
+As demais categorias com conteúdo publicado geram automaticamente blocos editoriais. No snapshot atual isso inclui, entre outras, Hulha Negra, Política, Educação, Rural, Economia, Segurança, Esportes, Saúde e Internacional.
+
+Cada bloco usa até quatro matérias reais e preserva a relação original post ↔ categoria. Uma matéria pode aparecer no hero e também em sua editoria, comportamento aceitável em uma capa jornalística e necessário para não ocultar editorias com pouco volume.
+
+### Imagens
+
+A API resolve `_thumbnail_id` e o attachment correspondente. Quando a imagem pertence ao acervo local, a URL é normalizada para `/wp-content/uploads/...`, preservando o caminho persistente durante releases do frontend.
+
+### Conteúdo fictício
+
+Os blocos demonstrativos anteriores de manchete, recentes, apoiadores, classificados e comunicados foram removidos da homepage. Produtos sem fonte de dados real não recebem conteúdo inventado.
