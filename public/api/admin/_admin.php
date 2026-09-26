@@ -218,6 +218,7 @@ function nj_admin_user_payload(PDO $pdo, array $row): array
             'listUsers' => in_array('list_users', $access['capabilities'], true),
             'editUsers' => in_array('edit_users', $access['capabilities'], true),
             'manageOptions' => in_array('manage_options', $access['capabilities'], true),
+            'moderateComments' => in_array('moderate_comments', $access['capabilities'], true),
             'managePautas' => (string) $row['user_login'] === NJ_PAUTAS_OWNER_LOGIN,
         ],
     ];
