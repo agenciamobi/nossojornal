@@ -442,6 +442,65 @@
   background: #fff;
 }
 
+.admin-toolbar--directory {
+  justify-content: flex-end;
+}
+
+.admin-toolbar__clear {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #8c8f94;
+  border-radius: 3px;
+  padding: 0 10px;
+  background: #fff;
+  color: #50575e;
+  font-size: 9px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.admin-toolbar__clear:hover,
+.admin-toolbar__clear:focus-visible {
+  border-color: #2271b1;
+  color: #135e96;
+}
+
+.admin-directory-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0 0 14px;
+}
+
+.admin-directory-summary > div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+  padding: 12px 14px;
+  border: 1px solid #dcdcde;
+  background: #fff;
+}
+
+.admin-directory-summary span {
+  color: #787c82;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+.admin-directory-summary strong {
+  color: #1d2327;
+  font-size: 20px;
+  font-weight: 550;
+}
+
+.admin-directory-summary small {
+  color: #8c8f94;
+  font-size: 8px;
+}
+
 .admin-search button {
   min-height: 34px;
   border: 1px solid #2271b1;
@@ -2098,6 +2157,46 @@
 }
 
 
+.admin-slug-editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.admin-slug-editor input {
+  min-width: 0;
+  border-radius: 3px 0 0 3px !important;
+}
+
+.admin-slug-editor button {
+  min-height: 36px;
+  border: 1px solid #8c8f94;
+  border-left: 0;
+  border-radius: 0 3px 3px 0;
+  padding: 0 10px;
+  background: #f6f7f7;
+  color: #2c3338;
+  font-size: 8px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.admin-slug-editor button:hover,
+.admin-slug-editor button:focus-visible {
+  color: #135e96;
+}
+
+.admin-slug-editor button:disabled {
+  color: #8c8f94;
+  cursor: not-allowed;
+}
+
+.admin-field-warning {
+  color: #8a5a00 !important;
+  font-size: 8px;
+  font-weight: 700;
+}
+
 .admin-editor-field input:not([readonly]),
 .admin-editor-field textarea:not([readonly]) {
   border-color: #2271b1;
@@ -2105,6 +2204,36 @@
 }
 
 @media (max-width: 720px) {
+  .admin-directory-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-toolbar--directory,
+  .admin-toolbar--directory .admin-search {
+    width: 100%;
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .admin-toolbar--directory .admin-search input {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .admin-slug-editor {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-slug-editor input {
+    border-radius: 3px !important;
+  }
+
+  .admin-slug-editor button {
+    border-left: 1px solid #8c8f94;
+    border-top: 0;
+    border-radius: 0 0 3px 3px;
+  }
+
   .admin-page-heading-row {
     flex-direction: column;
     gap: 0;
