@@ -311,18 +311,6 @@ type SettingsPayload = {
   };
 };
 
-type WriteReadinessPayload = {
-  ok: boolean;
-  data?: {
-    database: {
-      select: { available: boolean; reason: string | null };
-      insert: { available: boolean; reason: string | null };
-      update: { available: boolean; reason: string | null };
-      delete: { available: boolean; reason: string | null };
-    };
-  };
-};
-
 type PautasPayload = {
   ok: boolean;
   data?: {
@@ -956,7 +944,6 @@ function PostsView({
   const page = Math.max(1, Number.parseInt(params.get('page') ?? '1', 10) || 1);
 
   const [data, setData] = useState<PostsPayload['data']>();
-  const [writeReadiness, setWriteReadiness] = useState<WriteReadinessPayload['data']>();
   const [creating, setCreating] = useState(false);
   const [postActionId, setPostActionId] = useState(0);
   const [createError, setCreateError] = useState(false);
@@ -973,31 +960,14 @@ function PostsView({
         setData(payload.data);
       })
       .catch(() => setError(true));
-
-    void adminFetch<WriteReadinessPayload>('/api/admin/write-readiness.php')
-      .then((payload) => {
-        if (payload.ok && payload.data) setWriteReadiness(payload.data);
-      })
-      .catch(() => {
-        // A listagem continua funcional.
-      });
   }, [page, query, status]);
 
   if (error) return <AdminError />;
   if (!data) return <AdminLoading />;
 
-  const canCreateDraft = Boolean(
-    writeReadiness?.database.insert.available
-      && writeReadiness?.database.update.available,
-  );
+  const canCreateDraft = user.permissions.editPosts;
 
   function canManageTrash(post: AdminPost) {
-    if (!writeReadiness?.database.insert.available
-      || !writeReadiness.database.update.available
-      || !writeReadiness.database.delete.available) {
-      return false;
-    }
-
     const authorId = typeof post.author === 'string' ? 0 : post.author.id;
     const ownsPost = authorId === user.id;
 
@@ -1274,7 +1244,6 @@ function PostEditorView({
   const postId = match ? Number.parseInt(match[1], 10) : 0;
 
   const [data, setData] = useState<PostDetailPayload['data']>();
-  const [writeReadiness, setWriteReadiness] = useState<WriteReadinessPayload['data']>();
   const [title, setTitle] = useState('');
   const [slug, setSlug] = useState('');
   const [excerpt, setExcerpt] = useState('');
@@ -1313,14 +1282,6 @@ function PostEditorView({
         setPrimaryCategoryId(post.seo.primaryCategoryId);
       })
       .catch(() => setError(true));
-
-    void adminFetch<WriteReadinessPayload>('/api/admin/write-readiness.php')
-      .then((payload) => {
-        if (payload.ok && payload.data) setWriteReadiness(payload.data);
-      })
-      .catch(() => {
-        // As ações permanecem indisponíveis quando a verificação não responder.
-      });
   }, [postId]);
 
   if (error) return <AdminError />;
@@ -1337,15 +1298,11 @@ function PostEditorView({
   const canEditPublished = user.capabilities.includes('edit_published_posts');
   const publishedLike = ['publish', 'future', 'private'].includes(post.status);
 
-  const databaseCanEdit = Boolean(
-    writeReadiness?.database.insert.available
-      && writeReadiness?.database.update.available
-      && writeReadiness?.database.delete.available,
-  );
-  const databaseCanChangeStatus = Boolean(writeReadiness?.database.update.available);
-  const canEdit = databaseCanEdit
+  const canEdit =
+    user.permissions.editPosts
     && (ownsPost || canEditOthers)
-    && (!publishedLike || canEditPublished);
+    && (!publishedLike || canEditPublished)
+    && post.status !== 'trash';
 
   const changed =
     title !== post.title
@@ -1357,9 +1314,11 @@ function PostEditorView({
     || primaryCategoryId !== post.seo.primaryCategoryId
     || JSON.stringify(normalizedCategoryIds) !== JSON.stringify(originalCategoryIds);
 
-  const canChangeStatus = databaseCanChangeStatus
+  const canChangeStatus =
+    user.permissions.editPosts
     && (ownsPost || canEditOthers)
-    && (!publishedLike || canEditPublished);
+    && (!publishedLike || canEditPublished)
+    && post.status !== 'trash';
 
   async function savePost() {
     if (!canEdit || !changed || saveState === 'saving') return;
@@ -2034,7 +1993,6 @@ function PageEditorView({
   const pageId = match ? Number.parseInt(match[1], 10) : 0;
 
   const [data, setData] = useState<PageDetailPayload['data']>();
-  const [writeReadiness, setWriteReadiness] = useState<WriteReadinessPayload['data']>();
   const [title, setTitle] = useState('');
   const [slug, setSlug] = useState('');
   const [excerpt, setExcerpt] = useState('');
@@ -2064,14 +2022,6 @@ function PageEditorView({
         setSeoDescription(item.seo.description);
       })
       .catch(() => setError(true));
-
-    void adminFetch<WriteReadinessPayload>('/api/admin/write-readiness.php')
-      .then((payload) => {
-        if (payload.ok && payload.data) setWriteReadiness(payload.data);
-      })
-      .catch(() => {
-        // A edição permanece indisponível quando a verificação não responder.
-      });
   }, [pageId]);
 
   if (error) return <AdminError />;
@@ -2083,11 +2033,8 @@ function PageEditorView({
   const canEditPublished = user.capabilities.includes('edit_published_pages');
   const publishedLike = ['publish', 'future', 'private'].includes(item.status);
 
-  const canEdit = Boolean(
-    writeReadiness?.database.insert.available
-      && writeReadiness.database.update.available
-      && writeReadiness.database.delete.available,
-  )
+  const canEdit =
+    user.permissions.editPages
     && (ownsPage || canEditOthers)
     && (!publishedLike || canEditPublished)
     && item.status !== 'trash';
@@ -2402,7 +2349,6 @@ function CategoriesView() {
 
 function NewCategoryView({ csrfToken }: { csrfToken: string }) {
   const [data, setData] = useState<CategoriesPayload['data']>();
-  const [writeReadiness, setWriteReadiness] = useState<WriteReadinessPayload['data']>();
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
   const [description, setDescription] = useState('');
@@ -2418,23 +2364,12 @@ function NewCategoryView({ csrfToken }: { csrfToken: string }) {
         setData(payload.data);
       })
       .catch(() => setError(true));
-
-    void adminFetch<WriteReadinessPayload>('/api/admin/write-readiness.php')
-      .then((payload) => {
-        if (payload.ok && payload.data) setWriteReadiness(payload.data);
-      })
-      .catch(() => {
-        // O formulário permanece indisponível quando a verificação não responder.
-      });
   }, []);
 
   if (error) return <AdminError />;
   if (!data) return <AdminLoading />;
 
-  const canCreate = Boolean(
-    writeReadiness?.database.insert.available
-      && writeReadiness?.database.update.available,
-  );
+  const canCreate = true;
 
   async function createCategory() {
     if (!canCreate || name.trim() === '' || saveState === 'saving') return;
@@ -2598,7 +2533,6 @@ function CategoryEditorView({ csrfToken }: { csrfToken: string }) {
   const categoryId = match ? Number.parseInt(match[1], 10) : 0;
 
   const [data, setData] = useState<CategoryDetailPayload['data']>();
-  const [writeReadiness, setWriteReadiness] = useState<WriteReadinessPayload['data']>();
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
   const [description, setDescription] = useState('');
@@ -2626,24 +2560,13 @@ function CategoryEditorView({ csrfToken }: { csrfToken: string }) {
         setColor(category.color);
       })
       .catch(() => setError(true));
-
-    void adminFetch<WriteReadinessPayload>('/api/admin/write-readiness.php')
-      .then((payload) => {
-        if (payload.ok && payload.data) setWriteReadiness(payload.data);
-      })
-      .catch(() => {
-        // A edição permanece indisponível quando a verificação não responder.
-      });
   }, [categoryId]);
 
   if (error) return <AdminError />;
   if (!data) return <AdminLoading />;
 
   const category = data.category;
-  const canEdit = Boolean(
-    writeReadiness?.database.insert.available
-      && writeReadiness?.database.update.available,
-  );
+  const canEdit = true;
 
   const changed =
     name !== category.name
@@ -3168,12 +3091,17 @@ function UsersView() {
   );
 }
 
-function UserEditorView({ csrfToken }: { csrfToken: string }) {
+function UserEditorView({
+  user,
+  csrfToken,
+}: {
+  user: AdminUser;
+  csrfToken: string;
+}) {
   const match = window.location.pathname.match(/^\/sistema\/usuarios\/(\d+)\/?$/);
   const userId = match ? Number.parseInt(match[1], 10) : 0;
 
   const [data, setData] = useState<UserDetailPayload['data']>();
-  const [writeReadiness, setWriteReadiness] = useState<WriteReadinessPayload['data']>();
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
   const [role, setRole] = useState('');
@@ -3196,24 +3124,13 @@ function UserEditorView({ csrfToken }: { csrfToken: string }) {
         setRole(payload.data.user.roles[0] ?? '');
       })
       .catch(() => setError(true));
-
-    void adminFetch<WriteReadinessPayload>('/api/admin/write-readiness.php')
-      .then((payload) => {
-        if (payload.ok && payload.data) setWriteReadiness(payload.data);
-      })
-      .catch(() => {
-        // A edição permanece indisponível quando a verificação não responder.
-      });
   }, [userId]);
 
   if (error) return <AdminError />;
   if (!data) return <AdminLoading />;
 
-  const profileCanSave = Boolean(writeReadiness?.database.update.available);
-  const roleCanSave = data.canChangeRole && Boolean(
-    writeReadiness?.database.insert.available
-      && writeReadiness?.database.update.available,
-  );
+  const profileCanSave = user.permissions.editUsers;
+  const roleCanSave = user.permissions.editUsers && data.canChangeRole;
   const originalRole = data.user.roles[0] ?? '';
   const changed =
     displayName !== data.user.displayName
@@ -3381,7 +3298,6 @@ function MediaView({ csrfToken }: { csrfToken: string }) {
   const query = params.get('q') ?? '';
 
   const [data, setData] = useState<MediaPayload['data']>();
-  const [writeReadiness, setWriteReadiness] = useState<WriteReadinessPayload['data']>();
   const [uploadState, setUploadState] = useState<'idle' | 'uploading' | 'saved' | 'error'>('idle');
   const [error, setError] = useState(false);
 
@@ -3398,20 +3314,12 @@ function MediaView({ csrfToken }: { csrfToken: string }) {
         setData(payload.data);
       })
       .catch(() => setError(true));
-
-    void adminFetch<WriteReadinessPayload>('/api/admin/write-readiness.php')
-      .then((payload) => {
-        if (payload.ok && payload.data) setWriteReadiness(payload.data);
-      })
-      .catch(() => {
-        // Upload permanece indisponível quando a verificação não responder.
-      });
   }, [page, query]);
 
   if (error) return <AdminError />;
   if (!data) return <AdminLoading />;
 
-  const canUpload = Boolean(writeReadiness?.database.insert.available);
+  const canUpload = true;
 
   async function uploadFile(file: File) {
     if (!canUpload || uploadState === 'uploading') return;
@@ -3547,7 +3455,6 @@ function MediaItemView({ csrfToken }: { csrfToken: string }) {
   const mediaId = match ? Number.parseInt(match[1], 10) : 0;
 
   const [data, setData] = useState<MediaDetailPayload['data']>();
-  const [writeReadiness, setWriteReadiness] = useState<WriteReadinessPayload['data']>();
   const [title, setTitle] = useState('');
   const [alt, setAlt] = useState('');
   const [caption, setCaption] = useState('');
@@ -3572,25 +3479,13 @@ function MediaItemView({ csrfToken }: { csrfToken: string }) {
         setDescription(payload.data.media.description);
       })
       .catch(() => setError(true));
-
-    void adminFetch<WriteReadinessPayload>('/api/admin/write-readiness.php')
-      .then((payload) => {
-        if (payload.ok && payload.data) setWriteReadiness(payload.data);
-      })
-      .catch(() => {
-        // A edição permanece indisponível quando a verificação não responder.
-      });
   }, [mediaId]);
 
   if (error) return <AdminError />;
   if (!data) return <AdminLoading />;
 
   const media = data.media;
-  const canEdit = Boolean(
-    writeReadiness?.database.insert.available
-      && writeReadiness.database.update.available
-      && writeReadiness.database.delete.available,
-  );
+  const canEdit = true;
   const changed =
     title !== media.title
     || alt !== media.alt
@@ -3805,7 +3700,6 @@ function MediaItemView({ csrfToken }: { csrfToken: string }) {
 
 function SettingsView({ csrfToken }: { csrfToken: string }) {
   const [data, setData] = useState<SettingsPayload['data']>();
-  const [writeReadiness, setWriteReadiness] = useState<WriteReadinessPayload['data']>();
   const [values, setValues] = useState<Record<string, string>>({});
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [error, setError] = useState(false);
@@ -3818,23 +3712,12 @@ function SettingsView({ csrfToken }: { csrfToken: string }) {
         setValues(payload.data.options);
       })
       .catch(() => setError(true));
-
-    void adminFetch<WriteReadinessPayload>('/api/admin/write-readiness.php')
-      .then((payload) => {
-        if (payload.ok && payload.data) setWriteReadiness(payload.data);
-      })
-      .catch(() => {
-        // A edição permanece indisponível quando a verificação não responder.
-      });
   }, []);
 
   if (error) return <AdminError />;
   if (!data) return <AdminLoading />;
 
-  const canEdit = Boolean(
-    writeReadiness?.database.insert.available
-      && writeReadiness?.database.update.available,
-  );
+  const canEdit = true;
 
   const editableKeys = [
     'blogname',
@@ -4258,7 +4141,7 @@ export function AdminApp() {
               : <AdminAccessDenied />
           )}
           {view === 'users' && <UsersView />}
-          {view === 'user' && <UserEditorView csrfToken={csrfToken} />}
+          {view === 'user' && <UserEditorView user={user} csrfToken={csrfToken} />}
           {view === 'settings' && <SettingsView csrfToken={csrfToken} />}
           {view === 'pautas' && (
             user.login === 'agenciamobi' && user.permissions.managePautas
