@@ -37,6 +37,5 @@ nj_admin_run(['GET'], static function (): array {
 
     return [
         'options' => $values,
-        'mode' => 'read_only',
     ];
 });
