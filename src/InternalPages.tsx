@@ -153,10 +153,21 @@ function usePageMeta(
   title: string,
   description: string,
   canonicalPath: string,
-  options?: { type?: 'website' | 'article'; image?: string },
+  options?: {
+    type?: 'website' | 'article';
+    image?: string;
+    imageAlt?: string;
+    publishedAt?: string;
+    modifiedAt?: string;
+    section?: string;
+  },
 ) {
   const type = options?.type ?? 'website';
   const image = options?.image ?? '';
+  const imageAlt = options?.imageAlt ?? '';
+  const publishedAt = options?.publishedAt ?? '';
+  const modifiedAt = options?.modifiedAt ?? '';
+  const section = options?.section ?? '';
 
   useEffect(() => {
     if (!title) return;
@@ -168,13 +179,40 @@ function usePageMeta(
     ensurePropertyMeta('og:description', description);
     ensurePropertyMeta('og:url', new URL(canonicalPath, window.location.origin).toString());
     ensurePropertyMeta('og:type', type);
+    ensurePropertyMeta('og:site_name', 'Nosso Jornal');
+    ensureMeta('twitter:card', image ? 'summary_large_image' : 'summary');
+    ensureMeta('twitter:title', fullTitle);
+    ensureMeta('twitter:description', description);
 
     if (image) {
-      ensurePropertyMeta('og:image', new URL(image, window.location.origin).toString());
+      const imageUrl = new URL(image, window.location.origin).toString();
+      ensurePropertyMeta('og:image', imageUrl);
+      ensureMeta('twitter:image', imageUrl);
+    }
+
+    if (imageAlt) {
+      ensurePropertyMeta('og:image:alt', imageAlt);
+      ensureMeta('twitter:image:alt', imageAlt);
+    }
+
+    if (type === 'article') {
+      if (publishedAt) ensurePropertyMeta('article:published_time', publishedAt);
+      if (modifiedAt) ensurePropertyMeta('article:modified_time', modifiedAt);
+      if (section) ensurePropertyMeta('article:section', section);
     }
 
     setCanonical(canonicalPath);
-  }, [title, description, canonicalPath, image, type]);
+  }, [
+    title,
+    description,
+    canonicalPath,
+    image,
+    imageAlt,
+    modifiedAt,
+    publishedAt,
+    section,
+    type,
+  ]);
 }
 
 function formatDate(value: string, includeTime = true) {
@@ -360,36 +398,77 @@ function ArticlePage({ slug }: { slug: string }) {
     {
       type: 'article',
       image: article?.featuredImage?.url,
+      imageAlt: article?.featuredImage?.alt,
+      publishedAt: article?.publishedAt,
+      modifiedAt: article?.modifiedAt,
+      section: article?.primaryCategory?.name,
     },
   );
 
   const jsonLd = useMemo(() => {
     if (!article) return '';
 
+    const articleUrl = new URL(article.url, window.location.origin).toString();
+    const categoryUrl = article.primaryCategory
+      ? new URL(article.primaryCategory.url, window.location.origin).toString()
+      : null;
+
     return JSON.stringify({
       '@context': 'https://schema.org',
-      '@type': 'NewsArticle',
-      headline: article.title,
-      datePublished: article.publishedAt,
-      dateModified: article.modifiedAt,
-      mainEntityOfPage: new URL(article.url, window.location.origin).toString(),
-      image: article.featuredImage
-        ? [new URL(article.featuredImage.url, window.location.origin).toString()]
-        : undefined,
-      author: article.author.name
-        ? { '@type': 'Person', name: article.author.name }
-        : { '@type': 'Organization', name: 'Nosso Jornal' },
-      publisher: {
-        '@type': 'Organization',
-        name: 'Nosso Jornal',
-        url: window.location.origin,
-        logo: {
-          '@type': 'ImageObject',
-          url: new URL('/nosso-jornal-hulha-negra-bage.png', window.location.origin).toString(),
+      '@graph': [
+        {
+          '@type': 'NewsArticle',
+          '@id': `${articleUrl}#article`,
+          headline: article.title,
+          datePublished: article.publishedAt,
+          dateModified: article.modifiedAt,
+          mainEntityOfPage: articleUrl,
+          image: article.featuredImage
+            ? [new URL(article.featuredImage.url, window.location.origin).toString()]
+            : undefined,
+          author: article.author.name
+            ? { '@type': 'Person', name: article.author.name }
+            : { '@type': 'Organization', name: 'Nosso Jornal' },
+          publisher: {
+            '@type': 'Organization',
+            name: 'Nosso Jornal',
+            url: window.location.origin,
+            logo: {
+              '@type': 'ImageObject',
+              url: new URL('/nosso-jornal-hulha-negra-bage.png', window.location.origin).toString(),
+            },
+          },
+          articleSection: article.primaryCategory?.name,
+          description: article.excerpt,
+          inLanguage: 'pt-BR',
         },
-      },
-      articleSection: article.primaryCategory?.name,
-      description: article.excerpt,
+        {
+          '@type': 'BreadcrumbList',
+          '@id': `${articleUrl}#breadcrumb`,
+          itemListElement: [
+            {
+              '@type': 'ListItem',
+              position: 1,
+              name: 'Capa',
+              item: window.location.origin,
+            },
+            ...(article.primaryCategory && categoryUrl
+              ? [{
+                  '@type': 'ListItem',
+                  position: 2,
+                  name: article.primaryCategory.name,
+                  item: categoryUrl,
+                }]
+              : []),
+            {
+              '@type': 'ListItem',
+              position: article.primaryCategory ? 3 : 2,
+              name: article.title,
+              item: articleUrl,
+            },
+          ],
+        },
+      ],
     });
   }, [article]);
 
