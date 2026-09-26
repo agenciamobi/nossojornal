@@ -265,6 +265,10 @@ function nj_pautas_catalog_source(array $source): ?array
     $category = trim((string) ($source['category'] ?? ''));
     $feedUrl = trim((string) ($source['feedUrl'] ?? ''));
     $kind = trim((string) ($source['kind'] ?? ''));
+    $allowedKinds = ['fonte primária', 'jornalística', 'agregador', 'radar'];
+    if (!in_array($kind, $allowedKinds, true)) {
+        $kind = 'jornalística';
+    }
     $priority = max(0, min(100, (int) ($source['priority'] ?? 70)));
     $enabled = ($source['enabled'] ?? true) === true;
 
@@ -452,10 +456,15 @@ function nj_pautas_fetch_feed(string $url): array
             CURLOPT_TIMEOUT => 10,
             CURLOPT_USERAGENT => 'NossoJornalEditorial/1.0',
             CURLOPT_HTTPHEADER => ['Accept: application/rss+xml, application/atom+xml, application/xml, text/xml'],
-            CURLOPT_RESOLVE => [
-                (string) $target['host'] . ':443:' . (string) $target['ip'],
-            ],
         ]);
+
+        if (defined('CURLOPT_RESOLVE')) {
+            curl_setopt(
+                $curl,
+                CURLOPT_RESOLVE,
+                [(string) $target['host'] . ':443:' . (string) $target['ip']]
+            );
+        }
 
         if (defined('CURLOPT_PROTOCOLS') && defined('CURLPROTO_HTTPS')) {
             curl_setopt($curl, CURLOPT_PROTOCOLS, CURLPROTO_HTTPS);
@@ -471,6 +480,10 @@ function nj_pautas_fetch_feed(string $url): array
         if (!is_string($body) || $body === '' || $status < 200 || $status >= 400) {
             error_log('[nossojornal-pautas] feed=' . $url . ' status=' . $status . ' error=' . $error);
             throw new NjApiHttpException(502, 'feed_fetch_failed');
+        }
+
+        if (strlen($body) > 2 * 1024 * 1024) {
+            throw new NjApiHttpException(422, 'feed_too_large');
         }
 
         return [
@@ -496,6 +509,10 @@ function nj_pautas_fetch_feed(string $url): array
 
     if (!is_string($body) || $body === '') {
         throw new NjApiHttpException(502, 'feed_fetch_failed');
+    }
+
+    if (strlen($body) > 2 * 1024 * 1024) {
+        throw new NjApiHttpException(422, 'feed_too_large');
     }
 
     $status = 200;
@@ -905,6 +922,9 @@ nj_admin_run(['GET', 'POST'], static function (string $method): array {
         $name = trim((string) ($input['name'] ?? ''));
         $category = trim((string) ($input['category'] ?? ''));
         $kind = trim((string) ($input['kind'] ?? 'jornalística'));
+        if (!in_array($kind, ['fonte primária', 'jornalística', 'agregador', 'radar'], true)) {
+            throw new NjApiHttpException(422, 'invalid_feed_kind');
+        }
         $priority = max(0, min(100, (int) ($input['priority'] ?? 70)));
         $enabled = ($input['enabled'] ?? true) === true;
         $target = nj_pautas_validate_feed_url((string) ($input['feedUrl'] ?? ''));
