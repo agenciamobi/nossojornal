@@ -254,6 +254,8 @@ function usePageMeta(
     modifiedAt,
     publishedAt,
     section,
+    socialTitle,
+    socialDescription,
     type,
   ]);
 }
