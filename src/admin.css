@@ -3807,3 +3807,58 @@
     grid-template-columns: 1fr;
   }
 }
+
+
+.admin-radar-capture {
+  min-height: 31px;
+  border: 1px solid #2271b1;
+  border-radius: 3px;
+  padding: 0 10px;
+  background: #2271b1;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.admin-radar-capture:disabled {
+  border-color: #c3c4c7;
+  background: #dcdcde;
+  color: #8c8f94;
+  cursor: wait;
+}
+
+.admin-radar-result {
+  margin: -1px 0 0;
+  border-top: 1px solid #dcdcde;
+  border-bottom: 1px solid #dcdcde;
+  padding: 9px 12px;
+  background: #f0f6fc;
+  color: #135e96;
+  font-size: 9px;
+  font-weight: 650;
+}
+
+.admin-pautas-source__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-pautas-source__actions button {
+  min-height: 28px;
+  border: 1px solid #2271b1;
+  border-radius: 3px;
+  padding: 0 8px;
+  background: #fff;
+  color: #2271b1;
+  font-size: 8px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.admin-pautas-source__actions button:disabled {
+  border-color: #c3c4c7;
+  color: #8c8f94;
+  cursor: wait;
+}
