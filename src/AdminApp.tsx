@@ -793,6 +793,9 @@ function DashboardView({ user }: { user: AdminUser }) {
     ...(user.permissions.uploadFiles
       ? [{ label: 'Mídia', value: data.summary.media, href: '/sistema/midia' }]
       : []),
+    ...(user.permissions.moderateComments
+      ? [{ label: 'Comentários', value: data.summary.comments.pending, href: '/sistema/comentarios?status=pending' }]
+      : []),
     { label: 'Usuários', value: data.summary.users, href: user.permissions.listUsers ? '/sistema/usuarios' : '/sistema' },
   ];
 
@@ -873,7 +876,13 @@ function DashboardView({ user }: { user: AdminUser }) {
   );
 }
 
-function PostsView({ csrfToken }: { csrfToken: string }) {
+function PostsView({
+  user,
+  csrfToken,
+}: {
+  user: AdminUser;
+  csrfToken: string;
+}) {
   const params = useMemo(() => new URLSearchParams(window.location.search), []);
   const status = params.get('status') ?? 'all';
   const query = params.get('q') ?? '';
@@ -882,7 +891,9 @@ function PostsView({ csrfToken }: { csrfToken: string }) {
   const [data, setData] = useState<PostsPayload['data']>();
   const [writeReadiness, setWriteReadiness] = useState<WriteReadinessPayload['data']>();
   const [creating, setCreating] = useState(false);
+  const [postActionId, setPostActionId] = useState(0);
   const [createError, setCreateError] = useState(false);
+  const [actionError, setActionError] = useState(false);
   const [error, setError] = useState(false);
 
   useEffect(() => {
@@ -912,6 +923,100 @@ function PostsView({ csrfToken }: { csrfToken: string }) {
     writeReadiness?.database.insert.available
       && writeReadiness?.database.update.available,
   );
+
+  function canManageTrash(post: AdminPost) {
+    if (!writeReadiness?.database.insert.available
+      || !writeReadiness.database.update.available
+      || !writeReadiness.database.delete.available) {
+      return false;
+    }
+
+    const authorId = typeof post.author === 'string' ? 0 : post.author.id;
+    const ownsPost = authorId === user.id;
+
+    if (ownsPost && !user.capabilities.includes('delete_posts')) return false;
+    if (!ownsPost && !user.capabilities.includes('delete_others_posts')) return false;
+
+    if (
+      ['publish', 'future', 'private'].includes(post.status)
+      && !user.capabilities.includes('delete_published_posts')
+    ) {
+      return false;
+    }
+
+    return true;
+  }
+
+  async function changeTrash(post: AdminPost, action: 'trash' | 'restore') {
+    if (!canManageTrash(post) || postActionId > 0) return;
+
+    if (
+      action === 'trash'
+      && !window.confirm('Mover esta notícia para a lixeira?')
+    ) {
+      return;
+    }
+
+    setPostActionId(post.id);
+    setActionError(false);
+
+    try {
+      const payload = await adminFetch<{
+        ok: boolean;
+        data?: {
+          post: {
+            id: number;
+            status: string;
+            modifiedAt: string;
+            publicUrl: string | null;
+          };
+        };
+      }>('/api/admin/post-trash.php', {
+        method: 'POST',
+        headers: { 'X-CSRF-Token': csrfToken },
+        body: JSON.stringify({
+          postId: post.id,
+          action,
+        }),
+      });
+
+      if (!payload.ok || !payload.data) {
+        throw new Error('post_trash_invalid_response');
+      }
+
+      const nextStatus = payload.data.post.status;
+      const staysInCurrentFilter = status === 'all'
+        ? nextStatus !== 'trash'
+        : status === nextStatus;
+
+      setData((current) => current
+        ? {
+            ...current,
+            items: staysInCurrentFilter
+              ? current.items.map((item) => item.id === post.id
+                  ? {
+                      ...item,
+                      status: nextStatus,
+                      modifiedAt: payload.data!.post.modifiedAt,
+                      publicUrl: payload.data!.post.publicUrl,
+                    }
+                  : item)
+              : current.items.filter((item) => item.id !== post.id),
+            pagination: staysInCurrentFilter
+              ? current.pagination
+              : {
+                  ...current.pagination,
+                  total: Math.max(0, current.pagination.total - 1),
+                },
+          }
+        : current
+      );
+    } catch {
+      setActionError(true);
+    } finally {
+      setPostActionId(0);
+    }
+  }
 
   async function createDraft() {
     if (!canCreateDraft || creating) return;
@@ -975,6 +1080,12 @@ function PostsView({ csrfToken }: { csrfToken: string }) {
         </div>
       )}
 
+      {actionError && (
+        <div className="admin-save-feedback admin-save-feedback--error" role="alert">
+          Não foi possível atualizar a lixeira. Tente novamente.
+        </div>
+      )}
+
       <form className="admin-toolbar" method="get" action="/sistema/noticias">
         <div className="admin-filter-tabs" aria-label="Filtrar notícias por status">
           {[
@@ -983,6 +1094,7 @@ function PostsView({ csrfToken }: { csrfToken: string }) {
             ['draft', 'Rascunhos'],
             ['pending', 'Pendentes'],
             ['future', 'Agendadas'],
+            ['trash', 'Lixeira'],
           ].map(([value, label]) => (
             <a
               key={value}
@@ -1030,6 +1142,20 @@ function PostsView({ csrfToken }: { csrfToken: string }) {
                     <span>#{post.id}</span>
                     {post.publicUrl && post.status === 'publish' && (
                       <a href={post.publicUrl} target="_blank" rel="noopener noreferrer">Ver ↗</a>
+                    )}
+                    {canManageTrash(post) && (
+                      <button
+                        type="button"
+                        className={post.status === 'trash' ? 'admin-row-action-button' : 'admin-row-action-button admin-row-action-button--danger'}
+                        disabled={postActionId === post.id}
+                        onClick={() => void changeTrash(post, post.status === 'trash' ? 'restore' : 'trash')}
+                      >
+                        {postActionId === post.id
+                          ? 'Aguarde…'
+                          : post.status === 'trash'
+                            ? 'Restaurar'
+                            : 'Lixeira'}
+                      </button>
                     )}
                   </div>
                 </td>
@@ -2633,16 +2759,16 @@ function MediaView({ csrfToken }: { csrfToken: string }) {
       <section className="admin-media-grid" aria-label="Biblioteca de mídia">
         {data.items.map((item) => (
           <article className="admin-media-card" key={item.id}>
-            <div className="admin-media-card__preview">
+            <a className="admin-media-card__preview" href={'/sistema/midia/' + item.id}>
               {item.mimeType.startsWith('image/') ? (
                 <img src={item.url} alt={item.alt || item.title} loading="lazy" />
               ) : (
                 <span>{item.mimeType || 'arquivo'}</span>
               )}
-            </div>
+            </a>
 
             <div className="admin-media-card__body">
-              <strong>{item.title}</strong>
+              <strong><a href={'/sistema/midia/' + item.id}>{item.title}</a></strong>
               <small>{formatAdminDate(item.createdAt)}</small>
             </div>
           </article>
