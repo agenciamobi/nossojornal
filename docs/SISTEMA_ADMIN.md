@@ -1677,3 +1677,12 @@ passa a retornar somente correções marcadas como públicas.
 A seção de correções aparece abaixo do corpo da matéria e antes das notícias relacionadas.
 
 Esse recurso permite corrigir conteúdo sem apagar o histórico editorial relevante para o leitor.
+
+
+## Diagnóstico editorial
+
+Notícias e Páginas exibem um diagnóstico em tempo real durante a edição.
+
+A camada informa tempo estimado de leitura, palavras, tamanho de título e resumo, estrutura por subtítulos, quantidade de links e imagens, ausência de texto alternativo e referências externas. Também apresenta prévia de busca e contadores dos campos SEO.
+
+Ações rápidas permitem gerar o slug pelo título e copiar título/resumo para os metadados SEO. Nenhuma dessas ações publica ou reescreve conteúdo automaticamente.

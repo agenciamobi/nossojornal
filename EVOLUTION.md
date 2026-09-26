@@ -1862,3 +1862,25 @@ GET      /api/admin/post-activity.php
 ```
 
 A API pública de artigo passa a devolver as correções públicas vinculadas à notícia.
+
+
+## 34. Diagnóstico editorial em tempo real
+
+O editor de Notícias e Páginas recebeu uma camada de diagnóstico editorial inspirada em padrões observados em produtos de newsroom e publishing, sem incorporar dependências externas nem alterar a autoridade do banco legado.
+
+### Recursos
+
+- estimativa de tempo de leitura;
+- contagem de palavras;
+- faixa de tamanho para título e resumo;
+- leitura estrutural de H2/H3, links e imagens;
+- alerta para imagens do corpo sem texto alternativo;
+- contagem de referências externas;
+- prévia de resultado de busca;
+- contadores para título e descrição SEO;
+- ação rápida para gerar slug a partir do título;
+- ação rápida para reaproveitar título e resumo nos metadados SEO;
+- aplicação também no editor de Páginas;
+- métricas de estrutura diretamente na barra inferior do editor rico.
+
+A implementação é local ao frontend administrativo e não altera conteúdo automaticamente. O operador continua responsável por redação, revisão e publicação.
