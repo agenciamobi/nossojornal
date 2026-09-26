@@ -2,28 +2,7 @@
 declare(strict_types=1);
 
 require __DIR__ . '/_bootstrap.php';
-
-function nj_home_excerpt(string $excerpt, string $content, int $maxLength = 210): string
-{
-    $source = trim($excerpt) !== '' ? $excerpt : $content;
-    $text = html_entity_decode(strip_tags($source), ENT_QUOTES | ENT_HTML5, 'UTF-8');
-    $text = preg_replace('/\\s+/u', ' ', trim($text)) ?? trim($text);
-
-    if ($text === '') {
-        return '';
-    }
-
-    $length = function_exists('mb_strlen') ? mb_strlen($text, 'UTF-8') : strlen($text);
-    if ($length <= $maxLength) {
-        return $text;
-    }
-
-    $cut = function_exists('mb_substr')
-        ? mb_substr($text, 0, $maxLength - 1, 'UTF-8')
-        : substr($text, 0, $maxLength - 1);
-
-    return rtrim($cut, " \\t\\n\\r\\0\\x0B,.;:!?-") . '…';
-}
+require __DIR__ . '/_content.php';
 
 function nj_home_category_rank(string $slug): int
 {
@@ -236,9 +215,9 @@ SQL;
             )),
             'slug' => (string) $row['slug'],
             'url' => '/noticia/' . rawurlencode((string) $row['slug']),
-            'excerpt' => nj_home_excerpt((string) $row['excerpt'], (string) $row['content']),
-            'publishedAt' => (string) $row['published_at'],
-            'modifiedAt' => (string) $row['modified_at'],
+            'excerpt' => nj_content_excerpt((string) $row['excerpt'], (string) $row['content'], 210),
+            'publishedAt' => nj_content_iso8601((string) $row['published_at']),
+            'modifiedAt' => nj_content_iso8601((string) $row['modified_at']),
             'author' => [
                 'id' => (int) $row['author_id'],
                 'name' => trim((string) $row['author_name']),
@@ -369,4 +348,4 @@ SQL;
             'heroSelection' => $heroSelection,
         ],
     ];
-}, 'public, max-age=30, stale-while-revalidate=120');
+}, 'public, max-age=10, stale-while-revalidate=30');
