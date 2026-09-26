@@ -44,10 +44,11 @@ function nj_content_sanitize_html(string $html): string
         return '';
     }
 
-    $html = preg_replace('#<(script|style|form|input|button|textarea|select|object|embed|iframe)[^>]*>.*?</\\1>#is', '', $html) ?? $html;
-    $html = preg_replace('#<(script|style|form|input|button|textarea|select|object|embed|iframe)[^>]*/?>#is', '', $html) ?? $html;
+    $html = preg_replace('#<(script|style|form|input|button|textarea|select|object|embed|iframe|svg)[^>]*>.*?</\\1>#is', '', $html) ?? $html;
+    $html = preg_replace('#<(script|style|form|input|button|textarea|select|object|embed|iframe|svg)[^>]*/?>#is', '', $html) ?? $html;
     $html = preg_replace('/\\son[a-z]+\\s*=\\s*("[^"]*"|\'[^\']*\'|[^\\s>]+)/i', '', $html) ?? $html;
     $html = preg_replace('/\\sstyle\\s*=\\s*("[^"]*"|\'[^\']*\')/i', '', $html) ?? $html;
+    $html = preg_replace('/\\s(?:data-elementor-[a-z0-9_-]+|data-e-[a-z0-9_-]+)\\s*=\\s*("[^"]*"|\'[^\']*\')/i', '', $html) ?? $html;
     $html = preg_replace_callback(
         '/\\s(href|src)\\s*=\\s*(["\'])(.*?)\\2/i',
         static function (array $matches): string {
