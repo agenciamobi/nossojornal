@@ -421,6 +421,7 @@ nj_admin_run(['GET', 'POST'], static function (string $method): array {
     }
 
     $post = nj_editorial_require_post_access($pdo, $user, $postId);
+    $existingMeta = nj_editorial_meta_map($pdo, $postId);
 
     $stage = trim((string) ($body['stage'] ?? 'writing'));
     if (!in_array($stage, ['idea', 'reporting', 'writing', 'review', 'ready', 'scheduled', 'published'], true)) {
@@ -711,7 +712,7 @@ nj_admin_run(['GET', 'POST'], static function (string $method): array {
                 'hasCanonical' => $canonicalUrl !== '',
                 'hasOriginalSource' => $originalSourceUrl !== '',
                 'provenanceMode' => $provenanceMode,
-                'hasCapturedProvenance' => trim((string) ($meta[NJ_PROVENANCE_META_SOURCE_HASH] ?? '')) !== '',
+                'hasCapturedProvenance' => trim((string) ($existingMeta[NJ_PROVENANCE_META_SOURCE_HASH] ?? '')) !== '',
                 'relatedCount' => count($relatedPostIds),
                 'seriesSlug' => $seriesSlug,
             ]
