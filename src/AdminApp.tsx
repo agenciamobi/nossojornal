@@ -318,6 +318,10 @@ type UsersPayload = {
   data?: {
     items: AdminUser[];
     count: number;
+    query: string;
+    role: string;
+    roles: Array<{ key: string; name: string }>;
+    canCreate: boolean;
   };
 };
 
@@ -766,7 +770,7 @@ type AgendaPayload = {
   };
 };
 
-type AdminView = 'dashboard' | 'homeLayout' | 'agenda' | 'sources' | 'posts' | 'post' | 'pages' | 'page' | 'categories' | 'category' | 'categoryNew' | 'media' | 'mediaItem' | 'comments' | 'users' | 'user' | 'settings' | 'wordpress' | 'pautas';
+type AdminView = 'dashboard' | 'homeLayout' | 'agenda' | 'sources' | 'posts' | 'post' | 'pages' | 'page' | 'categories' | 'category' | 'categoryNew' | 'media' | 'mediaItem' | 'comments' | 'users' | 'user' | 'userNew' | 'settings' | 'wordpress' | 'pautas';
 
 function resolveAdminView(pathname: string): AdminView {
   const clean = pathname.replace(/\/+$/, '');
@@ -785,6 +789,7 @@ function resolveAdminView(pathname: string): AdminView {
   if (/^\/sistema\/midia\/\d+$/.test(clean)) return 'mediaItem';
   if (clean === '/sistema/comentarios') return 'comments';
   if (clean === '/sistema/usuarios') return 'users';
+  if (clean === '/sistema/usuarios/novo') return 'userNew';
   if (/^\/sistema\/usuarios\/\d+$/.test(clean)) return 'user';
   if (clean === '/sistema/configuracoes') return 'settings';
   if (clean === '/sistema/wordpress') return 'wordpress';
@@ -1261,7 +1266,7 @@ function AdminNav({ user, view }: { user: AdminUser; view: AdminView }) {
                       || (view === 'page' && entry.key === 'pages')
                       || ((view === 'category' || view === 'categoryNew') && entry.key === 'categories')
                       || (view === 'mediaItem' && entry.key === 'media')
-                      || (view === 'user' && entry.key === 'users')
+                      || ((view === 'user' || view === 'userNew') && entry.key === 'users')
                       ? 'admin-nav__item admin-nav__item--active'
                       : 'admin-nav__item'
                   }
@@ -1271,7 +1276,7 @@ function AdminNav({ user, view }: { user: AdminUser; view: AdminView }) {
                       || (view === 'page' && entry.key === 'pages')
                       || ((view === 'category' || view === 'categoryNew') && entry.key === 'categories')
                       || (view === 'mediaItem' && entry.key === 'media')
-                      || (view === 'user' && entry.key === 'users')
+                      || ((view === 'user' || view === 'userNew') && entry.key === 'users')
                       ? 'page'
                       : undefined
                   }
@@ -6172,28 +6177,73 @@ function SourcesView({ csrfToken }: { csrfToken: string }) {
 }
 
 function UsersView() {
+  const params = useMemo(() => new URLSearchParams(window.location.search), []);
+  const query = params.get('q') ?? '';
+  const role = params.get('role') ?? 'all';
+
   const [data, setData] = useState<UsersPayload['data']>();
   const [error, setError] = useState(false);
 
   useEffect(() => {
-    void adminFetch<UsersPayload>('/api/admin/users.php')
+    const search = new URLSearchParams();
+    if (query) search.set('q', query);
+    if (role !== 'all') search.set('role', role);
+
+    void adminFetch<UsersPayload>('/api/admin/users.php?' + search.toString())
       .then((payload) => {
         if (!payload.ok || !payload.data) throw new Error('users_invalid');
         setData(payload.data);
       })
       .catch(() => setError(true));
-  }, []);
+  }, [query, role]);
 
   if (error) return <AdminError />;
   if (!data) return <AdminLoading />;
 
   return (
     <>
-      <AdminPageHeader
-        eyebrow="Acesso"
-        title="Usuários"
-        description="Gerencie as contas com acesso ao painel."
-      />
+      <div className="admin-page-heading-row">
+        <AdminPageHeader
+          eyebrow="Acesso"
+          title="Usuários"
+          description="Gerencie contas, funções editoriais e perfis de autoria."
+        />
+
+        {data.canCreate && (
+          <a className="admin-create-button" href="/sistema/usuarios/novo">
+            + Novo usuário
+          </a>
+        )}
+      </div>
+
+      <form className="admin-toolbar" method="get" action="/sistema/usuarios">
+        <div className="admin-filter-tabs" aria-label="Filtrar usuários por função">
+          <a className={role === 'all' ? 'active' : ''} href="/sistema/usuarios">
+            Todos <span>{role === 'all' ? data.count : ''}</span>
+          </a>
+          {data.roles.map((item) => (
+            <a
+              key={item.key}
+              className={role === item.key ? 'active' : ''}
+              href={'/sistema/usuarios?role=' + encodeURIComponent(item.key)}
+            >
+              {roleLabel(item.key)}
+            </a>
+          ))}
+        </div>
+
+        <div className="admin-search">
+          <input
+            type="search"
+            name="q"
+            defaultValue={query}
+            placeholder="Buscar nome, login ou e-mail"
+            aria-label="Buscar usuários"
+          />
+          {role !== 'all' && <input type="hidden" name="role" value={role} />}
+          <button type="submit">Buscar</button>
+        </div>
+      </form>
 
       <div className="admin-table-wrap">
         <table className="admin-table">
@@ -6207,26 +6257,32 @@ function UsersView() {
             </tr>
           </thead>
           <tbody>
-            {data.items.map((user) => (
-              <tr key={user.id}>
+            {data.items.map((item) => (
+              <tr key={item.id}>
                 <td className="admin-user-cell">
-                  <span className="admin-avatar">{initials(user.displayName)}</span>
+                  <span className="admin-avatar">{initials(item.displayName)}</span>
                   <strong>
-                    <a href={'/sistema/usuarios/' + user.id}>{user.displayName}</a>
+                    <a href={'/sistema/usuarios/' + item.id}>{item.displayName}</a>
                   </strong>
                 </td>
-                <td><code>{user.login}</code></td>
-                <td><a href={'mailto:' + user.email}>{user.email}</a></td>
+                <td><code>{item.login}</code></td>
+                <td><a href={'mailto:' + item.email}>{item.email}</a></td>
                 <td>
                   <div className="admin-chips">
-                    {user.roles.map((role) => <span key={role}>{roleLabel(role)}</span>)}
+                    {item.roles.map((itemRole) => <span key={itemRole}>{roleLabel(itemRole)}</span>)}
                   </div>
                 </td>
-                <td>{formatAdminDate(user.registeredAt)}</td>
+                <td>{formatAdminDate(item.registeredAt)}</td>
               </tr>
             ))}
           </tbody>
         </table>
+
+        {data.items.length === 0 && (
+          <div className="admin-empty-state">
+            Nenhum usuário corresponde aos filtros atuais.
+          </div>
+        )}
       </div>
     </>
   );
