@@ -5,6 +5,7 @@ import {
   AdminEditorialConnections,
   type EditorialRelatedStory,
 } from './AdminEditorialConnections';
+import { AdminWordPressTools } from './AdminWordPressTools';
 import './admin.css';
 
 type AdminUser = {
@@ -677,7 +678,7 @@ type AgendaPayload = {
   };
 };
 
-type AdminView = 'dashboard' | 'homeLayout' | 'agenda' | 'sources' | 'posts' | 'post' | 'pages' | 'page' | 'categories' | 'category' | 'categoryNew' | 'media' | 'mediaItem' | 'comments' | 'users' | 'user' | 'settings' | 'pautas';
+type AdminView = 'dashboard' | 'homeLayout' | 'agenda' | 'sources' | 'posts' | 'post' | 'pages' | 'page' | 'categories' | 'category' | 'categoryNew' | 'media' | 'mediaItem' | 'comments' | 'users' | 'user' | 'settings' | 'wordpress' | 'pautas';
 
 function resolveAdminView(pathname: string): AdminView {
   const clean = pathname.replace(/\/+$/, '');
@@ -698,6 +699,7 @@ function resolveAdminView(pathname: string): AdminView {
   if (clean === '/sistema/usuarios') return 'users';
   if (/^\/sistema\/usuarios\/\d+$/.test(clean)) return 'user';
   if (clean === '/sistema/configuracoes') return 'settings';
+  if (clean === '/sistema/wordpress') return 'wordpress';
   if (clean === '/sistema/pautas') return 'pautas';
 
   return 'dashboard';
@@ -911,6 +913,7 @@ type AdminIconName =
   | 'comments'
   | 'users'
   | 'pautas'
+  | 'wordpress'
   | 'settings';
 
 function AdminIcon({ name }: { name: AdminIconName }) {
@@ -1034,6 +1037,16 @@ function AdminIcon({ name }: { name: AdminIconName }) {
     );
   }
 
+  if (name === 'wordpress') {
+    return (
+      <svg {...common}>
+        <ellipse cx="12" cy="5.5" rx="7.5" ry="3" />
+        <path d="M4.5 5.5v6c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3v-6" />
+        <path d="M4.5 11.5v6c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3v-6" />
+      </svg>
+    );
+  }
+
   return (
     <svg {...common}>
       <circle cx="12" cy="12" r="3.2" />
@@ -1082,7 +1095,10 @@ function AdminNav({ user, view }: { user: AdminUser; view: AdminView }) {
       ? [{ key: 'pautas' as const, label: 'Mesa de Pautas', href: '/sistema/pautas', icon: 'pautas' as const, group: 'management' as const }]
       : []),
     ...(user.permissions.manageOptions
-      ? [{ key: 'settings' as const, label: 'Configurações', href: '/sistema/configuracoes', icon: 'settings' as const, group: 'system' as const }]
+      ? [
+          { key: 'wordpress' as const, label: 'Acervo WordPress', href: '/sistema/wordpress', icon: 'wordpress' as const, group: 'system' as const },
+          { key: 'settings' as const, label: 'Configurações', href: '/sistema/configuracoes', icon: 'settings' as const, group: 'system' as const },
+        ]
       : []),
   ];
 
@@ -7171,6 +7187,11 @@ export function AdminApp() {
           {view === 'users' && <UsersView />}
           {view === 'user' && <UserEditorView user={user} csrfToken={csrfToken} />}
           {view === 'settings' && <SettingsView csrfToken={csrfToken} />}
+          {view === 'wordpress' && (
+            user.permissions.manageOptions
+              ? <AdminWordPressTools csrfToken={csrfToken} />
+              : <AdminAccessDenied />
+          )}
           {view === 'pautas' && (
             user.login === 'agenciamobi' && user.permissions.managePautas
               ? <PautasView csrfToken={csrfToken} />
