@@ -107,6 +107,8 @@ LIMIT 80
 SQL)->fetchAll();
 
     $items = [];
+    $timezone = new DateTimeZone('America/Sao_Paulo');
+    $now = new DateTimeImmutable('now', $timezone);
 
     foreach ($rows as $row) {
         $imageUrl = trim((string) $row['image_url']);
@@ -122,6 +124,17 @@ SQL)->fetchAll();
             $slot = 'automatic';
         }
 
+        $until = trim((string) $row['home_until']);
+        $active = $slot !== 'automatic';
+
+        if ($active && $until !== '') {
+            try {
+                $active = new DateTimeImmutable($until, $timezone) > $now;
+            } catch (Throwable) {
+                $active = false;
+            }
+        }
+
         $items[] = [
             'id' => (int) $row['id'],
             'title' => (string) $row['title'],
@@ -135,7 +148,8 @@ SQL)->fetchAll();
             'home' => [
                 'slot' => $slot,
                 'rank' => max(0, min(99, (int) $row['home_rank'])),
-                'until' => (string) $row['home_until'],
+                'until' => $until,
+                'active' => $active,
             ],
         ];
     }
@@ -146,6 +160,7 @@ SQL)->fetchAll();
 nj_admin_run(['GET', 'POST'], static function (string $method): array {
     $user = nj_admin_current_user(true);
     nj_admin_require_capability($user, 'publish_posts');
+    nj_admin_require_capability($user, 'edit_others_posts');
 
     $pdo = nj_db();
 
