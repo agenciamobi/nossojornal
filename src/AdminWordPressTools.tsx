@@ -58,6 +58,7 @@ type RedirectItem = {
   statusCode: number;
   enabled: boolean;
   note: string;
+  origin: 'automatic' | 'manual';
   createdAt: string;
   modifiedAt: string;
 };
@@ -468,7 +469,11 @@ export function AdminWordPressTools({ csrfToken }: { csrfToken: string }) {
                   </div>
                 </div>
                 <div className="admin-wp-redirect-list__meta">
-                  <span>{item.enabled ? 'Ativo' : 'Inativo'}</span>
+                  <span>
+                    {item.enabled ? 'Ativo' : 'Inativo'}
+                    {' · '}
+                    {item.origin === 'automatic' ? 'Automático' : 'Manual'}
+                  </span>
                   <small>{item.note || 'Sem nota'} · atualizado {date(item.modifiedAt)}</small>
                 </div>
                 <div className="admin-wp-redirect-list__actions">

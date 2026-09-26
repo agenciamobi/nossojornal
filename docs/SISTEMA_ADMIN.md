@@ -1770,3 +1770,13 @@ Eles são marcados com `data-nj-block` e recebem apresentação própria no port
 ### Metadados estruturados
 
 Tags alimentam `keywords` no `NewsArticle`. Matérias pertencentes a dossiês expõem `isPartOf: CreativeWorkSeries`.
+
+## Redirect automático ao alterar URL
+
+Notícias publicadas preservam a URL anterior quando o slug é alterado pelo editor.
+
+O save cria um redirecionamento `301` WordPress-backed dentro da mesma transação e reduz cadeias automáticas anteriores.
+
+Regras manuais possuem prioridade. Se a URL anterior já estiver coberta por uma regra manual, o Sistema não a substitui e exibe um aviso após salvar.
+
+A área `/sistema/wordpress` identifica regras automáticas e manuais. Editar uma regra automática manualmente transfere sua autoridade ao operador e ela deixa de ser sobrescrita por mudanças futuras de slug.

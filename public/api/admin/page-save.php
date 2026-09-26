@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require __DIR__ . '/_admin.php';
+require_once __DIR__ . '/_redirects.php';
 
 nj_admin_run(['POST'], static function (): array {
     $user = nj_admin_current_user(true);
@@ -88,6 +89,8 @@ SQL);
         ? $currentSlug
         : nj_admin_unique_page_slug($pdo, $pageId, $requestedSlug, $title);
 
+    $redirectResult = null;
+
     try {
         $pdo->beginTransaction();
 
@@ -115,6 +118,27 @@ SQL);
 
         nj_admin_upsert_postmeta($pdo, $pageId, '_yoast_wpseo_title', $seoTitle);
         nj_admin_upsert_postmeta($pdo, $pageId, '_yoast_wpseo_metadesc', $seoDescription);
+
+        $oldPublicUrl = nj_admin_page_public_url($currentSlug);
+        $newPublicUrl = nj_admin_page_public_url($slug);
+
+        if (
+            $status === 'publish'
+            && is_string($oldPublicUrl)
+            && is_string($newPublicUrl)
+            && $oldPublicUrl !== ''
+            && $newPublicUrl !== ''
+            && $oldPublicUrl !== $newPublicUrl
+        ) {
+            $redirectResult = nj_redirect_ensure_slug_change(
+                $pdo,
+                (int) $user['id'],
+                $oldPublicUrl,
+                $newPublicUrl,
+                'page',
+                $pageId
+            );
+        }
 
         $readBack = $pdo->prepare(<<<SQL
 SELECT
@@ -160,6 +184,7 @@ SQL);
     }
 
     return [
+        'redirect' => $redirectResult,
         'page' => [
             'id' => $pageId,
             'title' => $title,

@@ -1647,6 +1647,12 @@
   color: #b32d2e;
 }
 
+.admin-save-feedback--warning {
+  border-left-color: #dba617;
+  color: #6f5100;
+  background: #fffdf4;
+}
+
 
 
 .admin-page-heading-row {
