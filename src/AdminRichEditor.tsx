@@ -320,6 +320,45 @@ export function AdminRichEditor({
     emitVisualChange();
   }
 
+  function insertEditorialBlock(kind: 'context' | 'service' | 'numbers' | 'timeline') {
+    if (disabled || sourceMode) return;
+
+    const blocks: Record<typeof kind, string> = {
+      context: [
+        '<aside data-nj-block="context">',
+        '<strong>Entenda</strong>',
+        '<p>Explique aqui o contexto necessário para o leitor compreender a notícia.</p>',
+        '</aside>',
+        '<p><br></p>',
+      ].join(''),
+      service: [
+        '<aside data-nj-block="service">',
+        '<strong>Serviço</strong>',
+        '<p><b>Quando:</b> informe data e horário.</p>',
+        '<p><b>Onde:</b> informe o local.</p>',
+        '<p><b>Mais informações:</b> telefone, endereço ou link.</p>',
+        '</aside>',
+        '<p><br></p>',
+      ].join(''),
+      numbers: [
+        '<aside data-nj-block="numbers">',
+        '<strong>Em números</strong>',
+        '<ul><li><b>0</b> — descreva o indicador.</li><li><b>0%</b> — acrescente outro dado.</li></ul>',
+        '</aside>',
+        '<p><br></p>',
+      ].join(''),
+      timeline: [
+        '<aside data-nj-block="timeline">',
+        '<strong>Cronologia</strong>',
+        '<ul><li><b>00:00</b> — descreva o acontecimento.</li><li><b>00:00</b> — próximo marco.</li></ul>',
+        '</aside>',
+        '<p><br></p>',
+      ].join(''),
+    };
+
+    runCommand('insertHTML', blocks[kind]);
+  }
+
   function insertTable() {
     if (disabled || sourceMode) return;
 
@@ -533,6 +572,16 @@ export function AdminRichEditor({
               <AdminCommandButton label="Imagem" title="Inserir imagem da biblioteca" disabled={disabled || !loadMedia} onClick={() => void openMedia()} className="wide" />
               <AdminCommandButton label="Tabela" title="Inserir tabela" disabled={disabled} onClick={insertTable} className="wide" />
               <AdminCommandButton label="―" title="Inserir linha horizontal" disabled={disabled} onClick={() => runCommand('insertHorizontalRule')} />
+            </div>
+          </div>
+
+          <div className="admin-rich-editor__group">
+            <span>Blocos</span>
+            <div className="admin-rich-editor__buttons">
+              <AdminCommandButton label="Entenda" title="Inserir box de contexto" disabled={disabled} onClick={() => insertEditorialBlock('context')} className="wide" />
+              <AdminCommandButton label="Serviço" title="Inserir box de serviço" disabled={disabled} onClick={() => insertEditorialBlock('service')} className="wide" />
+              <AdminCommandButton label="Números" title="Inserir box de números" disabled={disabled} onClick={() => insertEditorialBlock('numbers')} className="wide" />
+              <AdminCommandButton label="Cronologia" title="Inserir cronologia" disabled={disabled} onClick={() => insertEditorialBlock('timeline')} className="wide" />
             </div>
           </div>
 
