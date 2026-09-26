@@ -4096,6 +4096,299 @@ function CommentsView({ csrfToken }: { csrfToken: string }) {
   );
 }
 
+function SourcesView({ csrfToken }: { csrfToken: string }) {
+  const params = useMemo(() => new URLSearchParams(window.location.search), []);
+  const query = params.get('q') ?? '';
+
+  const [data, setData] = useState<SourcesPayload['data']>();
+  const [editingId, setEditingId] = useState(0);
+  const [name, setName] = useState('');
+  const [organization, setOrganization] = useState('');
+  const [role, setRole] = useState('');
+  const [phone, setPhone] = useState('');
+  const [whatsapp, setWhatsapp] = useState('');
+  const [email, setEmail] = useState('');
+  const [city, setCity] = useState('');
+  const [topics, setTopics] = useState('');
+  const [url, setUrl] = useState('');
+  const [notes, setNotes] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<'idle' | 'saved' | 'error'>('idle');
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    const search = new URLSearchParams();
+    if (query) search.set('q', query);
+
+    void adminFetch<SourcesPayload>('/api/admin/sources.php?' + search.toString())
+      .then((payload) => {
+        if (!payload.ok || !payload.data) throw new Error('sources_invalid');
+        setData(payload.data);
+      })
+      .catch(() => setError(true));
+  }, [query]);
+
+  if (error) return <AdminError />;
+  if (!data) return <AdminLoading />;
+
+  function resetForm() {
+    setEditingId(0);
+    setName('');
+    setOrganization('');
+    setRole('');
+    setPhone('');
+    setWhatsapp('');
+    setEmail('');
+    setCity('');
+    setTopics('');
+    setUrl('');
+    setNotes('');
+    setMessage('idle');
+  }
+
+  function editSource(item: EditorialSourceContact) {
+    setEditingId(item.id);
+    setName(item.name);
+    setOrganization(item.organization);
+    setRole(item.role);
+    setPhone(item.phone);
+    setWhatsapp(item.whatsapp);
+    setEmail(item.email);
+    setCity(item.city);
+    setTopics(item.topics.join(', '));
+    setUrl(item.url);
+    setNotes(item.notes);
+    setMessage('idle');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  async function mutateSource(action: 'save' | 'trash') {
+    if (saving) return;
+    if (action === 'save' && !name.trim()) return;
+
+    setSaving(true);
+    setMessage('idle');
+
+    try {
+      const payload = await adminFetch<SourcesPayload>('/api/admin/sources.php', {
+        method: 'POST',
+        headers: { 'X-CSRF-Token': csrfToken },
+        body: JSON.stringify(
+          action === 'save'
+            ? {
+                action,
+                sourceId: editingId,
+                name,
+                organization,
+                role,
+                phone,
+                whatsapp,
+                email,
+                city,
+                topics: topics
+                  .split(/[,;\n]+/)
+                  .map((value) => value.trim())
+                  .filter(Boolean),
+                url,
+                notes,
+              }
+            : {
+                action,
+                sourceId: editingId,
+              },
+        ),
+      });
+
+      if (!payload.ok || !payload.data) throw new Error('source_mutation_invalid');
+
+      setData((current) => current
+        ? {
+            ...current,
+            items: payload.data!.items,
+          }
+        : payload.data
+      );
+      resetForm();
+      setMessage('saved');
+    } catch {
+      setMessage('error');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <>
+      <AdminPageHeader
+        eyebrow="Apuração"
+        title="Fontes"
+        description="Contatos, especialistas, órgãos e pessoas consultadas pela redação."
+      />
+
+      {message === 'saved' && (
+        <div className="admin-save-feedback admin-save-feedback--success" role="status">
+          Central de Fontes atualizada.
+        </div>
+      )}
+      {message === 'error' && (
+        <div className="admin-save-feedback admin-save-feedback--error" role="alert">
+          Não foi possível salvar a fonte. Verifique os dados e tente novamente.
+        </div>
+      )}
+
+      <div className="admin-sources-layout">
+        <aside className="admin-source-editor">
+          <section className="admin-editor-card">
+            <div className="admin-editor-card__head">
+              <span>{editingId ? 'Editar' : 'Nova'}</span>
+              <strong>{editingId ? 'Fonte #' + editingId : 'Cadastrar fonte'}</strong>
+            </div>
+
+            <div className="admin-editor-card__body admin-editor-card__body--fields">
+              <label className="admin-editor-field">
+                <span>Nome</span>
+                <input value={name} onChange={(event) => setName(event.target.value)} />
+              </label>
+
+              <label className="admin-editor-field">
+                <span>Organização</span>
+                <input value={organization} onChange={(event) => setOrganization(event.target.value)} />
+              </label>
+
+              <label className="admin-editor-field">
+                <span>Cargo / função</span>
+                <input value={role} onChange={(event) => setRole(event.target.value)} />
+              </label>
+
+              <div className="admin-source-editor__row">
+                <label className="admin-editor-field">
+                  <span>Telefone</span>
+                  <input value={phone} onChange={(event) => setPhone(event.target.value)} />
+                </label>
+                <label className="admin-editor-field">
+                  <span>WhatsApp</span>
+                  <input value={whatsapp} onChange={(event) => setWhatsapp(event.target.value)} />
+                </label>
+              </div>
+
+              <label className="admin-editor-field">
+                <span>E-mail</span>
+                <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} />
+              </label>
+
+              <label className="admin-editor-field">
+                <span>Cidade</span>
+                <input value={city} onChange={(event) => setCity(event.target.value)} />
+              </label>
+
+              <label className="admin-editor-field">
+                <span>Assuntos</span>
+                <input
+                  value={topics}
+                  placeholder="política, economia, saúde…"
+                  onChange={(event) => setTopics(event.target.value)}
+                />
+              </label>
+
+              <label className="admin-editor-field">
+                <span>Site / perfil oficial</span>
+                <input type="url" value={url} onChange={(event) => setUrl(event.target.value)} />
+              </label>
+
+              <label className="admin-editor-field">
+                <span>Observações privadas</span>
+                <textarea rows={6} value={notes} onChange={(event) => setNotes(event.target.value)} />
+              </label>
+
+              <div className="admin-source-editor__actions">
+                <button
+                  type="button"
+                  className="admin-button--primary"
+                  disabled={!name.trim() || saving}
+                  onClick={() => void mutateSource('save')}
+                >
+                  {saving ? 'Salvando…' : editingId ? 'Salvar fonte' : 'Cadastrar fonte'}
+                </button>
+
+                {editingId > 0 && (
+                  <>
+                    <button type="button" disabled={saving} onClick={resetForm}>
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      className="danger"
+                      disabled={saving}
+                      onClick={() => {
+                        if (window.confirm('Arquivar esta fonte?')) {
+                          void mutateSource('trash');
+                        }
+                      }}
+                    >
+                      Arquivar
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          </section>
+        </aside>
+
+        <section className="admin-sources-list">
+          <form className="admin-toolbar admin-toolbar--sources" method="get" action="/sistema/fontes">
+            <div className="admin-search">
+              <input
+                type="search"
+                name="q"
+                defaultValue={query}
+                placeholder="Buscar nome, órgão, cidade ou assunto"
+                aria-label="Buscar fontes"
+              />
+              <button type="submit">Buscar</button>
+            </div>
+          </form>
+
+          <div className="admin-source-cards">
+            {data.items.map((item) => (
+              <article className="admin-source-card" key={item.id}>
+                <button type="button" className="admin-source-card__main" onClick={() => editSource(item)}>
+                  <div className="admin-source-card__avatar">{initials(item.name)}</div>
+                  <div>
+                    <h2>{item.name}</h2>
+                    <p>
+                      {[item.role, item.organization, item.city].filter(Boolean).join(' • ') || 'Sem vínculo informado'}
+                    </p>
+                    {item.topics.length > 0 && (
+                      <div className="admin-source-card__topics">
+                        {item.topics.slice(0, 5).map((topic) => <span key={topic}>{topic}</span>)}
+                      </div>
+                    )}
+                  </div>
+                </button>
+
+                <div className="admin-source-card__contacts">
+                  {item.whatsapp && (
+                    <a href={'https://wa.me/' + item.whatsapp.replace(/\D+/g, '')} target="_blank" rel="noopener noreferrer">
+                      WhatsApp
+                    </a>
+                  )}
+                  {item.phone && <a href={'tel:' + item.phone.replace(/[^+\d]/g, '')}>Telefone</a>}
+                  {item.email && <a href={'mailto:' + item.email}>E-mail</a>}
+                  {item.url && <a href={item.url} target="_blank" rel="noopener noreferrer">Site ↗</a>}
+                </div>
+              </article>
+            ))}
+
+            {data.items.length === 0 && (
+              <div className="admin-empty-state">Nenhuma fonte encontrada.</div>
+            )}
+          </div>
+        </section>
+      </div>
+    </>
+  );
+}
+
 function UsersView() {
   const [data, setData] = useState<UsersPayload['data']>();
   const [error, setError] = useState(false);
@@ -5616,6 +5909,11 @@ export function AdminApp() {
           {view === 'comments' && (
             user.permissions.moderateComments
               ? <CommentsView csrfToken={csrfToken} />
+              : <AdminAccessDenied />
+          )}
+          {view === 'sources' && (
+            user.permissions.editPosts
+              ? <SourcesView csrfToken={csrfToken} />
               : <AdminAccessDenied />
           )}
           {view === 'users' && <UsersView />}
