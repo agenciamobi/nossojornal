@@ -1803,3 +1803,62 @@ manual ativo
 ```
 
 Destaques expirados são ignorados automaticamente.
+
+
+## 28. Revisões, colaboração e transparência editorial
+
+A segunda onda do sistema operacional de redação adiciona histórico e colaboração diretamente ao editor de notícias.
+
+### Autosave e revisões
+
+Nova entidade:
+
+```text
+nj_revision
+```
+
+O editor cria autosave privado após período de inatividade e guarda revisões anteriores antes de cada salvamento manual.
+
+Versões podem ser restauradas pelo próprio `/sistema`.
+
+### Comentários internos
+
+Nova entidade:
+
+```text
+nj_editorial_comment
+```
+
+Comentários são privados e podem ser resolvidos/reabertos.
+
+### Correções e atualizações
+
+Nova entidade:
+
+```text
+nj_correction
+```
+
+Registros podem ser internos ou públicos.
+
+Correções públicas passam a ser exibidas na matéria em uma área própria de transparência editorial.
+
+### Timeline
+
+Nova entidade:
+
+```text
+nj_activity
+```
+
+A timeline registra ações humanas relevantes da matéria e é exibida na lateral do editor.
+
+Novos endpoints:
+
+```text
+GET/POST /api/admin/post-revisions.php
+GET/POST /api/admin/post-collaboration.php
+GET      /api/admin/post-activity.php
+```
+
+A API pública de artigo passa a devolver as correções públicas vinculadas à notícia.
