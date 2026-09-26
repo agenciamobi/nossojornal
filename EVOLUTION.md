@@ -2178,3 +2178,29 @@ O card “Histórico e autosave” passa a:
 - manter restauração apenas onde o contrato é seguro.
 
 A próxima evolução é comparação de versões e, depois, restauração nativa com merge controlado.
+
+## 39. Comparação de versões e restore WordPress controlado
+
+A Timeline Editorial recebe uma etapa explícita de comparação antes da restauração.
+
+Cada revisão pode ser aberta em uma janela de comparação que mostra, lado a lado, a versão selecionada e o estado atual para:
+
+- título;
+- resumo;
+- conteúdo.
+
+A interface marca os campos alterados e impede restauração enquanto houver mudanças locais não salvas.
+
+### Restore de revisão nativa
+
+O endpoint `POST /api/admin/post-revisions.php` passa a aceitar:
+
+```text
+action = restore_wordpress
+```
+
+A operação restaura somente título, resumo e conteúdo da revisão `post_type=revision`.
+
+Slug, status, categorias, tags, SEO, imagem destacada e metadados editoriais permanecem intocados.
+
+Antes do update, o estado corrente é preservado com `nj_admin_create_revision(..., 'before_wordpress_restore')`. A mutation é transacional e registra `wordpress_revision_restored` na atividade da matéria.
