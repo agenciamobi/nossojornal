@@ -45,7 +45,7 @@ nj_admin_run(['GET'], static function (): array {
     } elseif ($status === 'trash') {
         $where[] = "c.comment_approved = 'trash'";
     } else {
-        $where[] = "c.comment_approved <> 'post-trashed'";
+        $where[] = "c.comment_approved IN ('0', '1')";
     }
 
     if ($query !== '') {
