@@ -2662,6 +2662,10 @@ function PostEditorView({
   }
 
   async function saveEditorialState(): Promise<EditorialWorkflowPayload['data']> {
+    if (!editorial) {
+      throw new Error('editorial_state_unavailable');
+    }
+
     const payload = await adminFetch<EditorialWorkflowPayload>('/api/admin/post-editorial.php', {
       method: 'POST',
       headers: { 'X-CSRF-Token': csrfToken },
@@ -2857,7 +2861,7 @@ function PostEditorView({
         }
 
         const saved = payload.data.post;
-        const savedCategories = data.categories
+        const savedCategories = (data?.categories ?? [])
           .filter((category) => saved.categoryIds.includes(category.id))
           .map((category) => ({
             id: category.id,
@@ -2906,6 +2910,7 @@ function PostEditorView({
   }
 
   async function changeStatus(action: 'publish' | 'draft' | 'schedule') {
+    if (!editorial) return;
     if (!canChangeStatus || statusState === 'working' || changed) return;
     if ((action === 'publish' || action === 'schedule') && !user.permissions.publishPosts) return;
 
@@ -5757,7 +5762,7 @@ function UserEditorView({
         method: 'POST',
         headers: { 'X-CSRF-Token': csrfToken },
         body: JSON.stringify({
-          userId: data.user.id,
+          userId: data?.user.id,
           displayName,
           email,
           role,
@@ -6694,7 +6699,7 @@ function PautasView({ csrfToken }: { csrfToken: string }) {
         return;
       }
 
-      const sources = data.sources ?? [];
+      const sources = data?.sources ?? [];
       let cursor = 0;
       let captured = 0;
       let failures = 0;
