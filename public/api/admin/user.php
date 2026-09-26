@@ -56,6 +56,7 @@ SQL);
 
     $usermeta = nj_table('usermeta');
     $posts = nj_table('posts');
+    $postmeta = nj_table('postmeta');
     $profileKeys = [
         'description',
         '_nj_public_bio',
@@ -84,15 +85,50 @@ SQL);
 
     $publishedStatement = $pdo->prepare(
         "SELECT COUNT(*)
-         FROM {$posts}
+         FROM {$posts} p
          WHERE
-             post_author = :user_id
-             AND post_type = 'post'
-             AND post_status = 'publish'
-             AND post_password = ''
-             AND post_name <> ''"
+             (
+                 p.post_author = :primary_author_id
+                 OR EXISTS (
+                     SELECT 1
+                     FROM {$postmeta} coauthor_meta
+                     WHERE
+                         coauthor_meta.post_id = p.ID
+                         AND coauthor_meta.meta_key = '_nj_coauthors'
+                         AND FIND_IN_SET(
+                             CAST(:coauthor_id AS CHAR),
+                             REPLACE(
+                                 REPLACE(
+                                     REPLACE(
+                                         REPLACE(
+                                             REPLACE(
+                                                 REPLACE(coauthor_meta.meta_value, '[', ''),
+                                                 ']', ''
+                                             ),
+                                             ' ',
+                                             ''
+                                         ),
+                                         CHAR(10),
+                                         ''
+                                     ),
+                                     CHAR(13),
+                                     ''
+                                 ),
+                                 CHAR(9),
+                                 ''
+                             )
+                         ) > 0
+                 )
+             )
+             AND p.post_type = 'post'
+             AND p.post_status = 'publish'
+             AND p.post_password = ''
+             AND p.post_name <> ''"
     );
-    $publishedStatement->execute(['user_id' => $id]);
+    $publishedStatement->execute([
+        'primary_author_id' => $id,
+        'coauthor_id' => $id,
+    ]);
     $publishedCount = (int) $publishedStatement->fetchColumn();
     $publicSlug = trim((string) ($row['user_nicename'] ?? ''));
 
