@@ -167,7 +167,7 @@ Podemos:
 
 Regra: não apagar o histórico legado ao migrar.
 
-### 2. Menus nativos
+### 2. Menus nativos — aplicada na Rodada 7
 
 Menus do WordPress são:
 
@@ -397,8 +397,8 @@ Nenhum desses projetos deve ser copiado diretamente. A utilidade está nos padr�
 ## Ordem recomendada das próximas rodadas
 
 1. revisar inventário real em `/sistema/wordpress`;
-2. revisões nativas e restauração;
-3. menus WordPress → header/footer com fallback;
+2. revisões nativas e restauração — concluída;
+3. menus WordPress → header/footer com fallback — concluída;
 4. mídia responsiva baseada em attachment metadata;
 5. redirects automáticos ao alterar slug;
 6. perfis públicos de autor;
@@ -464,3 +464,61 @@ demais postmeta
 Antes da mutation, o estado atual é gravado como `nj_revision`. A operação roda em transação e registra atividade editorial própria.
 
 A UI bloqueia restauração quando existem alterações não salvas no editor.
+
+## Rodada 7 — navegação WordPress-native
+
+O portal passa a reaproveitar menus reais do acervo sem depender do runtime WordPress.
+
+Novo contrato público:
+
+```text
+GET /api/v1/navigation.php
+```
+
+A API lê exclusivamente estruturas nativas:
+
+- termos `nav_menu`;
+- posts `nav_menu_item`;
+- `term_relationships`;
+- metadados `_menu_item_*`.
+
+### Resolução segura
+
+Itens são normalizados antes de chegar ao frontend.
+
+- posts publicados viram `/noticia/:slug`;
+- páginas publicadas viram `/:slug`;
+- categorias viram `/categoria/:slug`;
+- tags viram `/tag/:slug`;
+- links internos absolutos de `nossojornal.com.br` viram paths locais;
+- somente HTTP/HTTPS, `mailto:`, `tel:`, paths e fragments seguros entram no contrato;
+- objetos privados, ausentes ou de tipos não suportados são ignorados;
+- hierarquia possui profundidade limitada e proteção contra ciclos.
+
+Nenhuma option arbitrária é exposta. `nav_menu_options` continua fora do payload.
+
+### Header e rodapé
+
+O Header procura menus classificados por nome/slug como:
+
+```text
+primary / principal / main / header / cabeçalho / editorias
+utility / institucional / topo / superior
+```
+
+O rodapé procura:
+
+```text
+footer / rodapé
+```
+
+Quando não existe menu compatível, permanecem os fallbacks editoriais atuais. Isso impede que um acervo incompleto derrube navegação importante.
+
+Quando existe apenas um menu não vazio e ele possui pelo menos três itens, ele pode ser inferido como principal.
+
+O contrato preserva a árvore completa. O Header renderiza o primeiro nível e um submenu de segundo nível em desktop; no mobile mantém o primeiro nível horizontal. O rodapé usa grupos hierárquicos quando disponíveis.
+
+### Referência interna
+
+A implementação segue o princípio de `menu_location` observado no MOBI CMS: o renderer resolve uma localização lógica, enquanto o conteúdo do menu permanece separado da camada visual.
+

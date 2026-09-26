@@ -915,8 +915,25 @@ img {
   align-items: flex-start;
 }
 
+.site-footer__native-nav {
+  grid-column: span 3;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 42px;
+}
+
 .site-footer__column-title {
   margin-bottom: 17px;
+}
+
+.site-footer__column-title--link {
+  padding-block: 0 !important;
+  color: #7ea5f4 !important;
+}
+
+.site-footer__column-title--link:hover,
+.site-footer__column-title--link:focus-visible {
+  color: #fff !important;
 }
 
 .site-footer__mag-grid nav a,
@@ -999,6 +1016,12 @@ img {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .site-footer__native-nav {
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 30px;
+  }
+
   .site-footer__edition {
     padding-left: 0;
     border-left: 0;
@@ -1036,6 +1059,11 @@ img {
     grid-template-columns: 1fr 1fr;
     gap: 30px 22px;
     padding-block: 28px 34px;
+  }
+
+  .site-footer__native-nav {
+    grid-template-columns: 1fr 1fr;
+    gap: 28px 22px;
   }
 
   .site-footer__edition {
