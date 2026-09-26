@@ -508,6 +508,7 @@ type EditorialWorkflow = {
     slot: 'automatic' | 'hero' | 'featured';
     rank: number;
     until: string;
+    headline: string;
   };
 };
 
@@ -603,6 +604,7 @@ type HomeLayoutItem = {
     slot: 'automatic' | 'hero' | 'featured';
     rank: number;
     until: string;
+    headline: string;
     active: boolean;
   };
 };
@@ -1548,7 +1550,7 @@ function HomeLayoutView({ csrfToken }: { csrfToken: string }) {
     setDrafts((current) => ({
       ...current,
       [postId]: {
-        ...(current[postId] ?? { slot: 'automatic', rank: 0, until: '', active: false }),
+        ...(current[postId] ?? { slot: 'automatic', rank: 0, until: '', headline: '', active: false }),
         ...patch,
       },
     }));
@@ -1569,6 +1571,7 @@ function HomeLayoutView({ csrfToken }: { csrfToken: string }) {
           slot: draft.slot,
           rank: draft.rank,
           until: draft.until,
+          headline: draft.headline,
         }),
       });
 
@@ -1610,7 +1613,7 @@ function HomeLayoutView({ csrfToken }: { csrfToken: string }) {
             <article>
               {activeHero.imageUrl && <img src={activeHero.imageUrl} alt="" />}
               <div>
-                <strong>{activeHero.title}</strong>
+                <strong>{activeHero.home.headline || activeHero.title}</strong>
                 <a href={activeHero.publicUrl} target="_blank" rel="noopener noreferrer">Ver notícia ↗</a>
               </div>
             </article>
@@ -1659,6 +1662,18 @@ function HomeLayoutView({ csrfToken }: { csrfToken: string }) {
                     <option value="hero">Manchete principal</option>
                     <option value="featured">Destaque</option>
                   </select>
+                </label>
+
+                <label className="admin-home-item__headline">
+                  <span>Chamada da capa</span>
+                  <input
+                    type="text"
+                    maxLength={280}
+                    value={draft.headline}
+                    placeholder={item.title}
+                    disabled={draft.slot === 'automatic'}
+                    onChange={(event) => updateDraft(item.id, { headline: event.target.value })}
+                  />
                 </label>
 
                 <label>
@@ -2581,6 +2596,7 @@ function PostEditorView({
         homeSlot: editorial.home.slot,
         homeRank: editorial.home.rank,
         homeUntil: editorial.home.until,
+        homeHeadline: editorial.home.headline,
       }),
     });
 
@@ -3682,6 +3698,22 @@ function PostEditorView({
                           home: {
                             ...editorial.home,
                             until: event.target.value,
+                          },
+                        })}
+                      />
+                    </label>
+                    <label>
+                      <span>Chamada alternativa</span>
+                      <input
+                        type="text"
+                        maxLength={280}
+                        value={editorial.home.headline}
+                        placeholder={title}
+                        disabled={!canEdit}
+                        onChange={(event) => patchEditorial({
+                          home: {
+                            ...editorial.home,
+                            headline: event.target.value,
                           },
                         })}
                       />
