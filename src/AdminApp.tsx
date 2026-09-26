@@ -4695,6 +4695,16 @@ export function AdminApp() {
 
         <main className="admin-content">
           {view === 'dashboard' && <DashboardView user={user} />}
+          {view === 'homeLayout' && (
+            user.permissions.publishPosts
+              ? <HomeLayoutView csrfToken={csrfToken} />
+              : <AdminAccessDenied />
+          )}
+          {view === 'agenda' && (
+            user.permissions.editPosts
+              ? <AgendaView csrfToken={csrfToken} />
+              : <AdminAccessDenied />
+          )}
           {view === 'posts' && <PostsView user={user} csrfToken={csrfToken} />}
           {view === 'post' && <PostEditorView user={user} csrfToken={csrfToken} />}
           {view === 'pages' && (
