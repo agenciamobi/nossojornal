@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require __DIR__ . '/_admin.php';
+require_once __DIR__ . '/../v1/_authors.php';
 
 nj_admin_run(['GET'], static function (): array {
     $currentUser = nj_admin_current_user(true);
@@ -25,6 +26,8 @@ SELECT
     user_email,
     user_registered,
     user_status,
+    user_nicename,
+    user_url,
     display_name
 FROM {$users}
 WHERE ID = :id
@@ -51,8 +54,63 @@ SQL);
         ];
     }
 
+    $usermeta = nj_table('usermeta');
+    $posts = nj_table('posts');
+    $profileKeys = [
+        '_nj_public_bio',
+        '_nj_public_role',
+        '_nj_public_instagram',
+        '_nj_public_facebook',
+        '_nj_public_linkedin',
+        '_nj_public_x',
+    ];
+    $placeholders = implode(',', array_fill(0, count($profileKeys), '?'));
+    $profileStatement = $pdo->prepare(
+        "SELECT meta_key, meta_value
+         FROM {$usermeta}
+         WHERE user_id = ? AND meta_key IN ({$placeholders})
+         ORDER BY umeta_id DESC"
+    );
+    $profileStatement->execute(array_merge([$id], $profileKeys));
+
+    $profileMeta = [];
+    foreach ($profileStatement->fetchAll() as $profileRow) {
+        $key = (string) $profileRow['meta_key'];
+        if (!array_key_exists($key, $profileMeta)) {
+            $profileMeta[$key] = (string) $profileRow['meta_value'];
+        }
+    }
+
+    $publishedStatement = $pdo->prepare(
+        "SELECT COUNT(*)
+         FROM {$posts}
+         WHERE
+             post_author = :user_id
+             AND post_type = 'post'
+             AND post_status = 'publish'
+             AND post_password = ''
+             AND post_name <> ''"
+    );
+    $publishedStatement->execute(['user_id' => $id]);
+    $publishedCount = (int) $publishedStatement->fetchColumn();
+    $publicSlug = trim((string) ($row['user_nicename'] ?? ''));
+
     return [
         'user' => nj_admin_user_payload($pdo, $row),
+        'publicProfile' => [
+            'slug' => $publicSlug,
+            'url' => $publicSlug !== '' && $publishedCount > 0
+                ? '/autor/' . rawurlencode($publicSlug)
+                : null,
+            'publishedCount' => $publishedCount,
+            'bio' => (string) ($profileMeta['_nj_public_bio'] ?? ''),
+            'role' => (string) ($profileMeta['_nj_public_role'] ?? ''),
+            'website' => (string) ($row['user_url'] ?? ''),
+            'instagram' => (string) ($profileMeta['_nj_public_instagram'] ?? ''),
+            'facebook' => (string) ($profileMeta['_nj_public_facebook'] ?? ''),
+            'linkedin' => (string) ($profileMeta['_nj_public_linkedin'] ?? ''),
+            'x' => (string) ($profileMeta['_nj_public_x'] ?? ''),
+        ],
         'roles' => $roles,
         'canChangeRole' => in_array('promote_users', $currentUser['capabilities'], true)
             && (int) $currentUser['id'] !== $id
