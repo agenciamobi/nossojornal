@@ -179,6 +179,15 @@ type UsersPayload = {
   };
 };
 
+type UserDetailPayload = {
+  ok: boolean;
+  data?: {
+    user: AdminUser;
+    roles: Array<{ key: string; name: string }>;
+    canChangeRole: boolean;
+  };
+};
+
 
 type MediaPayload = {
   ok: boolean;
@@ -258,7 +267,7 @@ type PautasPayload = {
   };
 };
 
-type AdminView = 'dashboard' | 'posts' | 'post' | 'categories' | 'category' | 'media' | 'users' | 'settings' | 'pautas';
+type AdminView = 'dashboard' | 'posts' | 'post' | 'categories' | 'category' | 'media' | 'users' | 'user' | 'settings' | 'pautas';
 
 function resolveAdminView(pathname: string): AdminView {
   const clean = pathname.replace(/\/+$/, '');
@@ -269,6 +278,7 @@ function resolveAdminView(pathname: string): AdminView {
   if (/^\/sistema\/categorias\/\d+$/.test(clean)) return 'category';
   if (clean === '/sistema/midia') return 'media';
   if (clean === '/sistema/usuarios') return 'users';
+  if (/^\/sistema\/usuarios\/\d+$/.test(clean)) return 'user';
   if (clean === '/sistema/configuracoes') return 'settings';
   if (clean === '/sistema/pautas') return 'pautas';
 
@@ -583,6 +593,7 @@ function AdminNav({ user, view }: { user: AdminUser; view: AdminView }) {
                     view === entry.key
                       || (view === 'post' && entry.key === 'posts')
                       || (view === 'category' && entry.key === 'categories')
+                      || (view === 'user' && entry.key === 'users')
                       ? 'admin-nav__item admin-nav__item--active'
                       : 'admin-nav__item'
                   }
@@ -590,6 +601,7 @@ function AdminNav({ user, view }: { user: AdminUser; view: AdminView }) {
                     view === entry.key
                       || (view === 'post' && entry.key === 'posts')
                       || (view === 'category' && entry.key === 'categories')
+                      || (view === 'user' && entry.key === 'users')
                       ? 'page'
                       : undefined
                   }
@@ -697,7 +709,6 @@ function AdminError() {
 
 function DashboardView({ user }: { user: AdminUser }) {
   const [data, setData] = useState<DashboardPayload['data']>();
-  const [writeReadiness, setWriteReadiness] = useState<WriteReadinessPayload['data']>();
   const [error, setError] = useState(false);
 
   useEffect(() => {
@@ -708,16 +719,7 @@ function DashboardView({ user }: { user: AdminUser }) {
       })
       .catch(() => setError(true));
 
-    if (user.permissions.manageOptions) {
-      void adminFetch<WriteReadinessPayload>('/api/admin/write-readiness.php')
-        .then((payload) => {
-          if (payload.ok && payload.data) setWriteReadiness(payload.data);
-        })
-        .catch(() => {
-          // O dashboard continua funcional mesmo se o probe não estiver disponível.
-        });
-    }
-  }, [user.permissions.manageOptions]);
+  }, []);
 
   if (error) return <AdminError />;
   if (!data) return <AdminLoading />;
