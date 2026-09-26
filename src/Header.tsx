@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import type { CSSProperties } from 'react';
 import './header.css';
 
 type Category = {
@@ -11,6 +12,7 @@ type Category = {
   legacyCount: number;
   publishedCount: number;
   latestPublishedAt: string | null;
+  color: string;
   children?: Category[];
 };
 
@@ -144,6 +146,7 @@ export function SiteHeader() {
   const [categoryState, setCategoryState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [latestState, setLatestState] = useState<'loading' | 'ready' | 'error'>('loading');
   const editionDate = useMemo(formatEditionDate, []);
+  const currentPath = window.location.pathname.replace(/\/+$/, '') || '/';
 
   useEffect(() => {
     const controller = new AbortController();
@@ -273,11 +276,21 @@ export function SiteHeader() {
         >
           <a href="/ultimas">Últimas</a>
 
-          {editorialCategories.map((category) => (
-            <a key={category.id} href={category.url}>
-              {category.name}
-            </a>
-          ))}
+          {editorialCategories.map((category) => {
+            const active = currentPath === category.url;
+
+            return (
+              <a
+                key={category.id}
+                href={category.url}
+                className="primary-nav__category"
+                aria-current={active ? 'page' : undefined}
+                style={{ '--category-color': category.color } as CSSProperties}
+              >
+                {category.name}
+              </a>
+            );
+          })}
 
           {categoryState === 'loading' && (
             <span className="primary-nav__status" aria-live="polite">
@@ -300,11 +313,21 @@ export function SiteHeader() {
               Cobertura Regional
             </a>
             <div className="regional-nav__scroll">
-              {regionalCities.map((city) => (
-                <a key={city.id} href={city.url}>
-                  {city.name}
-                </a>
-              ))}
+              {regionalCities.map((city) => {
+                const active = currentPath === city.url;
+
+                return (
+                  <a
+                    key={city.id}
+                    href={city.url}
+                    className="regional-nav__category"
+                    aria-current={active ? 'page' : undefined}
+                    style={{ '--category-color': city.color } as CSSProperties}
+                  >
+                    {city.name}
+                  </a>
+                );
+              })}
             </div>
           </div>
         </nav>
