@@ -39,7 +39,7 @@ function nj_system_start_session(): void
     session_name(NJ_SYSTEM_SESSION_NAME);
     session_set_cookie_params([
         'lifetime' => 0,
-        'path' => '/sistema',
+        'path' => '/',
         'domain' => '',
         'secure' => $secure,
         'httponly' => true,
