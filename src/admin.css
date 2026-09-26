@@ -4619,6 +4619,59 @@
   font-size: 10px;
 }
 
+.admin-revision-list__title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.admin-revision-source {
+  display: inline-flex;
+  align-items: center;
+  min-height: 18px;
+  border-radius: 999px;
+  padding: 0 7px;
+  background: #eef2f7;
+  color: #4a5568;
+  font-size: 7px;
+  font-style: normal;
+  font-weight: 800;
+  letter-spacing: .02em;
+  white-space: nowrap;
+}
+
+.admin-revision-source--wordpress {
+  background: #f1f0ff;
+  color: #5842a5;
+}
+
+.admin-revision-source--nossojornal {
+  background: #eaf2ff;
+  color: #0a3284;
+}
+
+.admin-revision-list__headline {
+  overflow: hidden;
+  max-width: 390px;
+  color: #3c434a !important;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-revision-readonly {
+  flex: 0 0 auto;
+  border: 1px solid #dcdcde;
+  border-radius: 999px;
+  padding: 5px 8px;
+  background: #f6f7f7;
+  color: #646970 !important;
+  font-size: 8px !important;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 .admin-revision-list span,
 .admin-revision-list small {
   color: #787c82;
