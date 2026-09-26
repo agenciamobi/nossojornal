@@ -13,6 +13,7 @@ const NJ_EDITORIAL_META_CHECKLIST = '_nj_editorial_checklist';
 const NJ_EDITORIAL_META_HOME_SLOT = '_nj_home_slot';
 const NJ_EDITORIAL_META_HOME_RANK = '_nj_home_rank';
 const NJ_EDITORIAL_META_HOME_UNTIL = '_nj_home_until';
+const NJ_EDITORIAL_META_HOME_HEADLINE = '_nj_home_headline';
 
 function nj_editorial_meta_map(PDO $pdo, int $postId): array
 {
@@ -28,6 +29,7 @@ function nj_editorial_meta_map(PDO $pdo, int $postId): array
         NJ_EDITORIAL_META_HOME_SLOT,
         NJ_EDITORIAL_META_HOME_RANK,
         NJ_EDITORIAL_META_HOME_UNTIL,
+        NJ_EDITORIAL_META_HOME_HEADLINE,
     ];
     $placeholders = implode(',', array_fill(0, count($keys), '?'));
 
@@ -257,6 +259,7 @@ function nj_editorial_payload(PDO $pdo, array $post, array $meta): array
             'slot' => $homeSlot,
             'rank' => max(0, min(99, (int) ($meta[NJ_EDITORIAL_META_HOME_RANK] ?? 0))),
             'until' => (string) ($meta[NJ_EDITORIAL_META_HOME_UNTIL] ?? ''),
+            'headline' => (string) ($meta[NJ_EDITORIAL_META_HOME_HEADLINE] ?? ''),
         ],
     ];
 }
@@ -393,6 +396,25 @@ nj_admin_run(['GET', 'POST'], static function (string $method): array {
     }
 
     $homeRank = max(0, min(99, (int) ($body['homeRank'] ?? 0)));
+    $homeHeadline = trim((string) ($body['homeHeadline'] ?? ''));
+
+    if ((function_exists('mb_strlen') ? mb_strlen($homeHeadline, 'UTF-8') : strlen($homeHeadline)) > 280) {
+        throw new NjApiHttpException(422, 'home_headline_too_large');
+    }
+
+    if (
+        ($homeSlot !== 'automatic' || $homeHeadline !== '')
+        && !in_array('publish_posts', $user['capabilities'], true)
+    ) {
+        throw new NjApiHttpException(403, 'insufficient_permissions');
+    }
+
+    if (
+        ($homeSlot !== 'automatic' || $homeHeadline !== '')
+        && !in_array('edit_others_posts', $user['capabilities'], true)
+    ) {
+        throw new NjApiHttpException(403, 'insufficient_permissions');
+    }
 
     try {
         $pdo->beginTransaction();
@@ -417,6 +439,7 @@ nj_admin_run(['GET', 'POST'], static function (string $method): array {
         nj_admin_upsert_postmeta($pdo, $postId, NJ_EDITORIAL_META_HOME_SLOT, $homeSlot);
         nj_admin_upsert_postmeta($pdo, $postId, NJ_EDITORIAL_META_HOME_RANK, (string) $homeRank);
         nj_admin_upsert_postmeta($pdo, $postId, NJ_EDITORIAL_META_HOME_UNTIL, $homeUntil);
+        nj_admin_upsert_postmeta($pdo, $postId, NJ_EDITORIAL_META_HOME_HEADLINE, $homeHeadline);
 
         $posts = nj_table('posts');
         $touch = $pdo->prepare(
