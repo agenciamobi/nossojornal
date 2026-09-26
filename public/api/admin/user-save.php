@@ -315,6 +315,7 @@ SQL);
                 : null,
             'publishedCount' => $publishedCount,
             'bio' => $publicBio,
+            'bioSource' => $publicBio !== '' ? 'nossojornal' : 'empty',
             'role' => $publicRole,
             'website' => $website,
             'instagram' => $socialUrls['instagram'],
