@@ -1008,15 +1008,29 @@ function PostsView({ csrfToken }: { csrfToken: string }) {
   );
 }
 
-function PostEditorView({ csrfToken }: { csrfToken: string }) {
+function PostEditorView({
+  user,
+  csrfToken,
+}: {
+  user: AdminUser;
+  csrfToken: string;
+}) {
   const match = window.location.pathname.match(/^\/sistema\/noticias\/(\d+)\/?$/);
   const postId = match ? Number.parseInt(match[1], 10) : 0;
+
   const [data, setData] = useState<PostDetailPayload['data']>();
   const [writeReadiness, setWriteReadiness] = useState<WriteReadinessPayload['data']>();
   const [title, setTitle] = useState('');
+  const [slug, setSlug] = useState('');
   const [excerpt, setExcerpt] = useState('');
   const [content, setContent] = useState('');
+  const [categoryIds, setCategoryIds] = useState<number[]>([]);
+  const [seoTitle, setSeoTitle] = useState('');
+  const [seoDescription, setSeoDescription] = useState('');
+  const [primaryCategoryId, setPrimaryCategoryId] = useState(0);
+  const [scheduledAt, setScheduledAt] = useState('');
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [statusState, setStatusState] = useState<'idle' | 'working' | 'saved' | 'error'>('idle');
   const [error, setError] = useState(false);
 
   useEffect(() => {
@@ -1028,10 +1042,17 @@ function PostEditorView({ csrfToken }: { csrfToken: string }) {
     void adminFetch<PostDetailPayload>('/api/admin/post.php?id=' + postId)
       .then((payload) => {
         if (!payload.ok || !payload.data) throw new Error('post_invalid');
+
+        const post = payload.data.post;
         setData(payload.data);
-        setTitle(payload.data.post.title);
-        setExcerpt(payload.data.post.excerpt);
-        setContent(payload.data.post.content);
+        setTitle(post.title);
+        setSlug(post.slug);
+        setExcerpt(post.excerpt);
+        setContent(post.content);
+        setCategoryIds(post.categories.map((category) => category.id));
+        setSeoTitle(post.seo.title);
+        setSeoDescription(post.seo.description);
+        setPrimaryCategoryId(post.seo.primaryCategoryId);
       })
       .catch(() => setError(true));
 
@@ -1040,7 +1061,7 @@ function PostEditorView({ csrfToken }: { csrfToken: string }) {
         if (payload.ok && payload.data) setWriteReadiness(payload.data);
       })
       .catch(() => {
-        // O editor permanece somente leitura se o probe não estiver disponível.
+        // As ações permanecem indisponíveis quando a verificação não responder.
       });
   }, [postId]);
 
@@ -1048,12 +1069,42 @@ function PostEditorView({ csrfToken }: { csrfToken: string }) {
   if (!data) return <AdminLoading />;
 
   const post = data.post;
-  const selectedCategoryIds = new Set(post.categories.map((category) => category.id));
-  const canSaveDraft = post.status === 'draft' && Boolean(writeReadiness?.database.update.available);
-  const draftChanged = title !== post.title || excerpt !== post.excerpt || content !== post.content;
+  const selectedSet = new Set(categoryIds);
+  const selectedCategories = data.categories.filter((category) => selectedSet.has(category.id));
+  const originalCategoryIds = post.categories.map((category) => category.id).sort((a, b) => a - b);
+  const normalizedCategoryIds = [...categoryIds].sort((a, b) => a - b);
 
-  async function saveDraft() {
-    if (!canSaveDraft || !draftChanged || saveState === 'saving') return;
+  const ownsPost = post.author.id === user.id;
+  const canEditOthers = user.capabilities.includes('edit_others_posts');
+  const canEditPublished = user.capabilities.includes('edit_published_posts');
+  const publishedLike = ['publish', 'future', 'private'].includes(post.status);
+
+  const databaseCanEdit = Boolean(
+    writeReadiness?.database.insert.available
+      && writeReadiness?.database.update.available
+      && writeReadiness?.database.delete.available,
+  );
+  const databaseCanChangeStatus = Boolean(writeReadiness?.database.update.available);
+  const canEdit = databaseCanEdit
+    && (ownsPost || canEditOthers)
+    && (!publishedLike || canEditPublished);
+
+  const changed =
+    title !== post.title
+    || slug !== post.slug
+    || excerpt !== post.excerpt
+    || content !== post.content
+    || seoTitle !== post.seo.title
+    || seoDescription !== post.seo.description
+    || primaryCategoryId !== post.seo.primaryCategoryId
+    || JSON.stringify(normalizedCategoryIds) !== JSON.stringify(originalCategoryIds);
+
+  const canChangeStatus = databaseCanChangeStatus
+    && (ownsPost || canEditOthers)
+    && (!publishedLike || canEditPublished);
+
+  async function savePost() {
+    if (!canEdit || !changed || saveState === 'saving') return;
 
     setSaveState('saving');
 
@@ -1064,51 +1115,146 @@ function PostEditorView({ csrfToken }: { csrfToken: string }) {
           post: {
             id: number;
             title: string;
+            slug: string;
             excerpt: string;
             content: string;
-            status: 'draft';
+            status: string;
+            categoryIds: number[];
+            seo: {
+              title: string;
+              description: string;
+              primaryCategoryId: number;
+            };
             modifiedAt: string;
-          };
-          mutation: {
-            verifiedByReadBack: boolean;
-            publishedContentTouched: boolean;
+            publicUrl: string | null;
           };
         };
-      }>('/api/admin/post-draft.php', {
+      }>('/api/admin/post-save.php', {
         method: 'POST',
-        headers: {
-          'X-CSRF-Token': csrfToken,
-        },
+        headers: { 'X-CSRF-Token': csrfToken },
         body: JSON.stringify({
           postId: post.id,
           title,
+          slug,
           excerpt,
           content,
+          categoryIds,
+          seoTitle,
+          seoDescription,
+          primaryCategoryId,
         }),
       });
 
       if (!payload.ok || !payload.data) {
-        throw new Error('draft_invalid_response');
+        throw new Error('post_save_invalid_response');
       }
+
+      const saved = payload.data.post;
+      const savedCategories = data.categories
+        .filter((category) => saved.categoryIds.includes(category.id))
+        .map((category) => ({
+          id: category.id,
+          name: category.name,
+          slug: category.slug,
+        }));
 
       setData((current) => current
         ? {
             ...current,
             post: {
               ...current.post,
-              title: payload.data!.post.title,
-              excerpt: payload.data!.post.excerpt,
-              content: payload.data!.post.content,
-              modifiedAt: payload.data!.post.modifiedAt,
+              title: saved.title,
+              slug: saved.slug,
+              excerpt: saved.excerpt,
+              content: saved.content,
+              categories: savedCategories,
+              seo: saved.seo,
+              modifiedAt: saved.modifiedAt,
+              publicUrl: saved.publicUrl,
             },
           }
         : current
       );
+      setSlug(saved.slug);
       setSaveState('saved');
     } catch {
       setSaveState('error');
     }
   }
+
+  async function changeStatus(action: 'publish' | 'draft' | 'schedule') {
+    if (!canChangeStatus || statusState === 'working' || changed) return;
+    if ((action === 'publish' || action === 'schedule') && !user.permissions.publishPosts) return;
+
+    setStatusState('working');
+
+    try {
+      const payload = await adminFetch<{
+        ok: boolean;
+        data?: {
+          post: {
+            id: number;
+            status: string;
+            slug: string;
+            publishedAt: string;
+            modifiedAt: string;
+            publicUrl: string | null;
+          };
+        };
+      }>('/api/admin/post-status.php', {
+        method: 'POST',
+        headers: { 'X-CSRF-Token': csrfToken },
+        body: JSON.stringify({
+          postId: post.id,
+          action,
+          scheduledAt: action === 'schedule' ? scheduledAt : undefined,
+        }),
+      });
+
+      if (!payload.ok || !payload.data) {
+        throw new Error('post_status_invalid_response');
+      }
+
+      const saved = payload.data.post;
+
+      setData((current) => current
+        ? {
+            ...current,
+            post: {
+              ...current.post,
+              status: saved.status,
+              slug: saved.slug,
+              publishedAt: saved.publishedAt,
+              modifiedAt: saved.modifiedAt,
+              publicUrl: saved.publicUrl,
+            },
+          }
+        : current
+      );
+      setSlug(saved.slug);
+      setStatusState('saved');
+    } catch {
+      setStatusState('error');
+    }
+  }
+
+  function toggleCategory(categoryId: number) {
+    setCategoryIds((current) => {
+      const exists = current.includes(categoryId);
+      const next = exists
+        ? current.filter((id) => id !== categoryId)
+        : [...current, categoryId];
+
+      if (exists && primaryCategoryId === categoryId) {
+        setPrimaryCategoryId(0);
+      }
+
+      return next;
+    });
+    setSaveState('idle');
+  }
+
+  const publicationActionDisabled = !canChangeStatus || changed || statusState === 'working';
 
   return (
     <>
@@ -1119,9 +1265,9 @@ function PostEditorView({ csrfToken }: { csrfToken: string }) {
             <span className={'admin-status admin-status--' + post.status}>
               {statusLabel(post.status)}
             </span>
-            <h1>Editar notícia</h1>
+            <h1>{post.status === 'draft' ? 'Editar rascunho' : 'Editar notícia'}</h1>
           </div>
-          <p>#{post.id} • última alteração {formatAdminDate(post.modifiedAt)}</p>
+          <p>Última alteração {formatAdminDate(post.modifiedAt)}</p>
         </div>
 
         <div className="admin-editor-header__actions">
@@ -1130,28 +1276,36 @@ function PostEditorView({ csrfToken }: { csrfToken: string }) {
               Ver no site ↗
             </a>
           )}
+
           <button
             type="button"
-            disabled={!canSaveDraft || !draftChanged || saveState === 'saving'}
-            title={
-              post.status !== 'draft'
-                ? 'Esta publicação ainda não pode ser alterada nesta tela'
-                : canSaveDraft
-                  ? 'Salvar alterações'
-                  : 'Edição temporariamente indisponível'
-            }
-            onClick={() => void saveDraft()}
+            disabled={!canEdit || !changed || saveState === 'saving'}
+            onClick={() => void savePost()}
           >
             {saveState === 'saving' ? 'Salvando…' : 'Salvar'}
           </button>
-          <button
-            type="button"
-            className="admin-button--primary"
-            disabled
-            title="Publicação indisponível no momento"
-          >
-            Publicar
-          </button>
+
+          {post.status === 'publish' ? (
+            <button
+              type="button"
+              disabled={publicationActionDisabled}
+              onClick={() => void changeStatus('draft')}
+            >
+              Mover para rascunho
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="admin-button--primary"
+              disabled={
+                publicationActionDisabled
+                || !user.permissions.publishPosts
+              }
+              onClick={() => void changeStatus('publish')}
+            >
+              {statusState === 'working' ? 'Publicando…' : 'Publicar'}
+            </button>
+          )}
         </div>
       </header>
 
@@ -1167,13 +1321,25 @@ function PostEditorView({ csrfToken }: { csrfToken: string }) {
         </div>
       )}
 
+      {statusState === 'saved' && (
+        <div className="admin-save-feedback admin-save-feedback--success" role="status">
+          Status da notícia atualizado.
+        </div>
+      )}
+
+      {statusState === 'error' && (
+        <div className="admin-save-feedback admin-save-feedback--error" role="alert">
+          Não foi possível atualizar a publicação. Tente novamente.
+        </div>
+      )}
+
       <div className="admin-editor-layout">
         <section className="admin-editor-main">
           <label className="admin-editor-field admin-editor-field--title">
             <span>Título</span>
             <input
               value={title}
-              readOnly={!canSaveDraft}
+              readOnly={!canEdit}
               onChange={(event) => {
                 setTitle(event.target.value);
                 setSaveState('idle');
@@ -1182,15 +1348,25 @@ function PostEditorView({ csrfToken }: { csrfToken: string }) {
           </label>
 
           <label className="admin-editor-field">
-            <span>Slug</span>
-            <input value={post.slug} readOnly />
+            <span>Link</span>
+            <div className="admin-slug-field">
+              <span>/noticia/</span>
+              <input
+                value={slug}
+                readOnly={!canEdit}
+                onChange={(event) => {
+                  setSlug(event.target.value);
+                  setSaveState('idle');
+                }}
+              />
+            </div>
           </label>
 
           <label className="admin-editor-field">
             <span>Resumo</span>
             <textarea
               value={excerpt}
-              readOnly={!canSaveDraft}
+              readOnly={!canEdit}
               rows={5}
               onChange={(event) => {
                 setExcerpt(event.target.value);
@@ -1204,7 +1380,7 @@ function PostEditorView({ csrfToken }: { csrfToken: string }) {
             <textarea
               className="admin-editor-content"
               value={content}
-              readOnly={!canSaveDraft}
+              readOnly={!canEdit}
               rows={28}
               onChange={(event) => {
                 setContent(event.target.value);
@@ -1215,19 +1391,36 @@ function PostEditorView({ csrfToken }: { csrfToken: string }) {
 
           <section className="admin-editor-card">
             <div className="admin-editor-card__head">
-              <span>SEO</span>
-              <strong>Metadados</strong>
+              <span>Busca e compartilhamento</span>
+              <strong>SEO</strong>
             </div>
 
             <div className="admin-editor-card__body admin-editor-card__body--fields">
               <label className="admin-editor-field">
                 <span>Título SEO</span>
-                <input value={post.seo.title} readOnly />
+                <input
+                  value={seoTitle}
+                  readOnly={!canEdit}
+                  placeholder={title}
+                  onChange={(event) => {
+                    setSeoTitle(event.target.value);
+                    setSaveState('idle');
+                  }}
+                />
               </label>
 
               <label className="admin-editor-field">
                 <span>Descrição SEO</span>
-                <textarea value={post.seo.description} readOnly rows={4} />
+                <textarea
+                  value={seoDescription}
+                  readOnly={!canEdit}
+                  rows={4}
+                  placeholder={excerpt}
+                  onChange={(event) => {
+                    setSeoDescription(event.target.value);
+                    setSaveState('idle');
+                  }}
+                />
               </label>
             </div>
           </section>
@@ -1237,32 +1430,49 @@ function PostEditorView({ csrfToken }: { csrfToken: string }) {
           <section className="admin-editor-card">
             <div className="admin-editor-card__head">
               <span>Publicação</span>
-              <strong>Estado</strong>
+              <strong>{statusLabel(post.status)}</strong>
             </div>
 
             <dl className="admin-editor-meta">
-              <div>
-                <dt>Status</dt>
-                <dd>{statusLabel(post.status)}</dd>
-              </div>
               <div>
                 <dt>Autor</dt>
                 <dd>{post.author.name}</dd>
               </div>
               <div>
-                <dt>Publicado</dt>
+                <dt>Publicação</dt>
                 <dd>{formatAdminDate(post.publishedAt)}</dd>
               </div>
               <div>
-                <dt>Atualizado</dt>
+                <dt>Atualização</dt>
                 <dd>{formatAdminDate(post.modifiedAt)}</dd>
               </div>
             </dl>
+
+            {post.status !== 'publish' && user.permissions.publishPosts && (
+              <div className="admin-schedule">
+                <label>
+                  <span>Agendar publicação</span>
+                  <input
+                    type="datetime-local"
+                    value={scheduledAt}
+                    disabled={!canChangeStatus}
+                    onChange={(event) => setScheduledAt(event.target.value)}
+                  />
+                </label>
+                <button
+                  type="button"
+                  disabled={publicationActionDisabled || scheduledAt === ''}
+                  onClick={() => void changeStatus('schedule')}
+                >
+                  Agendar
+                </button>
+              </div>
+            )}
           </section>
 
           <section className="admin-editor-card">
             <div className="admin-editor-card__head">
-              <span>Taxonomia</span>
+              <span>Organização</span>
               <strong>Categorias</strong>
             </div>
 
@@ -1271,14 +1481,36 @@ function PostEditorView({ csrfToken }: { csrfToken: string }) {
                 <label key={category.id}>
                   <input
                     type="checkbox"
-                    checked={selectedCategoryIds.has(category.id)}
-                    readOnly
+                    checked={selectedSet.has(category.id)}
+                    disabled={!canEdit}
+                    onChange={() => toggleCategory(category.id)}
                   />
                   <i style={{ background: category.color }} aria-hidden="true" />
                   <span>{category.name}</span>
                 </label>
               ))}
             </div>
+
+            {selectedCategories.length > 0 && (
+              <label className="admin-editor-primary-category">
+                <span>Categoria principal</span>
+                <select
+                  value={primaryCategoryId || ''}
+                  disabled={!canEdit}
+                  onChange={(event) => {
+                    setPrimaryCategoryId(Number(event.target.value) || 0);
+                    setSaveState('idle');
+                  }}
+                >
+                  <option value="">Automática</option>
+                  {selectedCategories.map((category) => (
+                    <option value={category.id} key={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
           </section>
 
           <section className="admin-editor-card">
@@ -1299,10 +1531,9 @@ function PostEditorView({ csrfToken }: { csrfToken: string }) {
                 </figcaption>
               </figure>
             ) : (
-              <div className="admin-editor-empty">Sem imagem destacada.</div>
+              <div className="admin-editor-empty">Nenhuma imagem selecionada.</div>
             )}
           </section>
-
         </aside>
       </div>
     </>
