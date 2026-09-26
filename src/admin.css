@@ -2334,3 +2334,12 @@
     align-items: flex-start;
   }
 }
+
+
+.admin-field-help {
+  display: block;
+  margin-top: 1px;
+  color: #787c82;
+  font-size: 9px;
+  line-height: 1.45;
+}
