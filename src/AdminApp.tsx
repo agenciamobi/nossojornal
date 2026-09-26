@@ -539,6 +539,7 @@ type SourcesPayload = {
   data?: {
     items: EditorialSourceContact[];
     query?: string;
+    total?: number;
   };
 };
 
@@ -6270,6 +6271,8 @@ function SourcesView({ csrfToken }: { csrfToken: string }) {
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<'idle' | 'saved' | 'error'>('idle');
+  const [successMessage, setSuccessMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
   const [error, setError] = useState(false);
 
   useEffect(() => {
@@ -6290,10 +6293,14 @@ function SourcesView({ csrfToken }: { csrfToken: string }) {
   const editingSource = editingId > 0
     ? data.items.find((item) => item.id === editingId) ?? null
     : null;
-  const normalizedTopics = topics
-    .split(/[,;\n]+/)
-    .map((value) => value.trim())
-    .filter(Boolean);
+
+  const normalizedTopics = Array.from(new Set(
+    topics
+      .split(/[,;\n]+/)
+      .map((value) => value.trim())
+      .filter(Boolean)
+  ));
+
   const sourceDirty = editingSource
     ? name !== editingSource.name
       || organization !== editingSource.organization
@@ -6318,6 +6325,50 @@ function SourcesView({ csrfToken }: { csrfToken: string }) {
         notes,
       ].some((value) => value.trim() !== '');
 
+  function validPhone(value: string, minimumDigits = 6) {
+    if (!value.trim()) return true;
+    if (!/^[0-9+().\-\s]+$/.test(value)) return false;
+
+    const digits = value.replace(/\D+/g, '');
+    return digits.length >= minimumDigits && digits.length <= 20;
+  }
+
+  function validHttpUrl(value: string) {
+    if (!value.trim()) return true;
+
+    try {
+      const parsed = new URL(value);
+      return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+    } catch {
+      return false;
+    }
+  }
+
+  const emailValid = !email.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+  const phoneValid = validPhone(phone);
+  const whatsappValid = validPhone(whatsapp, 8);
+  const urlValid = validHttpUrl(url);
+  const topicsValid = normalizedTopics.length <= 30;
+  const notesValid = notes.length <= 20000;
+
+  const canSaveSource =
+    name.trim() !== ''
+    && name.trim().length <= 250
+    && emailValid
+    && phoneValid
+    && whatsappValid
+    && urlValid
+    && topicsValid
+    && notesValid
+    && sourceDirty
+    && !saving;
+
+  function clearFeedback() {
+    setMessage('idle');
+    setSuccessMessage('');
+    setErrorMessage('');
+  }
+
   function resetForm() {
     setEditingId(0);
     setName('');
@@ -6330,10 +6381,33 @@ function SourcesView({ csrfToken }: { csrfToken: string }) {
     setTopics('');
     setUrl('');
     setNotes('');
-    setMessage('idle');
+    clearFeedback();
+  }
+
+  function confirmDiscardSourceDraft() {
+    return !sourceDirty || window.confirm(
+      'Existem alterações não salvas nesta fonte. Deseja descartá-las?'
+    );
+  }
+
+  function focusSourceEditor() {
+    window.requestAnimationFrame(() => {
+      document.getElementById('admin-source-editor')?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
+    });
+  }
+
+  function newSource() {
+    if (!confirmDiscardSourceDraft()) return;
+    resetForm();
+    focusSourceEditor();
   }
 
   function editSource(item: EditorialSourceContact) {
+    if (item.id !== editingId && !confirmDiscardSourceDraft()) return;
+
     setEditingId(item.id);
     setName(item.name);
     setOrganization(item.organization);
@@ -6345,16 +6419,17 @@ function SourcesView({ csrfToken }: { csrfToken: string }) {
     setTopics(item.topics.join(', '));
     setUrl(item.url);
     setNotes(item.notes);
-    setMessage('idle');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    clearFeedback();
+    focusSourceEditor();
   }
 
   async function mutateSource(action: 'save' | 'trash') {
     if (saving) return;
-    if (action === 'save' && !name.trim()) return;
+    if (action === 'save' && !canSaveSource) return;
 
+    const wasEditing = editingId > 0;
     setSaving(true);
-    setMessage('idle');
+    clearFeedback();
 
     try {
       const payload = await adminFetch<SourcesPayload>('/api/admin/sources.php', {
@@ -6365,23 +6440,22 @@ function SourcesView({ csrfToken }: { csrfToken: string }) {
             ? {
                 action,
                 sourceId: editingId,
-                name,
-                organization,
-                role,
-                phone,
-                whatsapp,
-                email,
-                city,
-                topics: topics
-                  .split(/[,;\n]+/)
-                  .map((value) => value.trim())
-                  .filter(Boolean),
-                url,
-                notes,
+                query,
+                name: name.trim(),
+                organization: organization.trim(),
+                role: role.trim(),
+                phone: phone.trim(),
+                whatsapp: whatsapp.trim(),
+                email: email.trim(),
+                city: city.trim(),
+                topics: normalizedTopics,
+                url: url.trim(),
+                notes: notes.trim(),
               }
             : {
                 action,
                 sourceId: editingId,
+                query,
               },
         ),
       });
@@ -6391,18 +6465,46 @@ function SourcesView({ csrfToken }: { csrfToken: string }) {
       setData((current) => current
         ? {
             ...current,
-            items: payload.data!.items,
+            ...payload.data,
           }
         : payload.data
       );
       resetForm();
+      setSuccessMessage(
+        action === 'trash'
+          ? 'Fonte arquivada.'
+          : wasEditing
+            ? 'Fonte atualizada.'
+            : 'Fonte cadastrada.'
+      );
       setMessage('saved');
-    } catch {
+    } catch (cause) {
+      const code = cause instanceof Error ? cause.message : '';
+      const messages: Record<string, string> = {
+        invalid_source_name: 'Informe um nome válido para a fonte.',
+        invalid_source_email: 'O e-mail informado não é válido.',
+        invalid_source_phone: 'O telefone contém caracteres ou quantidade de dígitos inválidos.',
+        invalid_source_whatsapp: 'O WhatsApp precisa conter um número válido.',
+        invalid_source_url: 'Informe uma URL HTTP ou HTTPS válida.',
+        source_email_exists: 'Já existe outra fonte ativa com este e-mail.',
+        source_whatsapp_exists: 'Já existe outra fonte ativa com este WhatsApp.',
+        source_notes_too_large: 'As observações ultrapassaram o limite permitido.',
+        source_not_found: 'Esta fonte não está mais disponível.',
+        database_write_unavailable: 'O banco está temporariamente sem escrita para este recurso.',
+      };
+
+      setErrorMessage(messages[code] ?? 'Não foi possível salvar a fonte. Verifique os dados e tente novamente.');
       setMessage('error');
     } finally {
       setSaving(false);
     }
   }
+
+  const resultCount = data.items.length;
+  const totalCount = data.total ?? resultCount;
+  const withDirectContact = data.items.filter(
+    (item) => item.whatsapp || item.phone || item.email
+  ).length;
 
   return (
     <>
@@ -6411,25 +6513,49 @@ function SourcesView({ csrfToken }: { csrfToken: string }) {
         saving={saving}
         onSave={() => mutateSource('save')}
       />
-      <AdminPageHeader
-        eyebrow="Apuração"
-        title="Fontes"
-        description="Contatos, especialistas, órgãos e pessoas consultadas pela redação."
-      />
+
+      <div className="admin-page-heading-row">
+        <AdminPageHeader
+          eyebrow="Apuração"
+          title="Fontes"
+          description="Contatos, especialistas, órgãos e pessoas consultadas pela redação."
+        />
+        <button type="button" className="admin-create-button" onClick={newSource}>
+          + Nova fonte
+        </button>
+      </div>
 
       {message === 'saved' && (
         <div className="admin-save-feedback admin-save-feedback--success" role="status">
-          Central de Fontes atualizada.
+          {successMessage || 'Central de Fontes atualizada.'}
         </div>
       )}
       {message === 'error' && (
         <div className="admin-save-feedback admin-save-feedback--error" role="alert">
-          Não foi possível salvar a fonte. Verifique os dados e tente novamente.
+          {errorMessage || 'Não foi possível salvar a fonte. Verifique os dados e tente novamente.'}
         </div>
       )}
 
+      <section className="admin-directory-summary" aria-label="Resumo da Central de Fontes">
+        <div>
+          <span>Fontes ativas</span>
+          <strong>{totalCount.toLocaleString('pt-BR')}</strong>
+          <small>cadastros disponíveis</small>
+        </div>
+        <div>
+          <span>Resultado</span>
+          <strong>{resultCount.toLocaleString('pt-BR')}</strong>
+          <small>{query ? 'com o filtro atual' : 'na lista'}</small>
+        </div>
+        <div>
+          <span>Contato direto</span>
+          <strong>{withDirectContact.toLocaleString('pt-BR')}</strong>
+          <small>no resultado atual</small>
+        </div>
+      </section>
+
       <div className="admin-sources-layout">
-        <aside className="admin-source-editor">
+        <aside className="admin-source-editor" id="admin-source-editor">
           <section className="admin-editor-card">
             <div className="admin-editor-card__head">
               <div>
@@ -6445,38 +6571,114 @@ function SourcesView({ csrfToken }: { csrfToken: string }) {
             <div className="admin-editor-card__body admin-editor-card__body--fields">
               <label className="admin-editor-field">
                 <span>Nome</span>
-                <input value={name} onChange={(event) => setName(event.target.value)} />
+                <input
+                  value={name}
+                  maxLength={250}
+                  autoFocus={editingId === 0}
+                  onChange={(event) => {
+                    setName(event.target.value);
+                    clearFeedback();
+                  }}
+                />
               </label>
 
               <label className="admin-editor-field">
                 <span>Organização</span>
-                <input value={organization} onChange={(event) => setOrganization(event.target.value)} />
+                <input
+                  value={organization}
+                  maxLength={300}
+                  onChange={(event) => {
+                    setOrganization(event.target.value);
+                    clearFeedback();
+                  }}
+                />
               </label>
 
               <label className="admin-editor-field">
                 <span>Cargo / função</span>
-                <input value={role} onChange={(event) => setRole(event.target.value)} />
+                <input
+                  value={role}
+                  maxLength={300}
+                  onChange={(event) => {
+                    setRole(event.target.value);
+                    clearFeedback();
+                  }}
+                />
               </label>
 
               <div className="admin-source-editor__row">
                 <label className="admin-editor-field">
                   <span>Telefone</span>
-                  <input value={phone} onChange={(event) => setPhone(event.target.value)} />
+                  <input
+                    type="tel"
+                    value={phone}
+                    maxLength={100}
+                    autoComplete="tel"
+                    aria-invalid={!phoneValid}
+                    onChange={(event) => {
+                      setPhone(event.target.value);
+                      clearFeedback();
+                    }}
+                  />
+                  {!phoneValid && <small className="admin-field-error">Revise o telefone.</small>}
                 </label>
+
                 <label className="admin-editor-field">
                   <span>WhatsApp</span>
-                  <input value={whatsapp} onChange={(event) => setWhatsapp(event.target.value)} />
+                  <input
+                    type="tel"
+                    value={whatsapp}
+                    maxLength={100}
+                    autoComplete="tel"
+                    aria-invalid={!whatsappValid}
+                    onChange={(event) => {
+                      setWhatsapp(event.target.value);
+                      clearFeedback();
+                    }}
+                  />
+                  {!whatsappValid && <small className="admin-field-error">Revise o WhatsApp.</small>}
+                  {!whatsapp.trim() && phoneValid && phone.trim() && (
+                    <button
+                      type="button"
+                      className="admin-inline-field-action"
+                      onClick={() => {
+                        setWhatsapp(phone);
+                        clearFeedback();
+                      }}
+                    >
+                      Usar o telefone
+                    </button>
+                  )}
                 </label>
               </div>
 
               <label className="admin-editor-field">
                 <span>E-mail</span>
-                <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} />
+                <input
+                  type="email"
+                  value={email}
+                  maxLength={300}
+                  autoComplete="email"
+                  aria-invalid={!emailValid}
+                  onChange={(event) => {
+                    setEmail(event.target.value);
+                    clearFeedback();
+                  }}
+                />
+                {!emailValid && <small className="admin-field-error">Informe um e-mail válido.</small>}
               </label>
 
               <label className="admin-editor-field">
                 <span>Cidade</span>
-                <input value={city} onChange={(event) => setCity(event.target.value)} />
+                <input
+                  value={city}
+                  maxLength={200}
+                  autoComplete="address-level2"
+                  onChange={(event) => {
+                    setCity(event.target.value);
+                    clearFeedback();
+                  }}
+                />
               </label>
 
               <label className="admin-editor-field">
@@ -6484,25 +6686,53 @@ function SourcesView({ csrfToken }: { csrfToken: string }) {
                 <input
                   value={topics}
                   placeholder="política, economia, saúde…"
-                  onChange={(event) => setTopics(event.target.value)}
+                  onChange={(event) => {
+                    setTopics(event.target.value);
+                    clearFeedback();
+                  }}
                 />
+                <small className="admin-field-help">
+                  {normalizedTopics.length.toLocaleString('pt-BR')} / 30 assuntos
+                </small>
               </label>
 
               <label className="admin-editor-field">
                 <span>Site / perfil oficial</span>
-                <input type="url" value={url} onChange={(event) => setUrl(event.target.value)} />
+                <input
+                  type="url"
+                  value={url}
+                  maxLength={1000}
+                  placeholder="https://"
+                  aria-invalid={!urlValid}
+                  onChange={(event) => {
+                    setUrl(event.target.value);
+                    clearFeedback();
+                  }}
+                />
+                {!urlValid && <small className="admin-field-error">Use uma URL HTTP ou HTTPS válida.</small>}
               </label>
 
               <label className="admin-editor-field">
                 <span>Observações privadas</span>
-                <textarea rows={6} value={notes} onChange={(event) => setNotes(event.target.value)} />
+                <textarea
+                  rows={6}
+                  value={notes}
+                  maxLength={20000}
+                  onChange={(event) => {
+                    setNotes(event.target.value);
+                    clearFeedback();
+                  }}
+                />
+                <small className="admin-field-help">
+                  {notes.length.toLocaleString('pt-BR')} / 20.000 caracteres
+                </small>
               </label>
 
               <div className="admin-source-editor__actions">
                 <button
                   type="button"
                   className="admin-button--primary"
-                  disabled={!name.trim() || saving}
+                  disabled={!canSaveSource}
                   onClick={() => void mutateSource('save')}
                 >
                   {saving ? 'Salvando…' : editingId ? 'Salvar fonte' : 'Cadastrar fonte'}
@@ -6510,7 +6740,14 @@ function SourcesView({ csrfToken }: { csrfToken: string }) {
 
                 {editingId > 0 && (
                   <>
-                    <button type="button" disabled={saving} onClick={resetForm}>
+                    <button
+                      type="button"
+                      disabled={saving}
+                      onClick={() => {
+                        if (!confirmDiscardSourceDraft()) return;
+                        resetForm();
+                      }}
+                    >
                       Cancelar
                     </button>
                     <button
@@ -6518,7 +6755,7 @@ function SourcesView({ csrfToken }: { csrfToken: string }) {
                       className="danger"
                       disabled={saving}
                       onClick={() => {
-                        if (window.confirm('Arquivar esta fonte?')) {
+                        if (window.confirm('Arquivar esta fonte? O histórico das matérias será preservado.')) {
                           void mutateSource('trash');
                         }
                       }}
@@ -6528,6 +6765,9 @@ function SourcesView({ csrfToken }: { csrfToken: string }) {
                   </>
                 )}
               </div>
+              <small className="admin-field-help">
+                Ctrl+S ou Cmd+S salva quando os dados estiverem válidos.
+              </small>
             </div>
           </section>
         </aside>
@@ -6539,16 +6779,23 @@ function SourcesView({ csrfToken }: { csrfToken: string }) {
                 type="search"
                 name="q"
                 defaultValue={query}
-                placeholder="Buscar nome, órgão, cidade ou assunto"
+                placeholder="Buscar nome, órgão, cidade, contato ou assunto"
                 aria-label="Buscar fontes"
               />
               <button type="submit">Buscar</button>
+              {query && <a className="admin-toolbar__clear" href="/sistema/fontes">Limpar</a>}
             </div>
           </form>
 
           <div className="admin-source-cards">
             {data.items.map((item) => (
-              <article className="admin-source-card" key={item.id}>
+              <article
+                className={
+                  'admin-source-card'
+                  + (editingId === item.id ? ' admin-source-card--active' : '')
+                }
+                key={item.id}
+              >
                 <button type="button" className="admin-source-card__main" onClick={() => editSource(item)}>
                   <div className="admin-source-card__avatar">{initials(item.name)}</div>
                   <div>
@@ -6559,8 +6806,12 @@ function SourcesView({ csrfToken }: { csrfToken: string }) {
                     {item.topics.length > 0 && (
                       <div className="admin-source-card__topics">
                         {item.topics.slice(0, 5).map((topic) => <span key={topic}>{topic}</span>)}
+                        {item.topics.length > 5 && <span>+{item.topics.length - 5}</span>}
                       </div>
                     )}
+                    <small className="admin-source-card__updated">
+                      Atualizada {formatAdminDate(item.modifiedAt)}
+                    </small>
                   </div>
                 </button>
 
@@ -6578,7 +6829,10 @@ function SourcesView({ csrfToken }: { csrfToken: string }) {
             ))}
 
             {data.items.length === 0 && (
-              <div className="admin-empty-state">Nenhuma fonte encontrada.</div>
+              <div className="admin-empty-state">
+                Nenhuma fonte corresponde a “{query}”.
+                {query && <a href="/sistema/fontes"> Mostrar todas</a>}
+              </div>
             )}
           </div>
         </section>
