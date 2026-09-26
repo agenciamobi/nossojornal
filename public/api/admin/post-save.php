@@ -128,6 +128,8 @@ SQL);
     try {
         $pdo->beginTransaction();
 
+        nj_admin_create_revision($pdo, $postId, (int) $user['id'], 'save');
+
         $oldTaxonomyStatement = $pdo->prepare(<<<SQL
 SELECT tr.term_taxonomy_id
 FROM {$relationships} tr
@@ -197,6 +199,17 @@ SQL);
         nj_admin_recount_categories(
             $pdo,
             array_merge($oldTaxonomyIds, array_values($taxonomyIds))
+        );
+
+        nj_admin_log_post_activity(
+            $pdo,
+            $postId,
+            (int) $user['id'],
+            'post_saved',
+            [
+                'titleChanged' => (string) $current['post_name'] !== $slug || $title !== '',
+                'categoryCount' => count($categoryIds),
+            ]
         );
 
         $readBack = $pdo->prepare(<<<SQL
