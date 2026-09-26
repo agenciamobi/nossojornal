@@ -1,4 +1,5 @@
-import { FormEvent, ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
 import './system.css';
 
 type SystemPermission =
