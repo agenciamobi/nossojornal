@@ -9,6 +9,11 @@ const NJ_PAUTA_META_PRIORITY = '_nj_pauta_priority';
 const NJ_PAUTA_META_TOPIC = '_nj_pauta_topic';
 const NJ_PAUTA_META_SOURCE_NAME = '_nj_pauta_source_name';
 const NJ_PAUTA_META_SOURCE_URL = '_nj_pauta_source_url';
+const NJ_PAUTA_META_FEED_URL = '_nj_pauta_feed_url';
+const NJ_PAUTA_META_EXTERNAL_ID = '_nj_pauta_external_id';
+const NJ_PAUTA_META_SOURCE_PUBLISHED_AT = '_nj_pauta_source_published_at';
+const NJ_PAUTA_META_CAPTURED_AT = '_nj_pauta_captured_at';
+const NJ_PAUTA_META_SOURCE_HASH = '_nj_pauta_source_hash';
 const NJ_PAUTA_META_DEADLINE = '_nj_pauta_deadline';
 const NJ_PAUTA_META_ASSIGNEE = '_nj_pauta_assignee';
 const NJ_PAUTA_META_DRAFT_ID = '_nj_pauta_draft_post_id';
@@ -135,6 +140,20 @@ function nj_pautas_fetch_feed(string $url): string
     return $body;
 }
 
+function nj_pautas_feed_datetime(string $value): string
+{
+    $value = trim($value);
+    if ($value === '') {
+        return '';
+    }
+
+    try {
+        return (new DateTimeImmutable($value))->format(DATE_ATOM);
+    } catch (Throwable) {
+        return '';
+    }
+}
+
 function nj_pautas_parse_feed(string $xmlBody): array
 {
     if (!function_exists('simplexml_load_string')) {
@@ -157,12 +176,11 @@ function nj_pautas_parse_feed(string $xmlBody): array
             $title = trim((string) $item->title);
             $link = trim((string) $item->link);
             $description = trim((string) $item->description);
+            $guid = isset($item->guid) ? trim((string) $item->guid) : '';
+            $publishedAt = nj_pautas_feed_datetime((string) ($item->pubDate ?? ''));
 
-            if ($link === '' && isset($item->guid)) {
-                $guid = trim((string) $item->guid);
-                if (filter_var($guid, FILTER_VALIDATE_URL)) {
-                    $link = $guid;
-                }
+            if ($link === '' && $guid !== '' && filter_var($guid, FILTER_VALIDATE_URL)) {
+                $link = $guid;
             }
 
             if ($title === '' || !filter_var($link, FILTER_VALIDATE_URL)) {
@@ -173,6 +191,8 @@ function nj_pautas_parse_feed(string $xmlBody): array
                 'title' => html_entity_decode(strip_tags($title), ENT_QUOTES | ENT_HTML5, 'UTF-8'),
                 'link' => $link,
                 'description' => trim(html_entity_decode(strip_tags($description), ENT_QUOTES | ENT_HTML5, 'UTF-8')),
+                'externalId' => $guid !== '' ? $guid : $link,
+                'publishedAt' => $publishedAt,
             ];
 
             if (count($items) >= 12) {
@@ -186,9 +206,13 @@ function nj_pautas_parse_feed(string $xmlBody): array
             $titleNodes = $entry->xpath('./*[local-name()="title"]') ?: [];
             $summaryNodes = $entry->xpath('./*[local-name()="summary" or local-name()="content"]') ?: [];
             $linkNodes = $entry->xpath('./*[local-name()="link"]') ?: [];
+            $idNodes = $entry->xpath('./*[local-name()="id"]') ?: [];
+            $publishedNodes = $entry->xpath('./*[local-name()="published" or local-name()="updated"]') ?: [];
 
             $title = trim((string) ($titleNodes[0] ?? ''));
             $summary = trim((string) ($summaryNodes[0] ?? ''));
+            $externalId = trim((string) ($idNodes[0] ?? ''));
+            $publishedAt = nj_pautas_feed_datetime((string) ($publishedNodes[0] ?? ''));
             $link = '';
 
             foreach ($linkNodes as $linkNode) {
@@ -210,6 +234,8 @@ function nj_pautas_parse_feed(string $xmlBody): array
                 'title' => html_entity_decode(strip_tags($title), ENT_QUOTES | ENT_HTML5, 'UTF-8'),
                 'link' => $link,
                 'description' => trim(html_entity_decode(strip_tags($summary), ENT_QUOTES | ENT_HTML5, 'UTF-8')),
+                'externalId' => $externalId !== '' ? $externalId : $link,
+                'publishedAt' => $publishedAt,
             ];
 
             if (count($items) >= 12) {
@@ -278,9 +304,23 @@ SQL);
 
         nj_admin_upsert_postmeta($pdo, $pautaId, NJ_PAUTA_META_STAGE, 'inbox');
         nj_admin_upsert_postmeta($pdo, $pautaId, NJ_PAUTA_META_PRIORITY, $priority);
+        $capturedAt = gmdate('c');
+        $sourceHash = hash('sha256', implode("\n", [
+            (string) ($feedItem['externalId'] ?? ''),
+            (string) $feedItem['link'],
+            (string) $feedItem['title'],
+            (string) $feedItem['description'],
+            (string) ($feedItem['publishedAt'] ?? ''),
+        ]));
+
         nj_admin_upsert_postmeta($pdo, $pautaId, NJ_PAUTA_META_TOPIC, (string) $source['category']);
         nj_admin_upsert_postmeta($pdo, $pautaId, NJ_PAUTA_META_SOURCE_NAME, (string) $source['name']);
         nj_admin_upsert_postmeta($pdo, $pautaId, NJ_PAUTA_META_SOURCE_URL, (string) $feedItem['link']);
+        nj_admin_upsert_postmeta($pdo, $pautaId, NJ_PAUTA_META_FEED_URL, (string) $source['feedUrl']);
+        nj_admin_upsert_postmeta($pdo, $pautaId, NJ_PAUTA_META_EXTERNAL_ID, (string) ($feedItem['externalId'] ?? ''));
+        nj_admin_upsert_postmeta($pdo, $pautaId, NJ_PAUTA_META_SOURCE_PUBLISHED_AT, (string) ($feedItem['publishedAt'] ?? ''));
+        nj_admin_upsert_postmeta($pdo, $pautaId, NJ_PAUTA_META_CAPTURED_AT, $capturedAt);
+        nj_admin_upsert_postmeta($pdo, $pautaId, NJ_PAUTA_META_SOURCE_HASH, $sourceHash);
         nj_admin_upsert_postmeta($pdo, $pautaId, NJ_PAUTA_META_ASSIGNEE, (string) $user['id']);
 
         $captured++;
