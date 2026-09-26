@@ -19,7 +19,6 @@ nj_run(static function (): array {
     $postmeta = nj_table('postmeta');
     $users = nj_table('users');
     $relationships = nj_table('term_relationships');
-    $taxonomy = nj_table('term_taxonomy');
 
     $select = nj_content_article_select($posts, $postmeta, $users);
     $statement = $pdo->prepare($select . <<<SQL
@@ -73,15 +72,18 @@ SQL);
         $placeholders = implode(',', array_fill(0, count($categoryTaxonomyIds), '?'));
         $relatedSql = $select . <<<SQL
 
-INNER JOIN {$relationships} related_tr
-    ON related_tr.object_id = p.ID
 WHERE
     p.post_type = 'post'
     AND p.post_status = 'publish'
     AND p.post_password = ''
     AND p.ID <> ?
-    AND related_tr.term_taxonomy_id IN ({$placeholders})
-GROUP BY p.ID
+    AND EXISTS (
+        SELECT 1
+        FROM {$relationships} related_tr
+        WHERE
+            related_tr.object_id = p.ID
+            AND related_tr.term_taxonomy_id IN ({$placeholders})
+    )
 ORDER BY p.post_date DESC, p.ID DESC
 LIMIT 4
 SQL;
