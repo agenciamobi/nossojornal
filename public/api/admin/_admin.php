@@ -7,6 +7,16 @@ require_once __DIR__ . '/../v1/_content.php';
 const NJ_ADMIN_SESSION_NAME = 'nj_admin_session';
 const NJ_PAUTAS_OWNER_LOGIN = 'agenciamobi';
 
+const NJ_PROVENANCE_META_MODE = '_nj_provenance_mode';
+const NJ_PROVENANCE_META_SOURCE_NAME = '_nj_provenance_source_name';
+const NJ_PROVENANCE_META_SOURCE_URL = '_nj_provenance_source_url';
+const NJ_PROVENANCE_META_EXTERNAL_ID = '_nj_provenance_external_id';
+const NJ_PROVENANCE_META_FEED_URL = '_nj_provenance_feed_url';
+const NJ_PROVENANCE_META_CAPTURED_AT = '_nj_provenance_captured_at';
+const NJ_PROVENANCE_META_SOURCE_PUBLISHED_AT = '_nj_provenance_source_published_at';
+const NJ_PROVENANCE_META_SOURCE_HASH = '_nj_provenance_source_hash';
+const NJ_PROVENANCE_META_PAUTA_ID = '_nj_provenance_pauta_id';
+
 function nj_admin_json(array $payload, int $status = 200): never
 {
     http_response_code($status);
