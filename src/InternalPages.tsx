@@ -638,7 +638,15 @@ function ArticlePage({ slug }: { slug: string }) {
             },
           },
           articleSection: article.primaryCategory?.name,
-          description: article.excerpt,
+          keywords: article.tags.map((tag) => tag.name),
+          isPartOf: payload?.editorial.series.url
+            ? {
+                '@type': 'CreativeWorkSeries',
+                name: payload.editorial.series.name,
+                url: new URL(payload.editorial.series.url, window.location.origin).toString(),
+              }
+            : undefined,
+          description: payload?.editorial.standfirst || article.excerpt,
           inLanguage: 'pt-BR',
         },
         {
@@ -669,7 +677,13 @@ function ArticlePage({ slug }: { slug: string }) {
         },
       ],
     });
-  }, [article, payload?.seo.canonical]);
+  }, [
+    article,
+    payload?.editorial.series.name,
+    payload?.editorial.series.url,
+    payload?.editorial.standfirst,
+    payload?.seo.canonical,
+  ]);
 
   if (state === 'loading') return <LoadingState label="Carregando matéria" />;
   if (state === 'not-found') return <ErrorState title="Matéria não encontrada" description="A notícia pode ter mudado de endereço ou não estar mais publicada." />;
