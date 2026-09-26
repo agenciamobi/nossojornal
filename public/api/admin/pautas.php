@@ -543,6 +543,11 @@ SELECT
     COALESCE((SELECT CAST(pm.meta_value AS UNSIGNED) FROM {$postmeta} pm WHERE pm.post_id=p.ID AND pm.meta_key='_nj_pauta_assignee' ORDER BY pm.meta_id DESC LIMIT 1), 0) AS assignee_id,
     COALESCE((SELECT pm.meta_value FROM {$postmeta} pm WHERE pm.post_id=p.ID AND pm.meta_key='_nj_pauta_source_name' ORDER BY pm.meta_id DESC LIMIT 1), '') AS source_name,
     COALESCE((SELECT pm.meta_value FROM {$postmeta} pm WHERE pm.post_id=p.ID AND pm.meta_key='_nj_pauta_source_url' ORDER BY pm.meta_id DESC LIMIT 1), '') AS source_url,
+    COALESCE((SELECT pm.meta_value FROM {$postmeta} pm WHERE pm.post_id=p.ID AND pm.meta_key='_nj_pauta_feed_url' ORDER BY pm.meta_id DESC LIMIT 1), '') AS feed_url,
+    COALESCE((SELECT pm.meta_value FROM {$postmeta} pm WHERE pm.post_id=p.ID AND pm.meta_key='_nj_pauta_external_id' ORDER BY pm.meta_id DESC LIMIT 1), '') AS external_id,
+    COALESCE((SELECT pm.meta_value FROM {$postmeta} pm WHERE pm.post_id=p.ID AND pm.meta_key='_nj_pauta_source_published_at' ORDER BY pm.meta_id DESC LIMIT 1), '') AS source_published_at,
+    COALESCE((SELECT pm.meta_value FROM {$postmeta} pm WHERE pm.post_id=p.ID AND pm.meta_key='_nj_pauta_captured_at' ORDER BY pm.meta_id DESC LIMIT 1), '') AS captured_at,
+    COALESCE((SELECT pm.meta_value FROM {$postmeta} pm WHERE pm.post_id=p.ID AND pm.meta_key='_nj_pauta_source_hash' ORDER BY pm.meta_id DESC LIMIT 1), '') AS source_hash,
     COALESCE((SELECT CAST(pm.meta_value AS UNSIGNED) FROM {$postmeta} pm WHERE pm.post_id=p.ID AND pm.meta_key='_nj_pauta_draft_post_id' ORDER BY pm.meta_id DESC LIMIT 1), 0) AS draft_post_id
 FROM {$posts} p
 WHERE p.ID=:id AND p.post_type='nj_pauta' AND p.post_status='private'
@@ -615,6 +620,47 @@ SQL);
                 $draftId,
                 '_nj_reporting_sources',
                 json_encode($source, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]'
+            );
+
+            $hasExternalOrigin = trim((string) $pauta['source_url']) !== '';
+            nj_admin_upsert_postmeta(
+                $pdo,
+                $draftId,
+                NJ_PROVENANCE_META_MODE,
+                $hasExternalOrigin ? 'adapted' : 'original'
+            );
+            nj_admin_upsert_postmeta($pdo, $draftId, NJ_PROVENANCE_META_SOURCE_NAME, (string) $pauta['source_name']);
+            nj_admin_upsert_postmeta($pdo, $draftId, NJ_PROVENANCE_META_SOURCE_URL, (string) $pauta['source_url']);
+            nj_admin_upsert_postmeta($pdo, $draftId, NJ_PROVENANCE_META_EXTERNAL_ID, (string) $pauta['external_id']);
+            nj_admin_upsert_postmeta($pdo, $draftId, NJ_PROVENANCE_META_FEED_URL, (string) $pauta['feed_url']);
+            nj_admin_upsert_postmeta($pdo, $draftId, NJ_PROVENANCE_META_CAPTURED_AT, (string) $pauta['captured_at']);
+            nj_admin_upsert_postmeta(
+                $pdo,
+                $draftId,
+                NJ_PROVENANCE_META_SOURCE_PUBLISHED_AT,
+                (string) $pauta['source_published_at']
+            );
+            nj_admin_upsert_postmeta($pdo, $draftId, NJ_PROVENANCE_META_SOURCE_HASH, (string) $pauta['source_hash']);
+            nj_admin_upsert_postmeta($pdo, $draftId, NJ_PROVENANCE_META_PAUTA_ID, (string) $pautaId);
+
+            if ($hasExternalOrigin) {
+                // Attribution is inherited, but canonical remains self by default.
+                // An editor must explicitly choose an external canonical later.
+                nj_admin_upsert_postmeta($pdo, $draftId, '_nj_original_source_url', (string) $pauta['source_url']);
+            }
+
+            nj_admin_log_post_activity(
+                $pdo,
+                $draftId,
+                (int) $user['id'],
+                'pauta_converted_to_draft',
+                [
+                    'pautaId' => $pautaId,
+                    'provenanceMode' => $hasExternalOrigin ? 'adapted' : 'original',
+                    'sourceName' => (string) $pauta['source_name'],
+                    'hasExternalId' => trim((string) $pauta['external_id']) !== '',
+                    'hasSourceHash' => trim((string) $pauta['source_hash']) !== '',
+                ]
             );
 
             nj_admin_upsert_postmeta($pdo, $pautaId, NJ_PAUTA_META_STAGE, 'writing');
