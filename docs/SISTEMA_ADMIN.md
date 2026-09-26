@@ -1882,3 +1882,27 @@ e ordenar por recência ou prioridade.
 O contador “Novas desde revisão” pode ser usado como atalho para enxergar somente o que entrou depois da última passada pela Mesa.
 
 A data de captura do feed é preferida como referência de chegada. Pautas manuais sem metadata de captura usam a data de criação.
+
+## Gerenciamento das fontes RSS/Atom
+
+O Radar da Mesa de Pautas permite administrar o catálogo monitorado diretamente no Sistema.
+
+Ações disponíveis:
+
+```text
++ Fonte RSS
+Editar
+Pausar/ativar
+Remover
+Capturar
+```
+
+O catálogo é privado e fica em `nj_pautas_feed_catalog`.
+
+Os feeds padrão continuam servindo como bootstrap até a primeira alteração. Depois disso, a configuração salva passa a ser a autoridade.
+
+Uma fonte pausada continua aparecendo com seu histórico de health, mas não participa de “Capturar agora”.
+
+Por segurança, somente URLs HTTPS públicas são aceitas. Hosts locais, redes privadas, ranges reservados, URLs com credenciais, portas alternativas e redirects são rejeitados. A resposta de feed também possui limite de tamanho.
+
+A captura nunca aceita uma URL avulsa enviada pelo browser: o backend só busca uma URL que esteja cadastrada e ativa no catálogo.
