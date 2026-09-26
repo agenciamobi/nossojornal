@@ -1,5 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { CSSProperties } from 'react';
+import {
+  loadNavigation,
+  navigationLinkProps,
+  selectNavigationMenu,
+  type NavigationItem,
+  type NavigationMenu,
+} from './navigation';
 import './header.css';
 
 type Category = {
@@ -104,6 +111,55 @@ function formatEditionDate() {
   };
 }
 
+function navigationPath(url: string) {
+  if (!url.startsWith('/')) return '';
+  return url.split(/[?#]/, 1)[0].replace(/\/+$/, '') || '/';
+}
+
+function NativePrimaryItem({
+  item,
+  currentPath,
+}: {
+  item: NavigationItem;
+  currentPath: string;
+}) {
+  const itemPath = navigationPath(item.url);
+  const active = itemPath !== '' && currentPath === itemPath;
+  const hasChildren = item.children.length > 0;
+
+  return (
+    <div className={'primary-nav__native-item' + (hasChildren ? ' has-children' : '')}>
+      <a
+        href={item.url}
+        aria-current={active ? 'page' : undefined}
+        {...navigationLinkProps(item)}
+      >
+        {item.title}
+      </a>
+
+      {hasChildren && (
+        <div className="primary-nav__submenu" aria-label={`Submenu de ${item.title}`}>
+          {item.children.map((child) => {
+            const childPath = navigationPath(child.url);
+            const childActive = childPath !== '' && currentPath === childPath;
+
+            return (
+              <a
+                key={child.id}
+                href={child.url}
+                aria-current={childActive ? 'page' : undefined}
+                {...navigationLinkProps(child)}
+              >
+                {child.title}
+              </a>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TickerGroup({
   stories,
   duplicate = false,
@@ -143,8 +199,10 @@ export function Brand() {
 export function SiteHeader() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [latestStories, setLatestStories] = useState<LatestStory[]>([]);
+  const [navigationMenus, setNavigationMenus] = useState<NavigationMenu[]>([]);
   const [categoryState, setCategoryState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [latestState, setLatestState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [navigationState, setNavigationState] = useState<'loading' | 'ready' | 'error'>('loading');
   const editionDate = useMemo(formatEditionDate, []);
   const currentPath = window.location.pathname.replace(/\/+$/, '') || '/';
 
@@ -209,7 +267,22 @@ export function SiteHeader() {
       }
     }
 
-    void Promise.all([loadCategories(), loadLatestStories()]);
+    async function loadNativeNavigation() {
+      try {
+        const menus = await loadNavigation();
+        if (controller.signal.aborted) return;
+
+        setNavigationMenus(menus);
+        setNavigationState('ready');
+      } catch {
+        if (controller.signal.aborted) return;
+
+        setNavigationMenus([]);
+        setNavigationState('error');
+      }
+    }
+
+    void Promise.all([loadCategories(), loadLatestStories(), loadNativeNavigation()]);
 
     return () => controller.abort();
   }, []);
@@ -224,6 +297,16 @@ export function SiteHeader() {
         ),
       ),
     [categories],
+  );
+
+  const primaryMenu = useMemo(
+    () => selectNavigationMenu(navigationMenus, 'primary'),
+    [navigationMenus],
+  );
+
+  const utilityMenu = useMemo(
+    () => selectNavigationMenu(navigationMenus, 'utility'),
+    [navigationMenus],
   );
 
   const regionalCategory = categories.find(
@@ -248,13 +331,27 @@ export function SiteHeader() {
           </div>
 
           <nav className="utility__links" aria-label="Links institucionais">
-            <a href="/sobre">Sobre</a>
-            <a href="/classificados">Classificados</a>
-            <a href="/comunicados">Comunicados</a>
-            <a href="/contato">Contato</a>
-            <a href="/busca" className="utility__search" aria-label="Buscar no Nosso Jornal">
-              Buscar
-            </a>
+            {utilityMenu ? (
+              utilityMenu.items.map((item) => (
+                <a
+                  key={item.id}
+                  href={item.url}
+                  {...navigationLinkProps(item)}
+                >
+                  {item.title}
+                </a>
+              ))
+            ) : (
+              <>
+                <a href="/sobre">Sobre</a>
+                <a href="/classificados">Classificados</a>
+                <a href="/comunicados">Comunicados</a>
+                <a href="/contato">Contato</a>
+                <a href="/busca" className="utility__search" aria-label="Buscar no Nosso Jornal">
+                  Buscar
+                </a>
+              </>
+            )}
           </nav>
         </div>
       </div>
@@ -271,37 +368,56 @@ export function SiteHeader() {
 
       <nav className="primary-nav" aria-label="Editorias">
         <div
-          className="container primary-nav__scroll"
-          aria-busy={categoryState === 'loading'}
+          className={
+            'container primary-nav__scroll'
+            + (primaryMenu ? ' primary-nav__scroll--native' : '')
+          }
+          aria-busy={
+            primaryMenu
+              ? navigationState === 'loading'
+              : categoryState === 'loading'
+          }
         >
-          <a href="/ultimas">Últimas</a>
+          {primaryMenu ? (
+            primaryMenu.items.map((item) => (
+              <NativePrimaryItem
+                key={item.id}
+                item={item}
+                currentPath={currentPath}
+              />
+            ))
+          ) : (
+            <>
+              <a href="/ultimas">Últimas</a>
 
-          {editorialCategories.map((category) => {
-            const active = currentPath === category.url;
+              {editorialCategories.map((category) => {
+                const active = currentPath === category.url;
 
-            return (
-              <a
-                key={category.id}
-                href={category.url}
-                className="primary-nav__category"
-                aria-current={active ? 'page' : undefined}
-                style={{ '--category-color': category.color } as CSSProperties}
-              >
-                {category.name}
-              </a>
-            );
-          })}
+                return (
+                  <a
+                    key={category.id}
+                    href={category.url}
+                    className="primary-nav__category"
+                    aria-current={active ? 'page' : undefined}
+                    style={{ '--category-color': category.color } as CSSProperties}
+                  >
+                    {category.name}
+                  </a>
+                );
+              })}
 
-          {categoryState === 'loading' && (
-            <span className="primary-nav__status" aria-live="polite">
-              Carregando editorias…
-            </span>
-          )}
+              {categoryState === 'loading' && (
+                <span className="primary-nav__status" aria-live="polite">
+                  Carregando editorias…
+                </span>
+              )}
 
-          {categoryState === 'error' && (
-            <span className="primary-nav__status" role="status">
-              Editorias temporariamente indisponíveis
-            </span>
+              {categoryState === 'error' && (
+                <span className="primary-nav__status" role="status">
+                  Editorias temporariamente indisponíveis
+                </span>
+              )}
+            </>
           )}
         </div>
       </nav>
