@@ -333,7 +333,7 @@ export function AdminEditorialConnections({
                 onSeriesChange({
                   ...series,
                   name,
-                  slug: series.slug || slugify(name),
+                  slug: slugify(name),
                 });
               }}
             />
