@@ -65,6 +65,30 @@ SELECT
         LIMIT 1
     ), '') AS featured_image_url,
     COALESCE((
+        SELECT file.meta_value
+        FROM {$postmeta} thumb_file
+        INNER JOIN {$postmeta} file
+            ON file.post_id = CAST(thumb_file.meta_value AS UNSIGNED)
+            AND file.meta_key = '_wp_attached_file'
+        WHERE
+            thumb_file.post_id = p.ID
+            AND thumb_file.meta_key = '_thumbnail_id'
+        ORDER BY file.meta_id DESC
+        LIMIT 1
+    ), '') AS featured_image_file,
+    COALESCE((
+        SELECT metadata.meta_value
+        FROM {$postmeta} thumb_meta
+        INNER JOIN {$postmeta} metadata
+            ON metadata.post_id = CAST(thumb_meta.meta_value AS UNSIGNED)
+            AND metadata.meta_key = '_wp_attachment_metadata'
+        WHERE
+            thumb_meta.post_id = p.ID
+            AND thumb_meta.meta_key = '_thumbnail_id'
+        ORDER BY metadata.meta_id DESC
+        LIMIT 1
+    ), '') AS featured_image_metadata,
+    COALESCE((
         SELECT alt.meta_value
         FROM {$postmeta} thumb2
         INNER JOIN {$postmeta} alt
@@ -247,21 +271,22 @@ SQL;
             $primaryCategory = $categories[0];
         }
 
-        $imageUrl = trim((string) $row['featured_image_url']);
-        if ($imageUrl !== '') {
-            $imagePath = parse_url($imageUrl, PHP_URL_PATH);
-            if (is_string($imagePath) && str_starts_with($imagePath, '/wp-content/uploads/')) {
-                $imageUrl = $imagePath;
-            }
-        }
+        $articleTitle = trim(html_entity_decode(
+            strip_tags((string) $row['title']),
+            ENT_QUOTES | ENT_HTML5,
+            'UTF-8'
+        ));
+        $featuredImage = nj_media_descriptor(
+            (string) ($row['featured_image_url'] ?? ''),
+            (string) ($row['featured_image_file'] ?? ''),
+            (string) ($row['featured_image_metadata'] ?? ''),
+            (string) ($row['featured_image_alt'] ?? ''),
+            $articleTitle
+        );
 
         $articles[] = [
             'id' => $id,
-            'title' => trim(html_entity_decode(
-                strip_tags((string) $row['title']),
-                ENT_QUOTES | ENT_HTML5,
-                'UTF-8'
-            )),
+            'title' => $articleTitle,
             'slug' => (string) $row['slug'],
             'url' => '/noticia/' . rawurlencode((string) $row['slug']),
             'excerpt' => nj_content_excerpt((string) $row['excerpt'], (string) $row['content'], 210),
@@ -271,14 +296,7 @@ SQL;
                 'id' => (int) $row['author_id'],
                 'name' => trim((string) $row['author_name']),
             ],
-            'featuredImage' => $imageUrl !== ''
-                ? [
-                    'url' => $imageUrl,
-                    'alt' => trim((string) $row['featured_image_alt']) !== ''
-                        ? (string) $row['featured_image_alt']
-                        : trim(html_entity_decode(strip_tags((string) $row['title']), ENT_QUOTES | ENT_HTML5, 'UTF-8')),
-                ]
-                : null,
+            'featuredImage' => $featuredImage,
             'views' => (int) $row['views'],
             'primaryCategory' => $primaryCategory,
             'categories' => $categories,
