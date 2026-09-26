@@ -57,6 +57,7 @@ type DashboardPayload = {
       };
       categories: number;
       users: number;
+      media: number;
       comments: { approved: number; pending: number; spam: number };
     };
     recentPosts: AdminPost[];
@@ -178,6 +179,18 @@ function initials(value: string) {
     .slice(0, 2)
     .map((part) => part.charAt(0).toUpperCase())
     .join('');
+}
+
+function roleLabel(role: string) {
+  const labels: Record<string, string> = {
+    administrator: 'Administrador',
+    editor: 'Editor',
+    author: 'Autor',
+    contributor: 'Colaborador',
+    subscriber: 'Assinante',
+  };
+
+  return labels[role] ?? role;
 }
 
 function statusLabel(status: string) {
@@ -384,7 +397,7 @@ function AdminTopbar({
         <span className="admin-avatar" aria-hidden="true">{initials(user.displayName)}</span>
         <span>
           <strong>{user.displayName}</strong>
-          <small>{user.roles.join(', ') || user.login}</small>
+          <small>{user.roles.map(roleLabel).join(', ') || user.login}</small>
         </span>
         <button type="button" onClick={() => void logout()} disabled={busy}>Sair</button>
       </div>
@@ -458,6 +471,9 @@ function DashboardView({ user }: { user: AdminUser }) {
     { label: 'Publicadas', value: data.summary.posts.published, href: '/sistema/noticias?status=publish' },
     { label: 'Rascunhos', value: data.summary.posts.draft, href: '/sistema/noticias?status=draft' },
     { label: 'Categorias', value: data.summary.categories, href: '/sistema/categorias' },
+    ...(user.permissions.uploadFiles
+      ? [{ label: 'Mídia', value: data.summary.media, href: '/sistema/midia' }]
+      : []),
     { label: 'Usuários', value: data.summary.users, href: user.permissions.listUsers ? '/sistema/usuarios' : '/sistema' },
   ];
 
@@ -785,7 +801,7 @@ function UsersView() {
                 <td><a href={'mailto:' + user.email}>{user.email}</a></td>
                 <td>
                   <div className="admin-chips">
-                    {user.roles.map((role) => <span key={role}>{role}</span>)}
+                    {user.roles.map((role) => <span key={role}>{roleLabel(role)}</span>)}
                   </div>
                 </td>
                 <td>{formatAdminDate(user.registeredAt)}</td>
