@@ -13,6 +13,51 @@ const NJ_SOURCE_META_CITY = '_nj_source_city';
 const NJ_SOURCE_META_TOPICS = '_nj_source_topics';
 const NJ_SOURCE_META_URL = '_nj_source_url';
 
+function nj_sources_query_value(mixed $value): string
+{
+    $query = trim((string) $value);
+
+    if (function_exists('mb_substr')) {
+        return mb_substr($query, 0, 120, 'UTF-8');
+    }
+
+    return substr($query, 0, 120);
+}
+
+function nj_sources_phone_digits(string $value): string
+{
+    return preg_replace('/\D+/', '', $value) ?? '';
+}
+
+function nj_sources_valid_phone(string $value, int $minimumDigits = 6): bool
+{
+    if ($value === '') {
+        return true;
+    }
+
+    if (
+        strlen($value) > 100
+        || preg_match('/^[0-9+().\-\s]+$/', $value) !== 1
+    ) {
+        return false;
+    }
+
+    $digits = nj_sources_phone_digits($value);
+    return strlen($digits) >= $minimumDigits && strlen($digits) <= 20;
+}
+
+function nj_sources_total(PDO $pdo): int
+{
+    $posts = nj_table('posts');
+    $statement = $pdo->query(
+        "SELECT COUNT(*)
+         FROM {$posts}
+         WHERE post_type = 'nj_source' AND post_status = 'private'"
+    );
+
+    return (int) $statement->fetchColumn();
+}
+
 function nj_sources_items(PDO $pdo, string $query = ''): array
 {
     $posts = nj_table('posts');
@@ -112,16 +157,12 @@ nj_admin_run(['GET', 'POST'], static function (string $method): array {
     $pdo = nj_db();
 
     if ($method === 'GET') {
-        $query = trim((string) ($_GET['q'] ?? ''));
-        if (function_exists('mb_substr')) {
-            $query = mb_substr($query, 0, 120, 'UTF-8');
-        } else {
-            $query = substr($query, 0, 120);
-        }
+        $query = nj_sources_query_value($_GET['q'] ?? '');
 
         return [
             'items' => nj_sources_items($pdo, $query),
             'query' => $query,
+            'total' => nj_sources_total($pdo),
         ];
     }
 
@@ -129,6 +170,7 @@ nj_admin_run(['GET', 'POST'], static function (string $method): array {
     $body = nj_admin_request_body();
     $action = trim((string) ($body['action'] ?? 'save'));
     $sourceId = max(0, (int) ($body['sourceId'] ?? 0));
+    $query = nj_sources_query_value($body['query'] ?? '');
     $posts = nj_table('posts');
 
     if (!in_array($action, ['save', 'trash'], true)) {
@@ -156,7 +198,9 @@ nj_admin_run(['GET', 'POST'], static function (string $method): array {
         }
 
         return [
-            'items' => nj_sources_items($pdo),
+            'items' => nj_sources_items($pdo, $query),
+            'query' => $query,
+            'total' => nj_sources_total($pdo),
         ];
     }
 
@@ -175,22 +219,92 @@ nj_admin_run(['GET', 'POST'], static function (string $method): array {
         throw new NjApiHttpException(422, 'invalid_source_name');
     }
 
+    $fieldLimits = [
+        'organization' => [$organization, 300],
+        'role' => [$role, 300],
+        'email' => [$email, 300],
+        'city' => [$city, 200],
+        'url' => [$url, 1000],
+    ];
+
+    foreach ($fieldLimits as $field => [$value, $limit]) {
+        $length = function_exists('mb_strlen')
+            ? mb_strlen((string) $value, 'UTF-8')
+            : strlen((string) $value);
+
+        if ($length > (int) $limit) {
+            throw new NjApiHttpException(422, 'source_' . $field . '_too_large');
+        }
+    }
+
     if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
         throw new NjApiHttpException(422, 'invalid_source_email');
     }
 
-    if ($url !== '' && !filter_var($url, FILTER_VALIDATE_URL)) {
-        throw new NjApiHttpException(422, 'invalid_source_url');
+    if (!nj_sources_valid_phone($phone)) {
+        throw new NjApiHttpException(422, 'invalid_source_phone');
+    }
+
+    if (!nj_sources_valid_phone($whatsapp, 8)) {
+        throw new NjApiHttpException(422, 'invalid_source_whatsapp');
+    }
+
+    if ($url !== '') {
+        $validUrl = filter_var($url, FILTER_VALIDATE_URL);
+        $scheme = strtolower((string) parse_url($url, PHP_URL_SCHEME));
+
+        if ($validUrl === false || !in_array($scheme, ['http', 'https'], true)) {
+            throw new NjApiHttpException(422, 'invalid_source_url');
+        }
+    }
+
+    $notesLength = function_exists('mb_strlen')
+        ? mb_strlen($notes, 'UTF-8')
+        : strlen($notes);
+    if ($notesLength > 20000) {
+        throw new NjApiHttpException(422, 'source_notes_too_large');
     }
 
     $topics = [];
+    $topicKeys = [];
     foreach ($topicsInput as $topic) {
         $topic = trim((string) $topic);
-        if ($topic !== '' && !in_array($topic, $topics, true)) {
-            $topics[] = substr($topic, 0, 120);
+        $key = function_exists('mb_strtolower')
+            ? mb_strtolower($topic, 'UTF-8')
+            : strtolower($topic);
+
+        if ($topic !== '' && !isset($topicKeys[$key])) {
+            $topics[] = function_exists('mb_substr')
+                ? mb_substr($topic, 0, 120, 'UTF-8')
+                : substr($topic, 0, 120);
+            $topicKeys[$key] = true;
         }
+
         if (count($topics) >= 30) {
             break;
+        }
+    }
+
+    $emailKey = strtolower($email);
+    $whatsappDigits = nj_sources_phone_digits($whatsapp);
+
+    foreach (nj_sources_items($pdo) as $existingSource) {
+        if ((int) $existingSource['id'] === $sourceId) {
+            continue;
+        }
+
+        if (
+            $emailKey !== ''
+            && strtolower(trim((string) $existingSource['email'])) === $emailKey
+        ) {
+            throw new NjApiHttpException(409, 'source_email_exists');
+        }
+
+        if (
+            $whatsappDigits !== ''
+            && nj_sources_phone_digits((string) $existingSource['whatsapp']) === $whatsappDigits
+        ) {
+            throw new NjApiHttpException(409, 'source_whatsapp_exists');
         }
     }
 
@@ -273,6 +387,8 @@ SQL);
     }
 
     return [
-        'items' => nj_sources_items($pdo),
+        'items' => nj_sources_items($pdo, $query),
+        'query' => $query,
+        'total' => nj_sources_total($pdo),
     ];
 });
