@@ -468,6 +468,52 @@
   padding-left: 25px;
 }
 
+.article-body hr {
+  height: 1px;
+  margin: 42px 0;
+  border: 0;
+  background: var(--line);
+}
+
+.article-body table {
+  width: 100%;
+  margin: 30px 0;
+  border-collapse: collapse;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.article-body th,
+.article-body td {
+  border: 1px solid var(--line);
+  padding: 11px 13px;
+  vertical-align: top;
+}
+
+.article-body th {
+  background: #f5f7fa;
+  color: #1f2937;
+  font-weight: 800;
+  text-align: left;
+}
+
+.article-body tr:nth-child(even) td {
+  background: #fafbfc;
+}
+
+.article-body [align="center"] {
+  text-align: center;
+}
+
+.article-body [align="right"] {
+  text-align: right;
+}
+
+.article-body [align="justify"] {
+  text-align: justify;
+}
+
 .article-detail__aside {
   align-self: start;
   position: sticky;
