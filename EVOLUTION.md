@@ -1693,3 +1693,18 @@ As rotas estruturais de `/sobre` e `/contato` têm slug protegido para evitar qu
 ### Estado
 
 Todas essas capacidades estão implementadas na `main` e devem ser consideradas pendentes de homologação até passarem pelo fluxo de deploy e testes controlados no ambiente real.
+
+
+## 26. Remoção do bloqueio global de edição
+
+Foi identificado em produção que todas as áreas administrativas podiam ficar não editáveis simultaneamente.
+
+A causa era o uso de `/api/admin/write-readiness.php` como gate global do frontend.
+
+O gate foi removido.
+
+A interface agora é governada pelas capabilities reais do usuário, enquanto cada endpoint valida e executa sua própria mutation.
+
+Isso evita que um probe técnico bloqueie Notícias, Páginas, Categorias, Mídia, Usuários e Configurações ao mesmo tempo.
+
+O endpoint de readiness permanece apenas como diagnóstico técnico e não participa mais da UX do CMS.
