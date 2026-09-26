@@ -1984,7 +1984,15 @@ function AgendaView({ csrfToken }: { csrfToken: string }) {
     setNote('');
   }
 
+  function confirmDiscardEventDraft() {
+    return !eventDirty || window.confirm(
+      'Existem alterações não salvas neste compromisso. Deseja descartá-las?'
+    );
+  }
+
   function startNewEvent() {
+    if (!confirmDiscardEventDraft()) return;
+
     clearForm();
     setMessage('idle');
     setSuccessMessage('');
@@ -1998,6 +2006,7 @@ function AgendaView({ csrfToken }: { csrfToken: string }) {
 
   function editEvent(item: AgendaItem) {
     if (item.kind !== 'event' || !item.eventId) return;
+    if (item.eventId !== editingEventId && !confirmDiscardEventDraft()) return;
 
     setEditingEventId(item.eventId);
     setTitle(item.title);
@@ -2323,6 +2332,7 @@ function AgendaView({ csrfToken }: { csrfToken: string }) {
                     type="button"
                     disabled={saving}
                     onClick={() => {
+                      if (!confirmDiscardEventDraft()) return;
                       clearForm();
                       setMessage('idle');
                       setSuccessMessage('');
