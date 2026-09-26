@@ -737,3 +737,255 @@ SQL);
         }
     }
 }
+
+
+function nj_admin_log_post_activity(
+    PDO $pdo,
+    int $postId,
+    int $userId,
+    string $action,
+    array $payload = []
+): void {
+    $posts = nj_table('posts');
+
+    $statement = $pdo->prepare(<<<SQL
+INSERT INTO {$posts} (
+    post_author,
+    post_date,
+    post_date_gmt,
+    post_content,
+    post_title,
+    post_excerpt,
+    post_status,
+    comment_status,
+    ping_status,
+    post_password,
+    post_name,
+    to_ping,
+    pinged,
+    post_modified,
+    post_modified_gmt,
+    post_content_filtered,
+    post_parent,
+    guid,
+    menu_order,
+    post_type,
+    post_mime_type,
+    comment_count
+) VALUES (
+    :author_id,
+    NOW(),
+    UTC_TIMESTAMP(),
+    :content,
+    :title,
+    '',
+    'private',
+    'closed',
+    'closed',
+    '',
+    '',
+    '',
+    '',
+    NOW(),
+    UTC_TIMESTAMP(),
+    '',
+    :post_parent,
+    '',
+    0,
+    'nj_activity',
+    '',
+    0
+)
+SQL);
+    $statement->execute([
+        'author_id' => $userId,
+        'content' => json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}',
+        'title' => substr($action, 0, 200),
+        'post_parent' => $postId,
+    ]);
+}
+
+function nj_admin_post_snapshot(PDO $pdo, int $postId): array
+{
+    $posts = nj_table('posts');
+    $postmeta = nj_table('postmeta');
+    $relationships = nj_table('term_relationships');
+    $taxonomy = nj_table('term_taxonomy');
+
+    $statement = $pdo->prepare(<<<SQL
+SELECT
+    ID,
+    post_title,
+    post_name,
+    post_excerpt,
+    post_content,
+    post_status,
+    post_date,
+    post_modified
+FROM {$posts}
+WHERE
+    ID = :id
+    AND post_type = 'post'
+LIMIT 1
+SQL);
+    $statement->execute(['id' => $postId]);
+    $post = $statement->fetch();
+
+    if (!$post) {
+        throw new NjApiHttpException(404, 'post_not_found');
+    }
+
+    $categoryStatement = $pdo->prepare(<<<SQL
+SELECT tt.term_id
+FROM {$relationships} tr
+INNER JOIN {$taxonomy} tt
+    ON tt.term_taxonomy_id = tr.term_taxonomy_id
+    AND tt.taxonomy = 'category'
+WHERE tr.object_id = :post_id
+ORDER BY tt.term_id ASC
+SQL);
+    $categoryStatement->execute(['post_id' => $postId]);
+    $categoryIds = array_map('intval', $categoryStatement->fetchAll(PDO::FETCH_COLUMN));
+
+    $metaStatement = $pdo->prepare(<<<SQL
+SELECT meta_key, meta_value
+FROM {$postmeta}
+WHERE
+    post_id = :post_id
+    AND meta_key IN (
+        '_yoast_wpseo_title',
+        '_yoast_wpseo_metadesc',
+        '_yoast_wpseo_primary_category'
+    )
+ORDER BY meta_id DESC
+SQL);
+    $metaStatement->execute(['post_id' => $postId]);
+
+    $meta = [];
+    foreach ($metaStatement->fetchAll() as $row) {
+        $key = (string) $row['meta_key'];
+        if (!array_key_exists($key, $meta)) {
+            $meta[$key] = (string) $row['meta_value'];
+        }
+    }
+
+    return [
+        'title' => (string) $post['post_title'],
+        'slug' => (string) $post['post_name'],
+        'excerpt' => (string) $post['post_excerpt'],
+        'content' => (string) $post['post_content'],
+        'status' => (string) $post['post_status'],
+        'publishedAt' => nj_content_iso8601((string) $post['post_date']),
+        'modifiedAt' => nj_content_iso8601((string) $post['post_modified']),
+        'categoryIds' => $categoryIds,
+        'seo' => [
+            'title' => (string) ($meta['_yoast_wpseo_title'] ?? ''),
+            'description' => (string) ($meta['_yoast_wpseo_metadesc'] ?? ''),
+            'primaryCategoryId' => (int) ($meta['_yoast_wpseo_primary_category'] ?? 0),
+        ],
+    ];
+}
+
+function nj_admin_create_revision(
+    PDO $pdo,
+    int $postId,
+    int $userId,
+    string $kind = 'save'
+): int {
+    $posts = nj_table('posts');
+    $snapshot = nj_admin_post_snapshot($pdo, $postId);
+
+    $statement = $pdo->prepare(<<<SQL
+INSERT INTO {$posts} (
+    post_author,
+    post_date,
+    post_date_gmt,
+    post_content,
+    post_title,
+    post_excerpt,
+    post_status,
+    comment_status,
+    ping_status,
+    post_password,
+    post_name,
+    to_ping,
+    pinged,
+    post_modified,
+    post_modified_gmt,
+    post_content_filtered,
+    post_parent,
+    guid,
+    menu_order,
+    post_type,
+    post_mime_type,
+    comment_count
+) VALUES (
+    :author_id,
+    NOW(),
+    UTC_TIMESTAMP(),
+    :content,
+    :title,
+    '',
+    'private',
+    'closed',
+    'closed',
+    '',
+    '',
+    '',
+    '',
+    NOW(),
+    UTC_TIMESTAMP(),
+    '',
+    :post_parent,
+    '',
+    0,
+    'nj_revision',
+    '',
+    0
+)
+SQL);
+    $statement->execute([
+        'author_id' => $userId,
+        'content' => json_encode([
+            'kind' => $kind,
+            'snapshot' => $snapshot,
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}',
+        'title' => 'Revisão de ' . $snapshot['title'],
+        'post_parent' => $postId,
+    ]);
+
+    return (int) $pdo->lastInsertId();
+}
+
+function nj_admin_require_post_editor(PDO $pdo, array $user, int $postId): array
+{
+    $posts = nj_table('posts');
+
+    $statement = $pdo->prepare(<<<SQL
+SELECT ID, post_author, post_status, post_title, post_name
+FROM {$posts}
+WHERE ID = :id AND post_type = 'post'
+LIMIT 1
+SQL);
+    $statement->execute(['id' => $postId]);
+    $post = $statement->fetch();
+
+    if (!$post) {
+        throw new NjApiHttpException(404, 'post_not_found');
+    }
+
+    $ownsPost = (int) $post['post_author'] === (int) $user['id'];
+
+    if (!$ownsPost && !in_array('edit_others_posts', $user['capabilities'], true)) {
+        throw new NjApiHttpException(403, 'insufficient_permissions');
+    }
+
+    if (
+        in_array((string) $post['post_status'], ['publish', 'future', 'private'], true)
+        && !in_array('edit_published_posts', $user['capabilities'], true)
+    ) {
+        throw new NjApiHttpException(403, 'insufficient_permissions');
+    }
+
+    return $post;
+}
