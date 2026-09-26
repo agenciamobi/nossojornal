@@ -386,7 +386,7 @@ A home deve ser orientada por configuração editorial, não apenas pela ordem c
 
 ### Fase 5 - Página de matéria
 
-Estado: **PLANEJADA**
+Estado: **EM ANDAMENTO**
 
 Recursos:
 
@@ -538,7 +538,7 @@ Estado: **PLANEJADA**
 
 ### Fase 12 - Busca e descoberta
 
-Estado: **PLANEJADA**
+Estado: **EM ANDAMENTO**
 
 Primeiro:
 
@@ -758,3 +758,90 @@ A API resolve `_thumbnail_id` e o attachment correspondente. Quando a imagem per
 ### Conteúdo fictício
 
 Os blocos demonstrativos anteriores de manchete, recentes, apoiadores, classificados e comunicados foram removidos da homepage. Produtos sem fonte de dados real não recebem conteúdo inventado.
+
+
+## 15. Páginas internas
+
+A estrutura pública agora resolve rotas internas sem adicionar dependência de roteador cliente. O Apache continua entregando o app Vite em modo history e o frontend seleciona a experiência pelo pathname.
+
+### Rotas implementadas
+
+```text
+/noticia/:slug
+/categoria/:slug
+/ultimas
+/busca
+/sobre
+/contato
+/classificados
+/comunicados
+/404
+```
+
+Compatibilidade histórica inicial:
+
+```text
+/:slug               -> tenta resolver matéria legada
+/noticias            -> /ultimas
+/quem-somos          -> conteúdo de /sobre
+```
+
+Matérias históricas servidas por `/:slug` mantêm canonical na rota editorial nova `/noticia/:slug`.
+
+### API interna criada
+
+```text
+GET /api/v1/article.php?slug=:slug
+GET /api/v1/articles.php
+GET /api/v1/articles.php?category=:slug
+GET /api/v1/articles.php?q=:termo
+GET /api/v1/page.php?slug=:slug
+```
+
+`_content.php` concentra normalização de artigos, autores, categorias, imagens e HTML legado. O frontend continua sem conhecer o schema WordPress.
+
+### Página de matéria
+
+A matéria inclui:
+
+- breadcrumbs;
+- editoria;
+- headline;
+- resumo;
+- autor;
+- publicação e atualização;
+- imagem destacada;
+- corpo legado sanitizado;
+- categorias relacionadas;
+- compartilhamento;
+- notícias relacionadas;
+- canonical;
+- Open Graph;
+- JSON-LD `NewsArticle`.
+
+Scripts, formulários, handlers inline e embeds arbitrários são removidos do HTML legado nesta primeira versão. Embeds serão reintroduzidos posteriormente por allowlist.
+
+### Editorias e últimas
+
+`/categoria/:slug` e `/ultimas` usam o mesmo endpoint paginado. A listagem oferece cards editoriais com imagem, título, resumo, data e autoria. A paginação preserva query string e filtros.
+
+### Busca
+
+`/busca?q=` pesquisa título, resumo e corpo publicados, com paginação. A busca vazia apresenta somente o formulário e não dispara consulta ampla desnecessária.
+
+### Institucional
+
+`/sobre` reutiliza a página legada `quem-somos`. `/contato` reutiliza a página publicada `contato`. O HTML passa pelo mesmo sanitizador usado em conteúdo legado.
+
+### Classificados e comunicados
+
+As rotas e layouts existem, mas permanecem explicitamente sem registros até o inventário dos tipos de conteúdo específicos ser concluído. Nenhum anúncio, classificado ou comunicado fictício é exibido.
+
+### Próximo gate
+
+1. publicar a nova `main`;
+2. validar sintaxe PHP dos novos endpoints em runtime;
+3. testar uma matéria histórica por `/noticia/:slug` e por `/:slug`;
+4. testar editoria, últimas, busca, sobre e contato;
+5. corrigir HTML legado que exigir adaptadores específicos;
+6. inventariar fontes reais de classificados e comunicados.
