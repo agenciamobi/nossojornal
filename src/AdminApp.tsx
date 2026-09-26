@@ -62,7 +62,6 @@ type DashboardPayload = {
       comments: { approved: number; pending: number; spam: number };
     };
     recentPosts: AdminPost[];
-    mode: 'read_only';
   };
 };
 
@@ -78,7 +77,6 @@ type PostsPayload = {
       total: number;
       totalPages: number;
     };
-    mode: 'read_only';
   };
 };
 
@@ -116,7 +114,6 @@ type PostDetailPayload = {
       parentId: number | null;
       color: string;
     }>;
-    mode: 'read_only';
   };
 };
 
@@ -135,7 +132,6 @@ type CategoriesPayload = {
       publicUrl: string;
     }>;
     count: number;
-    mode: 'read_only';
   };
 };
 
@@ -160,13 +156,6 @@ type CategoryDetailPayload = {
       slug: string;
       parentId: number | null;
     }>;
-    mode: 'read_only';
-    plannedMutation: {
-      termTable: string;
-      taxonomyTable: string;
-      colorMetaTable: string;
-      colorMetaKey: string;
-    };
   };
 };
 
@@ -175,7 +164,6 @@ type UsersPayload = {
   data?: {
     items: AdminUser[];
     count: number;
-    mode: 'read_only';
   };
 };
 
@@ -189,26 +177,27 @@ type UserDetailPayload = {
 };
 
 
+type MediaItem = {
+  id: number;
+  title: string;
+  mimeType: string;
+  url: string;
+  alt: string;
+  createdAt: string;
+  modifiedAt: string;
+  parentId: number;
+};
+
 type MediaPayload = {
   ok: boolean;
   data?: {
-    items: Array<{
-      id: number;
-      title: string;
-      mimeType: string;
-      url: string;
-      alt: string;
-      createdAt: string;
-      modifiedAt: string;
-      parentId: number;
-    }>;
+    items: MediaItem[];
     pagination: {
       page: number;
       perPage: number;
       total: number;
       totalPages: number;
     };
-    mode: 'read_only';
   };
 };
 
@@ -216,7 +205,6 @@ type SettingsPayload = {
   ok: boolean;
   data?: {
     options: Record<string, string>;
-    mode: 'read_only';
   };
 };
 
@@ -258,12 +246,6 @@ type PautasPayload = {
       kind: string;
       priority: number;
     }>;
-    storage: {
-      status: 'pending_database_write';
-      feedSourcesTable: string;
-      queueTable: string;
-    };
-    mode: 'foundation';
   };
 };
 
@@ -2191,7 +2173,7 @@ function MediaView({ csrfToken }: { csrfToken: string }) {
       const payload = (await response.json()) as {
         ok: boolean;
         data?: {
-          media: MediaPayload['data'] extends { items: Array<infer T> } ? T : never;
+          media: MediaItem;
         };
       };
 
