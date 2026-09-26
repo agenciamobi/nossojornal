@@ -198,7 +198,7 @@ Uso proposto:
 2. sticky WordPress quando fizer sentido;
 3. fallback editorial automático.
 
-### 4. Biblioteca de mídia completa
+### 4. Biblioteca de mídia completa — primeira camada aplicada na Rodada 8
 
 Attachments oferecem mais que URL.
 
@@ -399,7 +399,7 @@ Nenhum desses projetos deve ser copiado diretamente. A utilidade está nos padr�
 1. revisar inventário real em `/sistema/wordpress`;
 2. revisões nativas e restauração — concluída;
 3. menus WordPress → header/footer com fallback — concluída;
-4. mídia responsiva baseada em attachment metadata;
+4. mídia responsiva baseada em attachment metadata — primeira camada concluída;
 5. redirects automáticos ao alterar slug;
 6. perfis públicos de autor;
 7. comentários públicos, se houver decisão editorial;
@@ -522,3 +522,72 @@ O contrato preserva a árvore completa. O Header renderiza o primeiro nível e u
 
 A implementação segue o princípio de `menu_location` observado no MOBI CMS: o renderer resolve uma localização lógica, enquanto o conteúdo do menu permanece separado da camada visual.
 
+## Rodada 8 — mídia responsiva baseada em attachment metadata
+
+O portal passa a usar `_wp_attachment_metadata` como fonte de dimensões e derivados já existentes no acervo.
+
+Foi criado o helper:
+
+```text
+public/api/v1/_media.php
+```
+
+Ele lê metadata serializada usando:
+
+```php
+unserialize($value, ['allowed_classes' => false])
+```
+
+e rejeita paths com traversal ou formatos incompatíveis.
+
+### Contrato de imagem
+
+Imagens destacadas passam a expor:
+
+```text
+url
+alt
+width
+height
+srcSet
+variants[]
+```
+
+Cada variante contém nome, URL, largura e altura.
+
+O original e os tamanhos derivados do WordPress são ordenados por largura e deduplicados antes de formar o `srcSet`.
+
+### Delivery público
+
+A Homepage, arquivos, cards e página de matéria agora podem renderizar:
+
+- `srcset`;
+- `sizes` contextual;
+- `width` e `height` conhecidos;
+- imagem principal da capa com carregamento prioritário;
+- lazy loading para imagens fora da área crítica.
+
+Isso reduz download desnecessário e ajuda a estabilidade visual durante o carregamento.
+
+### SEO social
+
+`public/meta.php` passa a emitir `og:image:width` e `og:image:height` quando o acervo possui dimensões confiáveis.
+
+### Biblioteca administrativa
+
+`/sistema/midia` passa a receber dimensões, `srcSet` e inventário de derivados.
+
+O editor individual mostra:
+
+- dimensões originais;
+- quantidade de derivados;
+- nomes e dimensões dos tamanhos disponíveis;
+- links para inspecionar cada arquivo.
+
+Uploads novos continuam compatíveis mesmo antes de existir pipeline de geração de derivados: o original já entra com dimensões conhecidas.
+
+### Limite desta rodada
+
+Nenhuma miniatura é regenerada e nenhum arquivo histórico é movido.
+
+A rodada apenas consome os derivados já registrados no WordPress. Geração futura de novos tamanhos deve possuir política explícita de storage, formatos e retenção.
