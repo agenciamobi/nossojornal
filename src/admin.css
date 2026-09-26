@@ -1263,6 +1263,80 @@
   line-height: 1.35;
 }
 
+.admin-pautas-source-groups {
+  display: grid;
+  gap: 14px;
+  padding: 14px;
+  background: #f6f7f7;
+}
+
+.admin-pautas-source-group {
+  overflow: hidden;
+  border: 1px solid #dcdcde;
+  border-radius: 5px;
+  background: #fff;
+}
+
+.admin-pautas-source-group > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 11px 14px;
+  border-bottom: 1px solid #dcdcde;
+  background: #fbfbfc;
+}
+
+.admin-pautas-source-group > header > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.admin-pautas-source-group > header span {
+  color: #8c8f94;
+  font-size: 7px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.admin-pautas-source-group > header strong {
+  color: #1d2327;
+  font-size: 11px;
+}
+
+.admin-pautas-source-group > header small {
+  color: #646970;
+  font-size: 8px;
+}
+
+.admin-pautas-source-group > header button {
+  min-height: 30px;
+  flex: 0 0 auto;
+  border: 1px solid #8c8f94;
+  border-radius: 3px;
+  padding: 0 9px;
+  background: #fff;
+  color: #2c3338;
+  font-size: 8px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.admin-pautas-source-group > header button:hover,
+.admin-pautas-source-group > header button:focus-visible {
+  border-color: #2271b1;
+  color: #135e96;
+}
+
+.admin-pautas-source-group > header button:disabled {
+  border-color: #c3c4c7;
+  background: #f0f0f1;
+  color: #8c8f94;
+  cursor: not-allowed;
+}
+
 .admin-pautas-sources {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1365,6 +1439,20 @@
   font-weight: 800;
   letter-spacing: .03em;
 }
+
+.admin-feed-due {
+  display: inline-flex;
+  min-height: 20px;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0 7px;
+  background: #e7f1ff;
+  color: #135e96;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: .03em;
+}
+
 
 
 .admin-feed-health__meta {
@@ -4192,6 +4280,19 @@
     flex-direction: column;
   }
 
+  .admin-pautas-source-groups {
+    padding: 8px;
+  }
+
+  .admin-pautas-source-group > header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .admin-pautas-source-group > header button {
+    width: 100%;
+  }
+
   .admin-pautas-radar__actions {
     width: 100%;
     align-items: stretch;
@@ -4231,6 +4332,7 @@
 }
 
 .admin-radar-add,
+.admin-radar-due,
 .admin-radar-capture {
   min-height: 31px;
   border-radius: 3px;
@@ -4240,14 +4342,22 @@
   cursor: pointer;
 }
 
-.admin-radar-add {
+.admin-radar-add,
+.admin-radar-due {
   border: 1px solid #8c8f94;
   background: #fff;
   color: #2c3338;
 }
 
+.admin-radar-due {
+  border-color: #72aee6;
+  color: #135e96;
+}
+
 .admin-radar-add:hover,
-.admin-radar-add:focus-visible {
+.admin-radar-add:focus-visible,
+.admin-radar-due:hover,
+.admin-radar-due:focus-visible {
   border-color: #2271b1;
   color: #135e96;
 }
@@ -4265,6 +4375,7 @@
 }
 
 .admin-radar-add:disabled,
+.admin-radar-due:disabled,
 .admin-radar-capture:disabled {
   border-color: #c3c4c7;
   background: #dcdcde;
