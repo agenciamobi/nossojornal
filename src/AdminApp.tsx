@@ -1893,7 +1893,8 @@ function UsersView() {
         title="Usuários"
         description="Gerencie as contas com acesso ao painel."
       />
-<div className="admin-table-wrap">
+
+      <div className="admin-table-wrap">
         <table className="admin-table">
           <thead>
             <tr>
@@ -1909,7 +1910,9 @@ function UsersView() {
               <tr key={user.id}>
                 <td className="admin-user-cell">
                   <span className="admin-avatar">{initials(user.displayName)}</span>
-                  <strong>{user.displayName}</strong>
+                  <strong>
+                    <a href={'/sistema/usuarios/' + user.id}>{user.displayName}</a>
+                  </strong>
                 </td>
                 <td><code>{user.login}</code></td>
                 <td><a href={'mailto:' + user.email}>{user.email}</a></td>
@@ -1928,6 +1931,212 @@ function UsersView() {
   );
 }
 
+function UserEditorView({ csrfToken }: { csrfToken: string }) {
+  const match = window.location.pathname.match(/^\/sistema\/usuarios\/(\d+)\/?$/);
+  const userId = match ? Number.parseInt(match[1], 10) : 0;
+
+  const [data, setData] = useState<UserDetailPayload['data']>();
+  const [writeReadiness, setWriteReadiness] = useState<WriteReadinessPayload['data']>();
+  const [displayName, setDisplayName] = useState('');
+  const [email, setEmail] = useState('');
+  const [role, setRole] = useState('');
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    if (!userId) {
+      setError(true);
+      return;
+    }
+
+    void adminFetch<UserDetailPayload>('/api/admin/user.php?id=' + userId)
+      .then((payload) => {
+        if (!payload.ok || !payload.data) throw new Error('user_invalid');
+
+        setData(payload.data);
+        setDisplayName(payload.data.user.displayName);
+        setEmail(payload.data.user.email);
+        setRole(payload.data.user.roles[0] ?? '');
+      })
+      .catch(() => setError(true));
+
+    void adminFetch<WriteReadinessPayload>('/api/admin/write-readiness.php')
+      .then((payload) => {
+        if (payload.ok && payload.data) setWriteReadiness(payload.data);
+      })
+      .catch(() => {
+        // A edição permanece indisponível quando a verificação não responder.
+      });
+  }, [userId]);
+
+  if (error) return <AdminError />;
+  if (!data) return <AdminLoading />;
+
+  const profileCanSave = Boolean(writeReadiness?.database.update.available);
+  const roleCanSave = data.canChangeRole && Boolean(
+    writeReadiness?.database.insert.available
+      && writeReadiness?.database.update.available,
+  );
+  const originalRole = data.user.roles[0] ?? '';
+  const changed =
+    displayName !== data.user.displayName
+    || email !== data.user.email
+    || role !== originalRole;
+
+  async function saveUser() {
+    if (!profileCanSave || !changed || saveState === 'saving') return;
+    if (role !== originalRole && !roleCanSave) return;
+
+    setSaveState('saving');
+
+    try {
+      const payload = await adminFetch<{
+        ok: boolean;
+        data?: { user: AdminUser };
+      }>('/api/admin/user-save.php', {
+        method: 'POST',
+        headers: { 'X-CSRF-Token': csrfToken },
+        body: JSON.stringify({
+          userId: data.user.id,
+          displayName,
+          email,
+          role,
+        }),
+      });
+
+      if (!payload.ok || !payload.data) {
+        throw new Error('user_save_invalid_response');
+      }
+
+      setData((current) => current
+        ? {
+            ...current,
+            user: payload.data!.user,
+          }
+        : current
+      );
+      setDisplayName(payload.data.user.displayName);
+      setEmail(payload.data.user.email);
+      setRole(payload.data.user.roles[0] ?? role);
+      setSaveState('saved');
+    } catch {
+      setSaveState('error');
+    }
+  }
+
+  return (
+    <>
+      <header className="admin-editor-header">
+        <div>
+          <a href="/sistema/usuarios" className="admin-editor-header__back">← Usuários</a>
+          <div className="admin-editor-header__title">
+            <span className="admin-avatar">{initials(data.user.displayName)}</span>
+            <h1>Editar usuário</h1>
+          </div>
+          <p>@{data.user.login} • cadastrado em {formatAdminDate(data.user.registeredAt)}</p>
+        </div>
+
+        <div className="admin-editor-header__actions">
+          <button
+            type="button"
+            className="admin-button--primary"
+            disabled={!profileCanSave || !changed || saveState === 'saving' || (role !== originalRole && !roleCanSave)}
+            onClick={() => void saveUser()}
+          >
+            {saveState === 'saving' ? 'Salvando…' : 'Salvar'}
+          </button>
+        </div>
+      </header>
+
+      {saveState === 'saved' && (
+        <div className="admin-save-feedback admin-save-feedback--success" role="status">
+          Usuário atualizado.
+        </div>
+      )}
+
+      {saveState === 'error' && (
+        <div className="admin-save-feedback admin-save-feedback--error" role="alert">
+          Não foi possível salvar o usuário. Verifique os dados e tente novamente.
+        </div>
+      )}
+
+      <div className="admin-user-editor">
+        <section className="admin-editor-card">
+          <div className="admin-editor-card__head">
+            <span>Perfil</span>
+            <strong>Informações do usuário</strong>
+          </div>
+
+          <div className="admin-editor-card__body admin-editor-card__body--fields">
+            <label className="admin-editor-field">
+              <span>Nome de exibição</span>
+              <input
+                value={displayName}
+                readOnly={!profileCanSave}
+                onChange={(event) => {
+                  setDisplayName(event.target.value);
+                  setSaveState('idle');
+                }}
+              />
+            </label>
+
+            <label className="admin-editor-field">
+              <span>Login</span>
+              <input value={data.user.login} readOnly />
+            </label>
+
+            <label className="admin-editor-field">
+              <span>E-mail</span>
+              <input
+                type="email"
+                value={email}
+                readOnly={!profileCanSave}
+                onChange={(event) => {
+                  setEmail(event.target.value);
+                  setSaveState('idle');
+                }}
+              />
+            </label>
+
+            <label className="admin-editor-field">
+              <span>Função</span>
+              <select
+                value={role}
+                disabled={!roleCanSave}
+                onChange={(event) => {
+                  setRole(event.target.value);
+                  setSaveState('idle');
+                }}
+              >
+                {data.roles.map((item) => (
+                  <option value={item.key} key={item.key}>
+                    {roleLabel(item.key)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        </section>
+
+        <aside className="admin-editor-card">
+          <div className="admin-editor-card__head">
+            <span>Acesso</span>
+            <strong>Permissões</strong>
+          </div>
+
+          <div className="admin-user-permissions">
+            <span className={data.user.permissions.editPosts ? 'active' : ''}>Editar notícias</span>
+            <span className={data.user.permissions.publishPosts ? 'active' : ''}>Publicar notícias</span>
+            <span className={data.user.permissions.manageCategories ? 'active' : ''}>Gerenciar categorias</span>
+            <span className={data.user.permissions.uploadFiles ? 'active' : ''}>Enviar mídia</span>
+            <span className={data.user.permissions.editUsers ? 'active' : ''}>Gerenciar usuários</span>
+            <span className={data.user.permissions.manageOptions ? 'active' : ''}>Configurar site</span>
+          </div>
+        </aside>
+      </div>
+    </>
+  );
+}
 
 function MediaView() {
   const params = useMemo(() => new URLSearchParams(window.location.search), []);
