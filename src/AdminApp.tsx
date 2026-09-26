@@ -1821,6 +1821,8 @@ function PostEditorView({
   const postId = match ? Number.parseInt(match[1], 10) : 0;
 
   const [data, setData] = useState<PostDetailPayload['data']>();
+  const [editorialData, setEditorialData] = useState<EditorialWorkflowPayload['data']>();
+  const [editorial, setEditorial] = useState<EditorialWorkflow>();
   const [title, setTitle] = useState('');
   const [slug, setSlug] = useState('');
   const [excerpt, setExcerpt] = useState('');
@@ -1843,12 +1845,16 @@ function PostEditorView({
       return;
     }
 
-    void adminFetch<PostDetailPayload>('/api/admin/post.php?id=' + postId)
-      .then((payload) => {
-        if (!payload.ok || !payload.data) throw new Error('post_invalid');
+    void Promise.all([
+      adminFetch<PostDetailPayload>('/api/admin/post.php?id=' + postId),
+      adminFetch<EditorialWorkflowPayload>('/api/admin/post-editorial.php?id=' + postId),
+    ])
+      .then(([postPayload, editorialPayload]) => {
+        if (!postPayload.ok || !postPayload.data) throw new Error('post_invalid');
+        if (!editorialPayload.ok || !editorialPayload.data) throw new Error('editorial_invalid');
 
-        const post = payload.data.post;
-        setData(payload.data);
+        const post = postPayload.data.post;
+        setData(postPayload.data);
         setTitle(post.title);
         setSlug(post.slug);
         setExcerpt(post.excerpt);
@@ -1857,12 +1863,15 @@ function PostEditorView({
         setSeoTitle(post.seo.title);
         setSeoDescription(post.seo.description);
         setPrimaryCategoryId(post.seo.primaryCategoryId);
+
+        setEditorialData(editorialPayload.data);
+        setEditorial(editorialPayload.data.editorial);
       })
       .catch(() => setError(true));
   }, [postId]);
 
   if (error) return <AdminError />;
-  if (!data) return <AdminLoading />;
+  if (!data || !editorialData || !editorial) return <AdminLoading />;
 
   const post = data.post;
   const selectedSet = new Set(categoryIds);
@@ -1881,7 +1890,7 @@ function PostEditorView({
     && (!publishedLike || canEditPublished)
     && post.status !== 'trash';
 
-  const changed =
+  const postChanged =
     title !== post.title
     || slug !== post.slug
     || excerpt !== post.excerpt
@@ -1891,11 +1900,110 @@ function PostEditorView({
     || primaryCategoryId !== post.seo.primaryCategoryId
     || JSON.stringify(normalizedCategoryIds) !== JSON.stringify(originalCategoryIds);
 
+  const editorialChanged =
+    JSON.stringify(editorial) !== JSON.stringify(editorialData.editorial);
+
+  const changed = postChanged || editorialChanged;
+
   const canChangeStatus =
     user.permissions.editPosts
     && (ownsPost || canEditOthers)
     && (!publishedLike || canEditPublished)
     && post.status !== 'trash';
+
+  function patchEditorial(patch: Partial<EditorialWorkflow>) {
+    setEditorial((current) => current ? { ...current, ...patch } : current);
+    setSaveState('idle');
+  }
+
+  function patchChecklist(key: keyof EditorialChecklist, value: boolean) {
+    setEditorial((current) => current
+      ? {
+          ...current,
+          checklist: {
+            ...current.checklist,
+            [key]: value,
+          },
+        }
+      : current
+    );
+    setSaveState('idle');
+  }
+
+  function addSource() {
+    setEditorial((current) => current
+      ? {
+          ...current,
+          sources: [
+            ...current.sources,
+            { name: '', organization: '', contact: '', url: '', note: '' },
+          ],
+        }
+      : current
+    );
+    setSaveState('idle');
+  }
+
+  function updateSource(index: number, patch: Partial<EditorialSource>) {
+    setEditorial((current) => current
+      ? {
+          ...current,
+          sources: current.sources.map((source, sourceIndex) =>
+            sourceIndex === index ? { ...source, ...patch } : source
+          ),
+        }
+      : current
+    );
+    setSaveState('idle');
+  }
+
+  function removeSource(index: number) {
+    setEditorial((current) => current
+      ? {
+          ...current,
+          sources: current.sources.filter((_, sourceIndex) => sourceIndex !== index),
+        }
+      : current
+    );
+    setSaveState('idle');
+  }
+
+  async function saveEditorialState(): Promise<EditorialWorkflowPayload['data']> {
+    const payload = await adminFetch<EditorialWorkflowPayload>('/api/admin/post-editorial.php', {
+      method: 'POST',
+      headers: { 'X-CSRF-Token': csrfToken },
+      body: JSON.stringify({
+        postId: post.id,
+        stage: editorial.stage,
+        priority: editorial.priority,
+        deadline: editorial.deadline,
+        assigneeId: editorial.assigneeId,
+        notes: editorial.notes,
+        sources: editorial.sources,
+        checklist: editorial.checklist,
+        homeSlot: editorial.home.slot,
+        homeRank: editorial.home.rank,
+        homeUntil: editorial.home.until,
+      }),
+    });
+
+    if (!payload.ok || !payload.data) {
+      throw new Error('editorial_save_invalid_response');
+    }
+
+    return payload.data;
+  }
+
+  async function refreshEditorialState() {
+    const payload = await adminFetch<EditorialWorkflowPayload>(
+      '/api/admin/post-editorial.php?id=' + post.id,
+    );
+
+    if (payload.ok && payload.data) {
+      setEditorialData(payload.data);
+      setEditorial(payload.data.editorial);
+    }
+  }
 
   async function savePost() {
     if (!canEdit || !changed || saveState === 'saving') return;
@@ -1903,73 +2011,86 @@ function PostEditorView({
     setSaveState('saving');
 
     try {
-      const payload = await adminFetch<{
-        ok: boolean;
-        data?: {
-          post: {
-            id: number;
-            title: string;
-            slug: string;
-            excerpt: string;
-            content: string;
-            status: string;
-            categoryIds: number[];
-            seo: {
+      if (postChanged) {
+        const payload = await adminFetch<{
+          ok: boolean;
+          data?: {
+            post: {
+              id: number;
               title: string;
-              description: string;
-              primaryCategoryId: number;
+              slug: string;
+              excerpt: string;
+              content: string;
+              status: string;
+              categoryIds: number[];
+              seo: {
+                title: string;
+                description: string;
+                primaryCategoryId: number;
+              };
+              modifiedAt: string;
+              publicUrl: string | null;
             };
-            modifiedAt: string;
-            publicUrl: string | null;
           };
-        };
-      }>('/api/admin/post-save.php', {
-        method: 'POST',
-        headers: { 'X-CSRF-Token': csrfToken },
-        body: JSON.stringify({
-          postId: post.id,
-          title,
-          slug,
-          excerpt,
-          content,
-          categoryIds,
-          seoTitle,
-          seoDescription,
-          primaryCategoryId,
-        }),
-      });
+        }>('/api/admin/post-save.php', {
+          method: 'POST',
+          headers: { 'X-CSRF-Token': csrfToken },
+          body: JSON.stringify({
+            postId: post.id,
+            title,
+            slug,
+            excerpt,
+            content,
+            categoryIds,
+            seoTitle,
+            seoDescription,
+            primaryCategoryId,
+          }),
+        });
 
-      if (!payload.ok || !payload.data) {
-        throw new Error('post_save_invalid_response');
+        if (!payload.ok || !payload.data) {
+          throw new Error('post_save_invalid_response');
+        }
+
+        const saved = payload.data.post;
+        const savedCategories = data.categories
+          .filter((category) => saved.categoryIds.includes(category.id))
+          .map((category) => ({
+            id: category.id,
+            name: category.name,
+            slug: category.slug,
+          }));
+
+        setData((current) => current
+          ? {
+              ...current,
+              post: {
+                ...current.post,
+                title: saved.title,
+                slug: saved.slug,
+                excerpt: saved.excerpt,
+                content: saved.content,
+                categories: savedCategories,
+                seo: saved.seo,
+                modifiedAt: saved.modifiedAt,
+                publicUrl: saved.publicUrl,
+              },
+            }
+          : current
+        );
+        setSlug(saved.slug);
       }
 
-      const saved = payload.data.post;
-      const savedCategories = data.categories
-        .filter((category) => saved.categoryIds.includes(category.id))
-        .map((category) => ({
-          id: category.id,
-          name: category.name,
-          slug: category.slug,
-        }));
+      if (editorialChanged) {
+        const savedEditorial = await saveEditorialState();
+        if (savedEditorial) {
+          setEditorialData(savedEditorial);
+          setEditorial(savedEditorial.editorial);
+        }
+      } else if (postChanged) {
+        await refreshEditorialState();
+      }
 
-      setData((current) => current
-        ? {
-            ...current,
-            post: {
-              ...current.post,
-              title: saved.title,
-              slug: saved.slug,
-              excerpt: saved.excerpt,
-              content: saved.content,
-              categories: savedCategories,
-              seo: saved.seo,
-              modifiedAt: saved.modifiedAt,
-              publicUrl: saved.publicUrl,
-            },
-          }
-        : current
-      );
-      setSlug(saved.slug);
       setSaveState('saved');
     } catch {
       setSaveState('error');
@@ -1979,6 +2100,21 @@ function PostEditorView({
   async function changeStatus(action: 'publish' | 'draft' | 'schedule') {
     if (!canChangeStatus || statusState === 'working' || changed) return;
     if ((action === 'publish' || action === 'schedule') && !user.permissions.publishPosts) return;
+
+    if (action === 'publish' || action === 'schedule') {
+      const manualPending = Object.values(editorial.checklist).filter((value) => !value).length;
+      const automaticPending = Object.values(editorial.automaticChecks).filter((value) => !value).length;
+      const pending = manualPending + automaticPending;
+
+      if (
+        pending > 0
+        && !window.confirm(
+          'Ainda existem ' + pending + ' verificações editoriais pendentes. Deseja continuar mesmo assim?',
+        )
+      ) {
+        return;
+      }
+    }
 
     setStatusState('working');
 
@@ -2026,6 +2162,7 @@ function PostEditorView({
         : current
       );
       setSlug(saved.slug);
+      await refreshEditorialState();
       setStatusState('saved');
     } catch {
       setStatusState('error');
@@ -2088,6 +2225,7 @@ function PostEditorView({
       );
       setImageState('idle');
       setMediaPickerOpen(false);
+      await refreshEditorialState();
     } catch {
       setImageState('error');
     }
@@ -2110,6 +2248,48 @@ function PostEditorView({
   }
 
   const publicationActionDisabled = !canChangeStatus || changed || statusState === 'working';
+
+  const stageLabels: Record<EditorialWorkflow['stage'], string> = {
+    idea: 'Ideia',
+    reporting: 'Apuração',
+    writing: 'Redação',
+    review: 'Revisão',
+    ready: 'Pronta',
+    scheduled: 'Agendada',
+    published: 'Publicada',
+  };
+
+  const priorityLabels: Record<EditorialWorkflow['priority'], string> = {
+    low: 'Baixa',
+    normal: 'Normal',
+    high: 'Alta',
+    urgent: 'Urgente',
+  };
+
+  const checklistLabels: Array<[keyof EditorialChecklist, string]> = [
+    ['headline', 'Título revisado'],
+    ['facts', 'Fatos conferidos'],
+    ['names', 'Nomes e cargos conferidos'],
+    ['dates', 'Datas e números conferidos'],
+    ['sources', 'Fontes identificadas'],
+    ['imageRights', 'Crédito e direitos de imagem'],
+    ['altText', 'Texto alternativo conferido'],
+    ['links', 'Links verificados'],
+    ['category', 'Editoria definida'],
+    ['seo', 'SEO revisado'],
+    ['review', 'Revisão final concluída'],
+  ];
+
+  const automaticCheckLabels: Array<[keyof EditorialWorkflow['automaticChecks'], string]> = [
+    ['title', 'Título preenchido'],
+    ['excerpt', 'Resumo preenchido'],
+    ['featuredImage', 'Imagem destacada'],
+    ['category', 'Categoria definida'],
+    ['seo', 'Metadados de busca'],
+  ];
+
+  const checklistDone = Object.values(editorial.checklist).filter(Boolean).length;
+  const checklistTotal = Object.keys(editorial.checklist).length;
 
   return (
     <>
@@ -2152,10 +2332,7 @@ function PostEditorView({
             <button
               type="button"
               className="admin-button--primary"
-              disabled={
-                publicationActionDisabled
-                || !user.permissions.publishPosts
-              }
+              disabled={publicationActionDisabled || !user.permissions.publishPosts}
               onClick={() => void changeStatus('publish')}
             >
               {statusState === 'working' ? 'Publicando…' : 'Publicar'}
@@ -2244,6 +2421,97 @@ function PostEditorView({
             }}
           />
 
+          <section className="admin-editor-card admin-editorial-notebook">
+            <div className="admin-editor-card__head">
+              <span>Apuração</span>
+              <strong>Caderno da matéria</strong>
+            </div>
+
+            <div className="admin-editor-card__body admin-editor-card__body--fields">
+              <label className="admin-editor-field">
+                <span>Anotações privadas</span>
+                <textarea
+                  rows={8}
+                  value={editorial.notes}
+                  disabled={!canEdit}
+                  placeholder="Perguntas em aberto, dados para conferir, contexto, trechos de entrevista…"
+                  onChange={(event) => patchEditorial({ notes: event.target.value })}
+                />
+              </label>
+
+              <div className="admin-editorial-sources">
+                <div className="admin-editorial-sources__head">
+                  <div>
+                    <span>Fontes consultadas</span>
+                    <small>Informação interna da redação. Não aparece na matéria.</small>
+                  </div>
+                  <button type="button" disabled={!canEdit} onClick={addSource}>+ Adicionar fonte</button>
+                </div>
+
+                {editorial.sources.length === 0 && (
+                  <p className="admin-editorial-sources__empty">Nenhuma fonte registrada.</p>
+                )}
+
+                {editorial.sources.map((source, index) => (
+                  <article className="admin-editorial-source" key={index}>
+                    <div className="admin-editorial-source__grid">
+                      <label>
+                        <span>Nome</span>
+                        <input
+                          value={source.name}
+                          disabled={!canEdit}
+                          onChange={(event) => updateSource(index, { name: event.target.value })}
+                        />
+                      </label>
+                      <label>
+                        <span>Organização / função</span>
+                        <input
+                          value={source.organization}
+                          disabled={!canEdit}
+                          onChange={(event) => updateSource(index, { organization: event.target.value })}
+                        />
+                      </label>
+                      <label>
+                        <span>Contato</span>
+                        <input
+                          value={source.contact}
+                          disabled={!canEdit}
+                          onChange={(event) => updateSource(index, { contact: event.target.value })}
+                        />
+                      </label>
+                      <label>
+                        <span>Link / documento</span>
+                        <input
+                          type="url"
+                          value={source.url}
+                          disabled={!canEdit}
+                          onChange={(event) => updateSource(index, { url: event.target.value })}
+                        />
+                      </label>
+                    </div>
+                    <label className="admin-editorial-source__note">
+                      <span>Observação</span>
+                      <textarea
+                        rows={2}
+                        value={source.note}
+                        disabled={!canEdit}
+                        onChange={(event) => updateSource(index, { note: event.target.value })}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      className="admin-editorial-source__remove"
+                      disabled={!canEdit}
+                      onClick={() => removeSource(index)}
+                    >
+                      Remover fonte
+                    </button>
+                  </article>
+                ))}
+              </div>
+            </div>
+          </section>
+
           <section className="admin-editor-card">
             <div className="admin-editor-card__head">
               <span>Busca e compartilhamento</span>
@@ -2289,18 +2557,9 @@ function PostEditorView({
             </div>
 
             <dl className="admin-editor-meta">
-              <div>
-                <dt>Autor</dt>
-                <dd>{post.author.name}</dd>
-              </div>
-              <div>
-                <dt>Publicação</dt>
-                <dd>{formatAdminDate(post.publishedAt)}</dd>
-              </div>
-              <div>
-                <dt>Atualização</dt>
-                <dd>{formatAdminDate(post.modifiedAt)}</dd>
-              </div>
+              <div><dt>Autor</dt><dd>{post.author.name}</dd></div>
+              <div><dt>Publicação</dt><dd>{formatAdminDate(post.publishedAt)}</dd></div>
+              <div><dt>Atualização</dt><dd>{formatAdminDate(post.modifiedAt)}</dd></div>
             </dl>
 
             {post.status !== 'publish' && user.permissions.publishPosts && (
@@ -2323,6 +2582,71 @@ function PostEditorView({
                 </button>
               </div>
             )}
+          </section>
+
+          <section className="admin-editor-card">
+            <div className="admin-editor-card__head">
+              <span>Redação</span>
+              <strong>Workflow editorial</strong>
+            </div>
+
+            <div className="admin-editorial-workflow">
+              <label>
+                <span>Etapa</span>
+                <select
+                  value={editorial.stage}
+                  disabled={!canEdit}
+                  onChange={(event) => patchEditorial({
+                    stage: event.target.value as EditorialWorkflow['stage'],
+                  })}
+                >
+                  {Object.entries(stageLabels).map(([value, label]) => (
+                    <option value={value} key={value}>{label}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label>
+                <span>Prioridade</span>
+                <select
+                  value={editorial.priority}
+                  disabled={!canEdit}
+                  onChange={(event) => patchEditorial({
+                    priority: event.target.value as EditorialWorkflow['priority'],
+                  })}
+                >
+                  {Object.entries(priorityLabels).map(([value, label]) => (
+                    <option value={value} key={value}>{label}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label>
+                <span>Responsável</span>
+                <select
+                  value={editorial.assigneeId || ''}
+                  disabled={!canEdit}
+                  onChange={(event) => patchEditorial({
+                    assigneeId: Number(event.target.value) || 0,
+                  })}
+                >
+                  <option value="">Autor da matéria</option>
+                  {editorialData.assignees.map((assignee) => (
+                    <option value={assignee.id} key={assignee.id}>{assignee.name}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label>
+                <span>Prazo interno</span>
+                <input
+                  type="datetime-local"
+                  value={editorial.deadline}
+                  disabled={!canEdit}
+                  onChange={(event) => patchEditorial({ deadline: event.target.value })}
+                />
+              </label>
+            </div>
           </section>
 
           <section className="admin-editor-card">
@@ -2359,9 +2683,7 @@ function PostEditorView({
                 >
                   <option value="">Automática</option>
                   {selectedCategories.map((category) => (
-                    <option value={category.id} key={category.id}>
-                      {category.name}
-                    </option>
+                    <option value={category.id} key={category.id}>{category.name}</option>
                   ))}
                 </select>
               </label>
@@ -2413,6 +2735,104 @@ function PostEditorView({
               <p className="admin-editor-media-error">Não foi possível atualizar a imagem.</p>
             )}
           </section>
+
+          <section className="admin-editor-card">
+            <div className="admin-editor-card__head">
+              <span>Antes de publicar</span>
+              <strong>{checklistDone}/{checklistTotal} conferidos</strong>
+            </div>
+
+            <div className="admin-editorial-checks admin-editorial-checks--automatic">
+              {automaticCheckLabels.map(([key, label]) => (
+                <div className={editorial.automaticChecks[key] ? 'done' : ''} key={key}>
+                  <span>{editorial.automaticChecks[key] ? '✓' : '○'}</span>
+                  <strong>{label}</strong>
+                </div>
+              ))}
+            </div>
+
+            <div className="admin-editorial-checks">
+              {checklistLabels.map(([key, label]) => (
+                <label key={key}>
+                  <input
+                    type="checkbox"
+                    checked={editorial.checklist[key]}
+                    disabled={!canEdit}
+                    onChange={(event) => patchChecklist(key, event.target.checked)}
+                  />
+                  <span>{label}</span>
+                </label>
+              ))}
+            </div>
+          </section>
+
+          {user.permissions.publishPosts && (
+            <section className="admin-editor-card">
+              <div className="admin-editor-card__head">
+                <span>Página inicial</span>
+                <strong>Capa do site</strong>
+              </div>
+
+              <div className="admin-editorial-workflow">
+                <label>
+                  <span>Posição</span>
+                  <select
+                    value={editorial.home.slot}
+                    disabled={!canEdit}
+                    onChange={(event) => patchEditorial({
+                      home: {
+                        ...editorial.home,
+                        slot: event.target.value as EditorialWorkflow['home']['slot'],
+                      },
+                    })}
+                  >
+                    <option value="automatic">Automática</option>
+                    <option value="hero">Manchete principal</option>
+                    <option value="featured">Destaque</option>
+                  </select>
+                </label>
+
+                {editorial.home.slot !== 'automatic' && (
+                  <>
+                    <label>
+                      <span>Ordem</span>
+                      <input
+                        type="number"
+                        min="0"
+                        max="99"
+                        value={editorial.home.rank}
+                        disabled={!canEdit}
+                        onChange={(event) => patchEditorial({
+                          home: {
+                            ...editorial.home,
+                            rank: Math.max(0, Math.min(99, Number(event.target.value) || 0)),
+                          },
+                        })}
+                      />
+                    </label>
+                    <label>
+                      <span>Fixar até</span>
+                      <input
+                        type="datetime-local"
+                        value={editorial.home.until}
+                        disabled={!canEdit}
+                        onChange={(event) => patchEditorial({
+                          home: {
+                            ...editorial.home,
+                            until: event.target.value,
+                          },
+                        })}
+                      />
+                    </label>
+                  </>
+                )}
+
+                <a className="admin-editorial-home-link" href="/sistema/capa">
+                  Organizar toda a capa →
+                </a>
+              </div>
+            </section>
+          )}
         </aside>
       </div>
 
