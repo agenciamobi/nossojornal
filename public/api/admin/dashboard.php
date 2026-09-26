@@ -119,6 +119,5 @@ SQL);
             'comments' => $commentCounts,
         ],
         'recentPosts' => $recent,
-        'mode' => 'read_only',
     ];
 });
