@@ -508,6 +508,7 @@ type EditorialWorkflow = {
     slot: 'automatic' | 'hero' | 'featured';
     rank: number;
     until: string;
+    active: boolean;
   };
 };
 
@@ -948,7 +949,7 @@ function AdminNav({ user, view }: { user: AdminUser; view: AdminView }) {
     group: 'content' | 'management' | 'system';
   }> = [
     { key: 'dashboard', label: 'Painel', href: '/sistema', icon: 'dashboard', group: 'content' },
-    ...(user.permissions.publishPosts
+    ...(user.permissions.publishPosts && user.capabilities.includes('edit_others_posts')
       ? [{ key: 'homeLayout' as const, label: 'Capa do site', href: '/sistema/capa', icon: 'home' as const, group: 'content' as const }]
       : []),
     ...(user.permissions.editPosts
@@ -1196,7 +1197,9 @@ function DashboardView({ user }: { user: AdminUser }) {
         />
 
         <div className="admin-dashboard-quick-actions">
-          {user.permissions.publishPosts && <a href="/sistema/capa">Organizar capa</a>}
+          {user.permissions.publishPosts && user.capabilities.includes('edit_others_posts') && (
+            <a href="/sistema/capa">Organizar capa</a>
+          )}
           <a href="/sistema/agenda">Abrir agenda</a>
           <a href="/sistema/noticias">Nova matéria</a>
           {user.login === 'agenciamobi' && <a href="/sistema/pautas">Mesa de Pautas</a>}
@@ -1471,9 +1474,9 @@ function HomeLayoutView({ csrfToken }: { csrfToken: string }) {
   if (error) return <AdminError />;
   if (!data) return <AdminLoading />;
 
-  const activeHero = data.items.find((item) => item.home.slot === 'hero');
+  const activeHero = data.items.find((item) => item.home.slot === 'hero' && item.home.active);
   const featured = data.items
-    .filter((item) => item.home.slot === 'featured')
+    .filter((item) => item.home.slot === 'featured' && item.home.active)
     .sort((a, b) => a.home.rank - b.home.rank);
 
   function updateDraft(postId: number, patch: Partial<HomeLayoutItem['home']>) {
@@ -1572,7 +1575,10 @@ function HomeLayoutView({ csrfToken }: { csrfToken: string }) {
               <div className="admin-home-item__content">
                 <span>{formatAdminDate(item.publishedAt)}</span>
                 <h2><a href={'/sistema/noticias/' + item.id}>{item.title}</a></h2>
-                <small>{item.author}</small>
+                <small>
+                  {item.author}
+                  {item.home.slot !== 'automatic' && !item.home.active ? ' • fixação expirada' : ''}
+                </small>
               </div>
 
               <div className="admin-home-item__controls">
@@ -3186,7 +3192,7 @@ function PostEditorView({
             </div>
           </section>
 
-          {user.permissions.publishPosts && (
+          {user.permissions.publishPosts && user.capabilities.includes('edit_others_posts') && (
             <section className="admin-editor-card">
               <div className="admin-editor-card__head">
                 <span>Página inicial</span>
@@ -6290,7 +6296,7 @@ export function AdminApp() {
         <main className="admin-content">
           {view === 'dashboard' && <DashboardView user={user} />}
           {view === 'homeLayout' && (
-            user.permissions.publishPosts
+            user.permissions.publishPosts && user.capabilities.includes('edit_others_posts')
               ? <HomeLayoutView csrfToken={csrfToken} />
               : <AdminAccessDenied />
           )}
