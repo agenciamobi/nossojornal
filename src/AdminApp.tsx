@@ -1903,6 +1903,11 @@ function PostEditorView({
   const [scheduledAt, setScheduledAt] = useState('');
   const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
   const [mediaPickerOpen, setMediaPickerOpen] = useState(false);
+  const [sourcePickerOpen, setSourcePickerOpen] = useState(false);
+  const [sourceDirectory, setSourceDirectory] = useState<EditorialSourceContact[]>([]);
+  const [sourceDirectoryQuery, setSourceDirectoryQuery] = useState('');
+  const [sourceDirectoryLoading, setSourceDirectoryLoading] = useState(false);
+  const [sourceDirectoryError, setSourceDirectoryError] = useState(false);
   const [imageState, setImageState] = useState<'idle' | 'working' | 'error'>('idle');
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [statusState, setStatusState] = useState<'idle' | 'working' | 'saved' | 'error'>('idle');
@@ -2010,6 +2015,58 @@ function PostEditorView({
         }
       : current
     );
+    setSaveState('idle');
+  }
+
+  async function searchSourceDirectory(query = sourceDirectoryQuery) {
+    setSourceDirectoryLoading(true);
+    setSourceDirectoryError(false);
+
+    try {
+      const search = new URLSearchParams();
+      if (query.trim()) search.set('q', query.trim());
+
+      const payload = await adminFetch<SourcesPayload>('/api/admin/sources.php?' + search.toString());
+      if (!payload.ok || !payload.data) throw new Error('sources_invalid');
+
+      setSourceDirectory(payload.data.items);
+    } catch {
+      setSourceDirectoryError(true);
+    } finally {
+      setSourceDirectoryLoading(false);
+    }
+  }
+
+  async function openSourceDirectory() {
+    if (!canEdit) return;
+    setSourcePickerOpen(true);
+
+    if (sourceDirectory.length === 0) {
+      await searchSourceDirectory('');
+    }
+  }
+
+  function addDirectorySource(item: EditorialSourceContact) {
+    const contact = item.whatsapp || item.phone || item.email;
+    const organization = [item.role, item.organization].filter(Boolean).join(' • ');
+
+    setEditorial((current) => current
+      ? {
+          ...current,
+          sources: [
+            ...current.sources,
+            {
+              name: item.name,
+              organization,
+              contact,
+              url: item.url,
+              note: item.notes,
+            },
+          ],
+        }
+      : current
+    );
+    setSourcePickerOpen(false);
     setSaveState('idle');
   }
 
@@ -2514,7 +2571,14 @@ function PostEditorView({
                     <span>Fontes consultadas</span>
                     <small>Informação interna da redação. Não aparece na matéria.</small>
                   </div>
-                  <button type="button" disabled={!canEdit} onClick={addSource}>+ Adicionar fonte</button>
+                  <div className="admin-editorial-sources__actions">
+                    <button type="button" disabled={!canEdit} onClick={() => void openSourceDirectory()}>
+                      Adicionar da Central
+                    </button>
+                    <button type="button" disabled={!canEdit} onClick={addSource}>
+                      + Fonte avulsa
+                    </button>
+                  </div>
                 </div>
 
                 {editorial.sources.length === 0 && (
@@ -2904,6 +2968,65 @@ function PostEditorView({
           )}
         </aside>
       </div>
+
+      {sourcePickerOpen && (
+        <div className="admin-source-picker" role="dialog" aria-modal="true" aria-label="Adicionar fonte da Central">
+          <div className="admin-source-picker__panel">
+            <header>
+              <div>
+                <span>Central de Fontes</span>
+                <h2>Adicionar fonte à apuração</h2>
+              </div>
+              <button type="button" onClick={() => setSourcePickerOpen(false)} aria-label="Fechar">×</button>
+            </header>
+
+            <form
+              className="admin-source-picker__search"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void searchSourceDirectory();
+              }}
+            >
+              <input
+                type="search"
+                value={sourceDirectoryQuery}
+                placeholder="Buscar nome, órgão, cidade ou assunto"
+                onChange={(event) => setSourceDirectoryQuery(event.target.value)}
+              />
+              <button type="submit" disabled={sourceDirectoryLoading}>
+                {sourceDirectoryLoading ? 'Buscando…' : 'Buscar'}
+              </button>
+            </form>
+
+            {sourceDirectoryError && (
+              <div className="admin-source-picker__error">
+                Não foi possível carregar a Central de Fontes.
+              </div>
+            )}
+
+            <div className="admin-source-picker__grid">
+              {sourceDirectory.map((item) => (
+                <button type="button" key={item.id} onClick={() => addDirectorySource(item)}>
+                  <span className="admin-source-picker__avatar">{initials(item.name)}</span>
+                  <span className="admin-source-picker__body">
+                    <strong>{item.name}</strong>
+                    <small>{[item.role, item.organization, item.city].filter(Boolean).join(' • ') || 'Sem vínculo informado'}</small>
+                    {item.topics.length > 0 && <em>{item.topics.slice(0, 4).join(' · ')}</em>}
+                  </span>
+                </button>
+              ))}
+
+              {!sourceDirectoryLoading && sourceDirectory.length === 0 && (
+                <p>Nenhuma fonte encontrada.</p>
+              )}
+            </div>
+
+            <footer>
+              <a href="/sistema/fontes">Gerenciar Central de Fontes →</a>
+            </footer>
+          </div>
+        </div>
+      )}
 
       {mediaPickerOpen && (
         <div className="admin-media-picker" role="dialog" aria-modal="true" aria-label="Escolher imagem destacada">
