@@ -3670,6 +3670,21 @@ function PostEditorView({
               </label>
             </div>
           </section>
+
+          <AdminEditorialConnections
+            postId={post.id}
+            disabled={!canEdit}
+            tags={tagNames}
+            tagSuggestions={data.tagSuggestions}
+            related={editorial.connections.related}
+            series={editorial.connections.series}
+            onTagsChange={(nextTags) => {
+              setTagNames(nextTags);
+              setSaveState('idle');
+            }}
+            onRelatedChange={(items) => patchConnections({ related: items })}
+            onSeriesChange={(series) => patchConnections({ series })}
+          />
         </section>
 
         <aside className="admin-editor-sidebar">
