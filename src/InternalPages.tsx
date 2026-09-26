@@ -22,6 +22,20 @@ type Article = {
   url: string;
   excerpt: string;
   contentHtml?: string;
+  toc?: Array<{
+    id: string;
+    label: string;
+  }>;
+  gallery?: Array<{
+    url: string;
+    alt: string;
+    caption: string;
+  }>;
+  videos?: Array<{
+    provider: 'youtube';
+    id: string;
+    embedUrl: string;
+  }>;
   publishedAt: string;
   modifiedAt: string;
   author: {
@@ -76,7 +90,7 @@ type StaticPagePayload = {
       excerpt: string;
       modifiedAt: string;
       contacts?: Array<{
-        type: 'whatsapp' | 'email' | 'phone';
+        type: 'whatsapp' | 'email' | 'phone' | 'location';
         href: string;
         value: string;
         label: string;
@@ -328,6 +342,94 @@ function ArticleCard({ article }: { article: Article }) {
   );
 }
 
+
+function ArticleGallery({
+  images,
+  articleTitle,
+}: {
+  images: NonNullable<Article['gallery']>;
+  articleTitle: string;
+}) {
+  if (images.length === 0) return null;
+
+  const preview = images.slice(0, 4);
+  const remaining = images.slice(4);
+
+  return (
+    <section className="article-gallery" aria-labelledby="article-gallery-title">
+      <div className="article-gallery__heading">
+        <span className="internal-kicker">Galeria</span>
+        <h2 id="article-gallery-title">{images.length} fotos da reportagem</h2>
+      </div>
+
+      <div className="article-gallery__preview">
+        {preview.map((image, index) => (
+          <figure
+            className={index === 0 ? 'article-gallery__item article-gallery__item--lead' : 'article-gallery__item'}
+            key={image.url}
+          >
+            <img
+              src={image.url}
+              alt={image.alt || articleTitle}
+              loading={index === 0 ? 'eager' : 'lazy'}
+              decoding="async"
+            />
+            {image.caption && <figcaption>{image.caption}</figcaption>}
+          </figure>
+        ))}
+      </div>
+
+      {remaining.length > 0 && (
+        <details className="article-gallery__more">
+          <summary>Ver galeria completa • {images.length} fotos</summary>
+          <div className="article-gallery__expanded">
+            {remaining.map((image) => (
+              <figure className="article-gallery__item" key={image.url}>
+                <img
+                  src={image.url}
+                  alt={image.alt || articleTitle}
+                  loading="lazy"
+                  decoding="async"
+                />
+                {image.caption && <figcaption>{image.caption}</figcaption>}
+              </figure>
+            ))}
+          </div>
+        </details>
+      )}
+    </section>
+  );
+}
+
+function ArticleVideos({
+  videos,
+  title,
+}: {
+  videos: NonNullable<Article['videos']>;
+  title: string;
+}) {
+  if (videos.length === 0) return null;
+
+  return (
+    <div className="article-videos">
+      {videos.map((video) => (
+        <figure className="article-video" key={video.id}>
+          <div className="article-video__frame">
+            <iframe
+              src={video.embedUrl}
+              title={`Vídeo: ${title}`}
+              loading="lazy"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              referrerPolicy="strict-origin-when-cross-origin"
+              allowFullScreen
+            />
+          </div>
+        </figure>
+      ))}
+    </div>
+  );
+}
+
 function Pagination({
   page,
   totalPages,
@@ -574,17 +676,37 @@ function ArticlePage({ slug }: { slug: string }) {
           )}
 
           <div className="article-detail__layout">
-            <div
-              className="article-body"
-              dangerouslySetInnerHTML={{ __html: article.contentHtml ?? '' }}
-            />
+            <div className="article-reading-column">
+              <ArticleVideos videos={article.videos ?? []} title={article.title} />
+              <ArticleGallery images={article.gallery ?? []} articleTitle={article.title} />
+
+              <div
+                className="article-body"
+                dangerouslySetInnerHTML={{ __html: article.contentHtml ?? '' }}
+              />
+            </div>
 
             <aside className="article-detail__aside" aria-label="Navegação da matéria">
-              <span className="internal-kicker">Nesta matéria</span>
-              <div className="article-detail__categories">
-                {article.categories.map((category) => (
-                  <a href={category.url} key={category.id}>{category.name}</a>
-                ))}
+              {(article.toc ?? []).length > 0 && (
+                <nav className="article-toc" aria-label="Nesta matéria">
+                  <span className="internal-kicker">Nesta matéria</span>
+                  <ol>
+                    {article.toc?.map((item) => (
+                      <li key={item.id}>
+                        <a href={`#${item.id}`}>{item.label}</a>
+                      </li>
+                    ))}
+                  </ol>
+                </nav>
+              )}
+
+              <div className="article-detail__aside-section">
+                <span className="internal-kicker">Editorias</span>
+                <div className="article-detail__categories">
+                  {article.categories.map((category) => (
+                    <a href={category.url} key={category.id}>{category.name}</a>
+                  ))}
+                </div>
               </div>
 
               {article.primaryCategory && (
@@ -824,6 +946,7 @@ function StaticPage({ slug }: { slug: 'sobre' | 'contato' }) {
     const whatsapp = contacts.find((contact) => contact.type === 'whatsapp');
     const email = contacts.find((contact) => contact.type === 'email');
     const phone = contacts.find((contact) => contact.type === 'phone');
+    const location = contacts.find((contact) => contact.type === 'location');
 
     return (
       <main className="internal-main contact-page">
@@ -872,7 +995,7 @@ function StaticPage({ slug }: { slug: 'sobre' | 'contato' }) {
 
             <div className="contact-card">
               <span>Redação regional</span>
-              <strong>Hulha Negra, RS</strong>
+              <strong>{location?.value || 'Hulha Negra, RS'}</strong>
               <small>Cobertura local e regional</small>
             </div>
           </div>
@@ -898,7 +1021,6 @@ function StaticPage({ slug }: { slug: 'sobre' | 'contato' }) {
         <header className="static-page__header about-page__header">
           <span className="internal-kicker">Nossa história</span>
           <h1>{page.title}</h1>
-          {page.excerpt && <p>{page.excerpt}</p>}
         </header>
 
         <div className="about-page__layout">
