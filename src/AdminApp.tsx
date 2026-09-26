@@ -448,6 +448,10 @@ type PautaItem = {
   topic: string;
   sourceName: string;
   sourceUrl: string;
+  feedUrl: string;
+  sourcePublishedAt: string;
+  capturedAt: string;
+  isNew: boolean;
   deadline: string;
   assigneeId: number;
   assignee: string;
@@ -483,6 +487,7 @@ type PautasPayload = {
       };
     }>;
     items: PautaItem[];
+    lastReviewAt?: string;
     assignees?: Array<{
       id: number;
       login: string;
@@ -7150,6 +7155,15 @@ function PautasView({ csrfToken }: { csrfToken: string }) {
   const [captureResult, setCaptureResult] = useState('');
   const [message, setMessage] = useState<'idle' | 'saved' | 'error'>('idle');
   const [error, setError] = useState(false);
+  const [query, setQuery] = useState('');
+  const [filterStage, setFilterStage] = useState<'all' | PautaItem['stage']>('all');
+  const [filterPriority, setFilterPriority] = useState<'all' | PautaItem['priority']>('all');
+  const [filterSource, setFilterSource] = useState('all');
+  const [filterTopic, setFilterTopic] = useState('all');
+  const [filterAge, setFilterAge] = useState<'all' | '24h' | '3d' | '7d' | 'older'>('all');
+  const [newOnly, setNewOnly] = useState(false);
+  const [sortMode, setSortMode] = useState<'recent' | 'priority'>('recent');
+  const [reviewing, setReviewing] = useState(false);
 
   useEffect(() => {
     void adminFetch<PautasPayload>('/api/admin/pautas.php')
@@ -7368,13 +7382,143 @@ function PautasView({ csrfToken }: { csrfToken: string }) {
     }
   }
 
+  async function markReviewed() {
+    if (reviewing) return;
+
+    setReviewing(true);
+    setMessage('idle');
+
+    try {
+      const payload = await adminFetch<PautasPayload>('/api/admin/pautas.php', {
+        method: 'POST',
+        headers: { 'X-CSRF-Token': csrfToken },
+        body: JSON.stringify({ action: 'mark_reviewed' }),
+      });
+
+      if (!payload.ok || !payload.data) {
+        throw new Error('pautas_review_invalid');
+      }
+
+      setData((current) => current
+        ? {
+            ...current,
+            ...payload.data,
+            sources: payload.data?.sources ?? current.sources,
+            assignees: payload.data?.assignees ?? current.assignees,
+          }
+        : payload.data
+      );
+      setNewOnly(false);
+      setMessage('saved');
+    } catch {
+      setMessage('error');
+    } finally {
+      setReviewing(false);
+    }
+  }
+
   const stages = Object.keys(stageLabels) as PautaItem['stage'][];
+  const normalizedQuery = query.trim().toLocaleLowerCase('pt-BR');
+  const now = Date.now();
+  const ageThresholds = {
+    '24h': 24 * 60 * 60 * 1000,
+    '3d': 3 * 24 * 60 * 60 * 1000,
+    '7d': 7 * 24 * 60 * 60 * 1000,
+  } as const;
+
+  const sourceOptions = Array.from(new Set(
+    data.items.map((item) => item.sourceName.trim()).filter(Boolean),
+  )).sort((left, right) => left.localeCompare(right, 'pt-BR'));
+
+  const topicOptions = Array.from(new Set(
+    data.items.map((item) => item.topic.trim()).filter(Boolean),
+  )).sort((left, right) => left.localeCompare(right, 'pt-BR'));
+
+  const priorityWeight: Record<PautaItem['priority'], number> = {
+    urgent: 4,
+    high: 3,
+    normal: 2,
+    low: 1,
+  };
+
+  const visibleItems = data.items
+    .filter((item) => {
+      if (filterStage !== 'all' && item.stage !== filterStage) return false;
+      if (filterPriority !== 'all' && item.priority !== filterPriority) return false;
+      if (filterSource !== 'all' && item.sourceName !== filterSource) return false;
+      if (filterTopic !== 'all' && item.topic !== filterTopic) return false;
+      if (newOnly && !item.isNew) return false;
+
+      if (normalizedQuery) {
+        const haystack = [
+          item.title,
+          item.notes,
+          item.topic,
+          item.sourceName,
+          item.assignee,
+        ].join(' ').toLocaleLowerCase('pt-BR');
+
+        if (!haystack.includes(normalizedQuery)) return false;
+      }
+
+      if (filterAge !== 'all') {
+        const arrivalRaw = item.capturedAt || item.createdAt;
+        const arrival = new Date(arrivalRaw).getTime();
+
+        if (!Number.isFinite(arrival)) return filterAge === 'older';
+
+        const age = Math.max(0, now - arrival);
+        if (filterAge === 'older') {
+          return age > ageThresholds['7d'];
+        }
+
+        return age <= ageThresholds[filterAge];
+      }
+
+      return true;
+    })
+    .sort((left, right) => {
+      if (sortMode === 'priority') {
+        const priorityDelta = priorityWeight[right.priority] - priorityWeight[left.priority];
+        if (priorityDelta !== 0) return priorityDelta;
+      }
+
+      if (left.isNew !== right.isNew) {
+        return left.isNew ? -1 : 1;
+      }
+
+      const leftTime = new Date(left.capturedAt || left.createdAt).getTime() || 0;
+      const rightTime = new Date(right.capturedAt || right.createdAt).getTime() || 0;
+      return rightTime - leftTime;
+    });
+
   const counts = Object.fromEntries(
     stages.map((stageKey) => [
       stageKey,
-      data.items.filter((item) => item.stage === stageKey).length,
+      visibleItems.filter((item) => item.stage === stageKey).length,
     ]),
   ) as Record<PautaItem['stage'], number>;
+
+  const newCount = data.items.filter((item) => item.isNew).length;
+  const activeFilterCount = [
+    normalizedQuery !== '',
+    filterStage !== 'all',
+    filterPriority !== 'all',
+    filterSource !== 'all',
+    filterTopic !== 'all',
+    filterAge !== 'all',
+    newOnly,
+  ].filter(Boolean).length;
+
+  function clearFilters() {
+    setQuery('');
+    setFilterStage('all');
+    setFilterPriority('all');
+    setFilterSource('all');
+    setFilterTopic('all');
+    setFilterAge('all');
+    setNewOnly(false);
+  }
 
   return (
     <>
@@ -7396,22 +7540,152 @@ function PautasView({ csrfToken }: { csrfToken: string }) {
       )}
 
       <section className="admin-pautas-summary" aria-label="Resumo da Mesa de Pautas">
+        <button
+          type="button"
+          className={newOnly ? 'is-active' : ''}
+          onClick={() => setNewOnly((current) => !current)}
+        >
+          <span>Novas desde revisão</span>
+          <strong>{newCount}</strong>
+        </button>
         <div>
           <span>Pautas abertas</span>
           <strong>{data.items.length}</strong>
         </div>
         <div>
           <span>Em apuração</span>
-          <strong>{counts.research}</strong>
+          <strong>{data.items.filter((item) => item.stage === 'research').length}</strong>
         </div>
         <div>
           <span>Prontas</span>
-          <strong>{counts.ready}</strong>
+          <strong>{data.items.filter((item) => item.stage === 'ready').length}</strong>
         </div>
         <div>
           <span>Em redação</span>
-          <strong>{counts.writing}</strong>
+          <strong>{data.items.filter((item) => item.stage === 'writing').length}</strong>
         </div>
+      </section>
+
+      <section className="admin-pauta-triage" aria-label="Filtros da Mesa de Pautas">
+        <div className="admin-pauta-triage__head">
+          <div>
+            <span>Triagem</span>
+            <strong>
+              {visibleItems.length.toLocaleString('pt-BR')} de {data.items.length.toLocaleString('pt-BR')} pautas
+            </strong>
+            <small>
+              {data.lastReviewAt
+                ? 'Última revisão: ' + formatAdminDate(data.lastReviewAt)
+                : 'Ainda não há uma revisão marcada.'}
+            </small>
+          </div>
+
+          <div className="admin-pauta-triage__actions">
+            {activeFilterCount > 0 && (
+              <button type="button" onClick={clearFilters}>
+                Limpar {activeFilterCount} {activeFilterCount === 1 ? 'filtro' : 'filtros'}
+              </button>
+            )}
+            <button
+              type="button"
+              className="admin-button--primary"
+              disabled={reviewing || newCount === 0}
+              onClick={() => void markReviewed()}
+            >
+              {reviewing ? 'Marcando…' : 'Marcar como revisadas'}
+            </button>
+          </div>
+        </div>
+
+        <div className="admin-pauta-triage__filters">
+          <label>
+            <span>Buscar</span>
+            <input
+              type="search"
+              value={query}
+              placeholder="Título, fonte, tema ou responsável"
+              onChange={(event) => setQuery(event.target.value)}
+            />
+          </label>
+
+          <label>
+            <span>Etapa</span>
+            <select
+              value={filterStage}
+              onChange={(event) => setFilterStage(event.target.value as 'all' | PautaItem['stage'])}
+            >
+              <option value="all">Todas</option>
+              {Object.entries(stageLabels).map(([value, label]) => (
+                <option value={value} key={value}>{label}</option>
+              ))}
+            </select>
+          </label>
+
+          <label>
+            <span>Prioridade</span>
+            <select
+              value={filterPriority}
+              onChange={(event) => setFilterPriority(event.target.value as 'all' | PautaItem['priority'])}
+            >
+              <option value="all">Todas</option>
+              {Object.entries(priorityLabels).map(([value, label]) => (
+                <option value={value} key={value}>{label}</option>
+              ))}
+            </select>
+          </label>
+
+          <label>
+            <span>Fonte</span>
+            <select value={filterSource} onChange={(event) => setFilterSource(event.target.value)}>
+              <option value="all">Todas</option>
+              {sourceOptions.map((source) => <option value={source} key={source}>{source}</option>)}
+            </select>
+          </label>
+
+          <label>
+            <span>Tema</span>
+            <select value={filterTopic} onChange={(event) => setFilterTopic(event.target.value)}>
+              <option value="all">Todos</option>
+              {topicOptions.map((itemTopic) => (
+                <option value={itemTopic} key={itemTopic}>{itemTopic}</option>
+              ))}
+            </select>
+          </label>
+
+          <label>
+            <span>Idade</span>
+            <select
+              value={filterAge}
+              onChange={(event) => setFilterAge(event.target.value as typeof filterAge)}
+            >
+              <option value="all">Qualquer</option>
+              <option value="24h">Últimas 24h</option>
+              <option value="3d">Últimos 3 dias</option>
+              <option value="7d">Últimos 7 dias</option>
+              <option value="older">Mais antigas</option>
+            </select>
+          </label>
+
+          <label>
+            <span>Ordenar</span>
+            <select
+              value={sortMode}
+              onChange={(event) => setSortMode(event.target.value as typeof sortMode)}
+            >
+              <option value="recent">Mais recentes</option>
+              <option value="priority">Maior prioridade</option>
+            </select>
+          </label>
+        </div>
+
+        <label className="admin-pauta-triage__new-only">
+          <input
+            type="checkbox"
+            checked={newOnly}
+            onChange={(event) => setNewOnly(event.target.checked)}
+          />
+          <span>Mostrar somente o que entrou desde a última revisão</span>
+        </label>
       </section>
 
       <div className="admin-pautas-workspace">
@@ -7550,12 +7824,13 @@ function PautasView({ csrfToken }: { csrfToken: string }) {
               </header>
 
               <div>
-                {data.items
+                {visibleItems
                   .filter((item) => item.stage === stageKey)
                   .map((item) => (
                     <article
                       className={
                         'admin-pauta-card admin-pauta-card--' + item.priority
+                        + (item.isNew ? ' admin-pauta-card--new' : '')
                         + (editingId === item.id ? ' admin-pauta-card--active' : '')
                       }
                       key={item.id}
@@ -7563,10 +7838,18 @@ function PautasView({ csrfToken }: { csrfToken: string }) {
                       <button type="button" onClick={() => editPauta(item)}>
                         <div className="admin-pauta-card__meta">
                           <span>{priorityLabels[item.priority]}</span>
+                          {item.isNew && <span className="admin-pauta-card__new">Nova</span>}
                           {item.topic && <span>{item.topic}</span>}
                         </div>
                         <h3>{item.title}</h3>
                         {item.sourceName && <p>{item.sourceName}</p>}
+                        {(item.capturedAt || item.sourcePublishedAt) && (
+                          <small className="admin-pauta-card__arrival">
+                            {item.capturedAt
+                              ? 'Capturada ' + formatAdminDate(item.capturedAt)
+                              : 'Origem ' + formatAdminDate(item.sourcePublishedAt)}
+                          </small>
+                        )}
                         <footer>
                           <span>{item.assignee}</span>
                           <span>{item.deadline ? formatAdminDate(item.deadline) : 'Sem prazo'}</span>
