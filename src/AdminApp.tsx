@@ -1617,8 +1617,13 @@ function CategoriesView() {
 function CategoryEditorView({ csrfToken }: { csrfToken: string }) {
   const match = window.location.pathname.match(/^\/sistema\/categorias\/(\d+)\/?$/);
   const categoryId = match ? Number.parseInt(match[1], 10) : 0;
+
   const [data, setData] = useState<CategoryDetailPayload['data']>();
   const [writeReadiness, setWriteReadiness] = useState<WriteReadinessPayload['data']>();
+  const [name, setName] = useState('');
+  const [slug, setSlug] = useState('');
+  const [description, setDescription] = useState('');
+  const [parentId, setParentId] = useState<number | null>(null);
   const [color, setColor] = useState('');
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [error, setError] = useState(false);
@@ -1632,8 +1637,14 @@ function CategoryEditorView({ csrfToken }: { csrfToken: string }) {
     void adminFetch<CategoryDetailPayload>('/api/admin/category.php?id=' + categoryId)
       .then((payload) => {
         if (!payload.ok || !payload.data) throw new Error('category_invalid');
+
+        const category = payload.data.category;
         setData(payload.data);
-        setColor(payload.data.category.color);
+        setName(category.name);
+        setSlug(category.slug);
+        setDescription(category.description);
+        setParentId(category.parentId);
+        setColor(category.color);
       })
       .catch(() => setError(true));
 
@@ -1642,7 +1653,7 @@ function CategoryEditorView({ csrfToken }: { csrfToken: string }) {
         if (payload.ok && payload.data) setWriteReadiness(payload.data);
       })
       .catch(() => {
-        // O editor permanece somente leitura se o probe não estiver disponível.
+        // A edição permanece indisponível quando a verificação não responder.
       });
   }, [categoryId]);
 
@@ -1650,14 +1661,20 @@ function CategoryEditorView({ csrfToken }: { csrfToken: string }) {
   if (!data) return <AdminLoading />;
 
   const category = data.category;
-  const canWriteColor = Boolean(
+  const canEdit = Boolean(
     writeReadiness?.database.insert.available
       && writeReadiness?.database.update.available,
   );
-  const colorChanged = color.toUpperCase() !== category.color.toUpperCase();
 
-  async function saveColor() {
-    if (!canWriteColor || !colorChanged || saveState === 'saving') return;
+  const changed =
+    name !== category.name
+    || slug !== category.slug
+    || description !== category.description
+    || parentId !== category.parentId
+    || color.toUpperCase() !== category.color.toUpperCase();
+
+  async function saveCategory() {
+    if (!canEdit || !changed || saveState === 'saving') return;
 
     setSaveState('saving');
 
@@ -1669,41 +1686,46 @@ function CategoryEditorView({ csrfToken }: { csrfToken: string }) {
             id: number;
             name: string;
             slug: string;
+            description: string;
+            parentId: number | null;
             color: string;
             colorSource: 'termmeta';
-          };
-          mutation: {
-            metaKey: string;
-            verifiedByReadBack: boolean;
+            publicUrl: string;
           };
         };
-      }>('/api/admin/category-color.php', {
+      }>('/api/admin/category-save.php', {
         method: 'POST',
-        headers: {
-          'X-CSRF-Token': csrfToken,
-        },
+        headers: { 'X-CSRF-Token': csrfToken },
         body: JSON.stringify({
           categoryId: category.id,
+          name,
+          slug,
+          description,
+          parentId,
           color,
         }),
       });
 
       if (!payload.ok || !payload.data) {
-        throw new Error('category_color_invalid_response');
+        throw new Error('category_save_invalid_response');
       }
 
+      const saved = payload.data.category;
       setData((current) => current
         ? {
             ...current,
             category: {
               ...current.category,
-              color: payload.data!.category.color,
-              colorSource: 'termmeta',
+              ...saved,
             },
           }
         : current
       );
-      setColor(payload.data.category.color);
+      setName(saved.name);
+      setSlug(saved.slug);
+      setDescription(saved.description);
+      setParentId(saved.parentId);
+      setColor(saved.color);
       setSaveState('saved');
     } catch {
       setSaveState('error');
@@ -1718,12 +1740,12 @@ function CategoryEditorView({ csrfToken }: { csrfToken: string }) {
           <div className="admin-editor-header__title">
             <span
               className="admin-category-dot"
-              style={{ background: category.color }}
+              style={{ background: color || category.color }}
               aria-hidden="true"
             />
             <h1>Editar categoria</h1>
           </div>
-          <p>#{category.id} • {category.count} posts associados</p>
+          <p>{category.count} posts associados</p>
         </div>
 
         <div className="admin-editor-header__actions">
@@ -1733,9 +1755,8 @@ function CategoryEditorView({ csrfToken }: { csrfToken: string }) {
           <button
             type="button"
             className="admin-button--primary"
-            disabled={!canWriteColor || !colorChanged || saveState === 'saving'}
-            title={canWriteColor ? 'Salvar alterações' : 'Edição temporariamente indisponível'}
-            onClick={() => void saveColor()}
+            disabled={!canEdit || !changed || saveState === 'saving'}
+            onClick={() => void saveCategory()}
           >
             {saveState === 'saving' ? 'Salvando…' : 'Salvar'}
           </button>
@@ -1744,42 +1765,71 @@ function CategoryEditorView({ csrfToken }: { csrfToken: string }) {
 
       {saveState === 'saved' && (
         <div className="admin-save-feedback admin-save-feedback--success" role="status">
-          Cor editorial salva.
+          Categoria atualizada.
         </div>
       )}
 
       {saveState === 'error' && (
         <div className="admin-save-feedback admin-save-feedback--error" role="alert">
-          Não foi possível salvar a cor. Tente novamente.
+          Não foi possível salvar a categoria. Verifique os campos e tente novamente.
         </div>
       )}
 
       <div className="admin-category-editor">
         <section className="admin-editor-card">
           <div className="admin-editor-card__head">
-            <span>Taxonomia</span>
-            <strong>Dados da categoria</strong>
+            <span>Categoria</span>
+            <strong>Informações</strong>
           </div>
 
           <div className="admin-editor-card__body admin-editor-card__body--fields">
             <label className="admin-editor-field">
               <span>Nome</span>
-              <input value={category.name} readOnly />
+              <input
+                value={name}
+                readOnly={!canEdit}
+                onChange={(event) => {
+                  setName(event.target.value);
+                  setSaveState('idle');
+                }}
+              />
             </label>
 
             <label className="admin-editor-field">
               <span>Slug</span>
-              <input value={category.slug} readOnly />
+              <input
+                value={slug}
+                readOnly={!canEdit}
+                onChange={(event) => {
+                  setSlug(event.target.value);
+                  setSaveState('idle');
+                }}
+              />
             </label>
 
             <label className="admin-editor-field">
               <span>Descrição</span>
-              <textarea value={category.description} readOnly rows={6} />
+              <textarea
+                value={description}
+                readOnly={!canEdit}
+                rows={6}
+                onChange={(event) => {
+                  setDescription(event.target.value);
+                  setSaveState('idle');
+                }}
+              />
             </label>
 
             <label className="admin-editor-field">
               <span>Categoria superior</span>
-              <select value={category.parentId ?? ''} disabled>
+              <select
+                value={parentId ?? ''}
+                disabled={!canEdit}
+                onChange={(event) => {
+                  setParentId(event.target.value === '' ? null : Number(event.target.value));
+                  setSaveState('idle');
+                }}
+              >
                 <option value="">Nenhuma</option>
                 {data.parents.map((parent) => (
                   <option value={parent.id} key={parent.id}>{parent.name}</option>
@@ -1805,7 +1855,7 @@ function CategoryEditorView({ csrfToken }: { csrfToken: string }) {
               <input
                 type="color"
                 value={color || category.color}
-                disabled={!canWriteColor || saveState === 'saving'}
+                disabled={!canEdit || saveState === 'saving'}
                 aria-label="Cor editorial"
                 onChange={(event) => {
                   setColor(event.target.value.toUpperCase());
@@ -1814,7 +1864,6 @@ function CategoryEditorView({ csrfToken }: { csrfToken: string }) {
               />
             </div>
           </section>
-
         </aside>
       </div>
     </>
