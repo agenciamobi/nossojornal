@@ -691,6 +691,11 @@ function ArticlePage({ slug }: { slug: string }) {
           datePublished: article.publishedAt,
           dateModified: article.modifiedAt,
           mainEntityOfPage: articleUrl,
+          isBasedOn:
+            payload?.editorial.provenance.mode !== 'original'
+            && payload?.editorial.originalSourceUrl
+              ? payload.editorial.originalSourceUrl
+              : undefined,
           image: article.featuredImage
             ? [new URL(article.featuredImage.url, window.location.origin).toString()]
             : undefined,
@@ -766,6 +771,8 @@ function ArticlePage({ slug }: { slug: string }) {
     payload?.editorial.series.name,
     payload?.editorial.series.url,
     payload?.editorial.standfirst,
+    payload?.editorial.originalSourceUrl,
+    payload?.editorial.provenance.mode,
     payload?.seo.canonical,
   ]);
 
