@@ -65,7 +65,8 @@ SELECT
     ID,
     post_author,
     post_status,
-    post_name
+    post_name,
+    post_title
 FROM {$posts}
 WHERE
     ID = :id
@@ -207,7 +208,8 @@ SQL);
             (int) $user['id'],
             'post_saved',
             [
-                'titleChanged' => (string) $current['post_name'] !== $slug || $title !== '',
+                'titleChanged' => (string) $current['post_title'] !== $title,
+                'slugChanged' => (string) $current['post_name'] !== $slug,
                 'categoryCount' => count($categoryIds),
             ]
         );
