@@ -76,15 +76,28 @@ function sortEditorialCategories(categories: Category[]) {
 
 function formatEditionDate() {
   const now = new Date();
+  const timeZone = 'America/Sao_Paulo';
+
   const label = new Intl.DateTimeFormat('pt-BR', {
     weekday: 'long',
     day: '2-digit',
     month: 'long',
     year: 'numeric',
+    timeZone,
   }).format(now);
 
+  const isoParts = new Intl.DateTimeFormat('en-CA', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    timeZone,
+  }).formatToParts(now);
+
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    isoParts.find((item) => item.type === type)?.value ?? '';
+
   return {
-    iso: now.toISOString().slice(0, 10),
+    iso: `${part('year')}-${part('month')}-${part('day')}`,
     label: label.charAt(0).toUpperCase() + label.slice(1),
   };
 }
