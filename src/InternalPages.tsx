@@ -697,6 +697,7 @@ function ArticlePage({ slug }: { slug: string }) {
               {payload?.editorial.articleType !== 'news' && (
                 <span className="article-type-badge">
                   {{
+                    news: 'Notícia',
                     analysis: 'Análise',
                     opinion: 'Opinião',
                     interview: 'Entrevista',
