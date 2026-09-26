@@ -50,6 +50,22 @@ function nj_content_local_media_url(string $url): string
     return $url;
 }
 
+function nj_content_iso8601(string $value): string
+{
+    $value = trim($value);
+    if ($value === '') {
+        return '';
+    }
+
+    try {
+        $timezone = new DateTimeZone('America/Sao_Paulo');
+        $date = new DateTimeImmutable($value, $timezone);
+        return $date->format(DATE_ATOM);
+    } catch (Throwable) {
+        return $value;
+    }
+}
+
 function nj_content_media_key(string $url): string
 {
     $path = parse_url($url, PHP_URL_PATH);
@@ -574,8 +590,8 @@ function nj_content_hydrate_articles(PDO $pdo, array $rows, bool $includeBody = 
             'slug' => (string) $row['slug'],
             'url' => '/noticia/' . rawurlencode((string) $row['slug']),
             'excerpt' => nj_content_excerpt((string) ($row['excerpt'] ?? ''), (string) ($row['content'] ?? '')),
-            'publishedAt' => (string) $row['published_at'],
-            'modifiedAt' => (string) $row['modified_at'],
+            'publishedAt' => nj_content_iso8601((string) $row['published_at']),
+            'modifiedAt' => nj_content_iso8601((string) $row['modified_at']),
             'author' => [
                 'id' => (int) ($row['author_id'] ?? 0),
                 'name' => trim((string) ($row['author_name'] ?? '')),
