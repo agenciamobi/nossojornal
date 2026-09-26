@@ -87,6 +87,44 @@ SQL;
         $related = nj_content_hydrate_articles($pdo, $relatedStatement->fetchAll());
     }
 
+    $corrections = [];
+    $correctionStatement = $pdo->prepare(<<<SQL
+SELECT
+    c.post_title AS type,
+    c.post_content AS content,
+    c.post_date AS created_at,
+    c.post_modified AS modified_at
+FROM {$posts} c
+WHERE
+    c.post_type = 'nj_correction'
+    AND c.post_parent = :post_id
+    AND c.post_status = 'private'
+    AND EXISTS (
+        SELECT 1
+        FROM {$postmeta} pm
+        WHERE
+            pm.post_id = c.ID
+            AND pm.meta_key = '_nj_correction_public'
+            AND pm.meta_value = '1'
+    )
+ORDER BY c.post_date ASC, c.ID ASC
+SQL);
+    $correctionStatement->execute(['post_id' => $article['id']]);
+
+    foreach ($correctionStatement->fetchAll() as $correction) {
+        $type = (string) $correction['type'];
+        if (!in_array($type, ['update', 'correction'], true)) {
+            $type = 'update';
+        }
+
+        $corrections[] = [
+            'type' => $type,
+            'text' => nj_content_clean_text_source((string) $correction['content']),
+            'createdAt' => nj_content_iso8601((string) $correction['created_at']),
+            'modifiedAt' => nj_content_iso8601((string) $correction['modified_at']),
+        ];
+    }
+
     $seoDescription = $seo['description'] !== ''
         ? nj_content_excerpt($seo['description'], '', 240)
         : $article['excerpt'];
@@ -94,6 +132,7 @@ SQL;
     return [
         'article' => $article,
         'related' => $related,
+        'corrections' => $corrections,
         'seo' => [
             'title' => $seo['title'] !== '' ? nj_content_clean_text_source($seo['title']) : $article['title'],
             'description' => $seoDescription,
