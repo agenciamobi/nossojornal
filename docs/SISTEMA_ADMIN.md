@@ -1850,3 +1850,35 @@ Também são exibidos último sucesso, duração da resposta, quantidade de paut
 O estado é salvo em uma option privada da aplicação chamada `nj_pautas_feed_state`. Ela não é exposta pela API pública e não contém secrets.
 
 A captura continua manual nesta fase. Falhar um feed não invalida os demais quando o operador usa “Capturar agora”; o frontend continua contabilizando as falhas separadamente.
+
+## Triagem da Mesa de Pautas
+
+A Mesa possui um cursor de revisão da redação.
+
+O botão:
+
+```text
+Marcar como revisadas
+```
+
+grava apenas o instante atual em `nj_pautas_last_review_at`. Ele não muda etapa, prioridade, responsável ou conteúdo das pautas.
+
+Tudo que chegar depois aparece como `Nova`.
+
+A barra de triagem permite filtrar por:
+
+```text
+busca
+etapa
+prioridade
+fonte
+tema
+idade
+somente novas
+```
+
+e ordenar por recência ou prioridade.
+
+O contador “Novas desde revisão” pode ser usado como atalho para enxergar somente o que entrou depois da última passada pela Mesa.
+
+A data de captura do feed é preferida como referência de chegada. Pautas manuais sem metadata de captura usam a data de criação.
