@@ -2372,6 +2372,10 @@ function PostEditorView({
   const [sourceDirectoryError, setSourceDirectoryError] = useState(false);
   const [imageState, setImageState] = useState<'idle' | 'working' | 'error'>('idle');
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [redirectNotice, setRedirectNotice] = useState<{
+    state: string;
+    collapsed: number;
+  } | null>(null);
   const [statusState, setStatusState] = useState<'idle' | 'working' | 'saved' | 'error'>('idle');
   const [revisions, setRevisions] = useState<PostRevisionItem[]>([]);
   const [revisionToCompare, setRevisionToCompare] = useState<PostRevisionItem | null>(null);
@@ -2879,12 +2883,18 @@ function PostEditorView({
     if (!canEdit || !changed || saveState === 'saving') return;
 
     setSaveState('saving');
+    setRedirectNotice(null);
 
     try {
       if (postChanged) {
         const payload = await adminFetch<{
           ok: boolean;
           data?: {
+            redirect: {
+              state: string;
+              id: number | null;
+              collapsed: number;
+            } | null;
             post: {
               id: number;
               title: string;
@@ -2924,6 +2934,14 @@ function PostEditorView({
         if (!payload.ok || !payload.data) {
           throw new Error('post_save_invalid_response');
         }
+
+        setRedirectNotice(payload.data.redirect
+          ? {
+              state: payload.data.redirect.state,
+              collapsed: payload.data.redirect.collapsed,
+            }
+          : null
+        );
 
         const saved = payload.data.post;
         const savedCategories = (data?.categories ?? [])
@@ -3223,6 +3241,22 @@ function PostEditorView({
       {saveState === 'saved' && (
         <div className="admin-save-feedback admin-save-feedback--success" role="status">
           Alterações salvas.
+          {redirectNotice && redirectNotice.state !== 'manual_conflict' && (
+            <span>
+              {' '}A URL anterior foi preservada com redirecionamento 301.
+              {redirectNotice.collapsed > 0
+                ? ' ' + redirectNotice.collapsed + (redirectNotice.collapsed === 1
+                    ? ' redirecionamento anterior foi encurtado.'
+                    : ' redirecionamentos anteriores foram encurtados.')
+                : ''}
+            </span>
+          )}
+        </div>
+      )}
+
+      {redirectNotice?.state === 'manual_conflict' && (
+        <div className="admin-save-feedback admin-save-feedback--warning" role="status">
+          O slug foi salvo, mas a URL anterior já possui um redirecionamento manual. A regra manual foi preservada e não foi substituída automaticamente.
         </div>
       )}
 
