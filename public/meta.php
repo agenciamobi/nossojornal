@@ -131,6 +131,69 @@ SQL);
     return $row ?: null;
 }
 
+function nj_meta_redirect_for_path(string $path): ?array
+{
+    if ($path === '' || str_starts_with($path, '/api/') || str_starts_with($path, '/sistema')) {
+        return null;
+    }
+
+    $pdo = nj_db();
+    $posts = nj_table('posts');
+    $postmeta = nj_table('postmeta');
+
+    $statement = $pdo->prepare(<<<SQL
+SELECT
+    p.ID,
+    COALESCE((
+        SELECT pm.meta_value
+        FROM {$postmeta} pm
+        WHERE pm.post_id = p.ID AND pm.meta_key = '_nj_redirect_to'
+        ORDER BY pm.meta_id DESC
+        LIMIT 1
+    ), '') AS redirect_to,
+    COALESCE((
+        SELECT pm.meta_value
+        FROM {$postmeta} pm
+        WHERE pm.post_id = p.ID AND pm.meta_key = '_nj_redirect_status'
+        ORDER BY pm.meta_id DESC
+        LIMIT 1
+    ), '301') AS redirect_status
+FROM {$posts} p
+INNER JOIN {$postmeta} source_meta
+    ON source_meta.post_id = p.ID
+    AND source_meta.meta_key = '_nj_redirect_from'
+    AND source_meta.meta_value = :path
+WHERE
+    p.post_type = 'nj_redirect'
+    AND p.post_status = 'publish'
+ORDER BY p.post_modified DESC, p.ID DESC
+LIMIT 1
+SQL);
+    $statement->execute(['path' => $path]);
+    $row = $statement->fetch();
+
+    if (!$row) {
+        return null;
+    }
+
+    $status = (int) $row['redirect_status'];
+    if (!in_array($status, [301, 302, 307, 308, 410], true)) {
+        $status = 301;
+    }
+
+    $destination = trim((string) $row['redirect_to']);
+
+    if ($status !== 410 && $destination === '') {
+        return null;
+    }
+
+    return [
+        'id' => (int) $row['ID'],
+        'status' => $status,
+        'destination' => $destination,
+    ];
+}
+
 function nj_meta_block(array $meta): string
 {
     $title = nj_meta_branded_title((string) ($meta['title'] ?? ''));
@@ -208,6 +271,25 @@ $path = parse_url((string) ($_SERVER['REQUEST_URI'] ?? '/'), PHP_URL_PATH);
 $path = is_string($path) ? rawurldecode($path) : '/';
 $path = $path !== '/' ? rtrim($path, '/') : '/';
 
+$matchedRedirect = null;
+
+try {
+    $matchedRedirect = nj_meta_redirect_for_path($path);
+} catch (Throwable $error) {
+    error_log('[nossojornal-redirect] error=' . get_class($error));
+}
+
+if (is_array($matchedRedirect) && (int) $matchedRedirect['status'] !== 410) {
+    $redirectStatus = (int) $matchedRedirect['status'];
+    $redirectDestination = (string) $matchedRedirect['destination'];
+
+    header('Location: ' . $redirectDestination, true, $redirectStatus);
+    header('Cache-Control: public, max-age=300');
+    header('X-Content-Type-Options: nosniff');
+    header('Referrer-Policy: strict-origin-when-cross-origin');
+    exit;
+}
+
 $meta = [
     'title' => 'Nosso Jornal | Hulha Negra e região',
     'description' => $defaultDescription,
@@ -218,7 +300,13 @@ $meta = [
 $status = 200;
 
 try {
-    if ($path === '/') {
+    if (is_array($matchedRedirect) && (int) $matchedRedirect['status'] === 410) {
+        $status = 410;
+        $meta['title'] = 'Conteúdo removido';
+        $meta['description'] = 'Este conteúdo não está mais disponível no Nosso Jornal.';
+        $meta['canonical'] = $path;
+        $meta['robots'] = 'noindex,nofollow';
+    } elseif ($path === '/') {
         $meta['canonical'] = '/';
     } elseif ($path === '/sistema' || str_starts_with($path, '/sistema/')) {
         $meta['title'] = 'Sistema';
