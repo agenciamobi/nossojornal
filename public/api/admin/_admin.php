@@ -213,6 +213,8 @@ function nj_admin_user_payload(PDO $pdo, array $row): array
         'permissions' => [
             'editPosts' => in_array('edit_posts', $access['capabilities'], true),
             'publishPosts' => in_array('publish_posts', $access['capabilities'], true),
+            'editPages' => in_array('edit_pages', $access['capabilities'], true),
+            'publishPages' => in_array('publish_pages', $access['capabilities'], true),
             'manageCategories' => in_array('manage_categories', $access['capabilities'], true),
             'uploadFiles' => in_array('upload_files', $access['capabilities'], true),
             'listUsers' => in_array('list_users', $access['capabilities'], true),
@@ -678,5 +680,60 @@ SQL);
         }
 
         $cursor = (int) $row['parent'];
+    }
+}
+
+
+function nj_admin_page_public_url(string $slug): ?string
+{
+    return match ($slug) {
+        'quem-somos' => '/sobre',
+        'contato' => '/contato',
+        default => null,
+    };
+}
+
+function nj_admin_unique_page_slug(
+    PDO $pdo,
+    int $pageId,
+    string $requestedSlug,
+    string $fallbackTitle
+): string {
+    $posts = nj_table('posts');
+    $base = nj_admin_slugify($requestedSlug !== '' ? $requestedSlug : $fallbackTitle);
+
+    if ($base === '') {
+        $base = 'pagina-' . $pageId;
+    }
+
+    $candidate = $base;
+    $suffix = 2;
+
+    $statement = $pdo->prepare(<<<SQL
+SELECT ID
+FROM {$posts}
+WHERE
+    post_type = 'page'
+    AND post_name = :slug
+    AND ID <> :id
+LIMIT 1
+SQL);
+
+    while (true) {
+        $statement->execute([
+            'slug' => $candidate,
+            'id' => $pageId,
+        ]);
+
+        if (!$statement->fetchColumn()) {
+            return $candidate;
+        }
+
+        $candidate = substr($base, 0, 170) . '-' . $suffix;
+        $suffix++;
+
+        if ($suffix > 500) {
+            throw new RuntimeException('unique_page_slug_exhausted');
+        }
     }
 }
