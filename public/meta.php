@@ -533,6 +533,13 @@ try {
                                 'datePublished' => (string) $article['publishedAt'],
                                 'dateModified' => (string) $article['modifiedAt'],
                                 'mainEntityOfPage' => $articleUrl,
+                                'isBasedOn' => in_array(
+                                    (string) ($article['provenanceMode'] ?? 'original'),
+                                    ['adapted', 'republished'],
+                                    true
+                                ) && trim((string) ($article['originalSourceUrl'] ?? '')) !== ''
+                                    ? (string) $article['originalSourceUrl']
+                                    : null,
                                 'image' => $image !== '' ? [nj_meta_absolute_url($image)] : null,
                                 'articleSection' => is_array($category) ? (string) $category['name'] : null,
                                 'inLanguage' => 'pt-BR',
