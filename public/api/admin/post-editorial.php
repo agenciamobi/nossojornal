@@ -14,6 +14,17 @@ const NJ_EDITORIAL_META_HOME_SLOT = '_nj_home_slot';
 const NJ_EDITORIAL_META_HOME_RANK = '_nj_home_rank';
 const NJ_EDITORIAL_META_HOME_UNTIL = '_nj_home_until';
 const NJ_EDITORIAL_META_HOME_HEADLINE = '_nj_home_headline';
+const NJ_EDITORIAL_META_ARTICLE_TYPE = '_nj_article_type';
+const NJ_EDITORIAL_META_KICKER = '_nj_kicker';
+const NJ_EDITORIAL_META_STANDFIRST = '_nj_standfirst';
+const NJ_EDITORIAL_META_DATELINE = '_nj_dateline';
+const NJ_EDITORIAL_META_COAUTHORS = '_nj_coauthors';
+const NJ_EDITORIAL_META_IMAGE_CREDIT = '_nj_image_credit';
+const NJ_EDITORIAL_META_IMAGE_CAPTION = '_nj_image_caption';
+const NJ_EDITORIAL_META_ORIGINAL_SOURCE_URL = '_nj_original_source_url';
+const NJ_EDITORIAL_META_CANONICAL_URL = '_nj_canonical_url';
+const NJ_EDITORIAL_META_SOCIAL_TITLE = '_nj_social_title';
+const NJ_EDITORIAL_META_SOCIAL_DESCRIPTION = '_nj_social_description';
 
 function nj_editorial_meta_map(PDO $pdo, int $postId): array
 {
@@ -30,6 +41,17 @@ function nj_editorial_meta_map(PDO $pdo, int $postId): array
         NJ_EDITORIAL_META_HOME_RANK,
         NJ_EDITORIAL_META_HOME_UNTIL,
         NJ_EDITORIAL_META_HOME_HEADLINE,
+        NJ_EDITORIAL_META_ARTICLE_TYPE,
+        NJ_EDITORIAL_META_KICKER,
+        NJ_EDITORIAL_META_STANDFIRST,
+        NJ_EDITORIAL_META_DATELINE,
+        NJ_EDITORIAL_META_COAUTHORS,
+        NJ_EDITORIAL_META_IMAGE_CREDIT,
+        NJ_EDITORIAL_META_IMAGE_CAPTION,
+        NJ_EDITORIAL_META_ORIGINAL_SOURCE_URL,
+        NJ_EDITORIAL_META_CANONICAL_URL,
+        NJ_EDITORIAL_META_SOCIAL_TITLE,
+        NJ_EDITORIAL_META_SOCIAL_DESCRIPTION,
     ];
     $placeholders = implode(',', array_fill(0, count($keys), '?'));
 
@@ -162,6 +184,7 @@ function nj_editorial_payload(PDO $pdo, array $post, array $meta): array
     $stageAllowed = ['idea', 'reporting', 'writing', 'review', 'ready', 'scheduled', 'published'];
     $priorityAllowed = ['low', 'normal', 'high', 'urgent'];
     $homeSlots = ['automatic', 'hero', 'featured'];
+    $articleTypes = ['news', 'analysis', 'opinion', 'interview', 'service', 'live'];
 
     $stage = (string) ($meta[NJ_EDITORIAL_META_STAGE] ?? '');
     if (!in_array($stage, $stageAllowed, true)) {
@@ -240,6 +263,16 @@ function nj_editorial_payload(PDO $pdo, array $post, array $meta): array
         $seo[(string) $row['meta_key']] = trim((string) $row['meta_value']);
     }
 
+    $articleType = (string) ($meta[NJ_EDITORIAL_META_ARTICLE_TYPE] ?? 'news');
+    if (!in_array($articleType, $articleTypes, true)) {
+        $articleType = 'news';
+    }
+
+    $coauthorIds = array_values(array_unique(array_filter(array_map(
+        'intval',
+        nj_editorial_json_array((string) ($meta[NJ_EDITORIAL_META_COAUTHORS] ?? ''))
+    ), static fn (int $id): bool => $id > 0)));
+
     return [
         'stage' => $stage,
         'priority' => $priority,
@@ -260,6 +293,21 @@ function nj_editorial_payload(PDO $pdo, array $post, array $meta): array
             'rank' => max(0, min(99, (int) ($meta[NJ_EDITORIAL_META_HOME_RANK] ?? 0))),
             'until' => (string) ($meta[NJ_EDITORIAL_META_HOME_UNTIL] ?? ''),
             'headline' => (string) ($meta[NJ_EDITORIAL_META_HOME_HEADLINE] ?? ''),
+        ],
+        'identity' => [
+            'articleType' => $articleType,
+            'kicker' => (string) ($meta[NJ_EDITORIAL_META_KICKER] ?? ''),
+            'standfirst' => (string) ($meta[NJ_EDITORIAL_META_STANDFIRST] ?? ''),
+            'dateline' => (string) ($meta[NJ_EDITORIAL_META_DATELINE] ?? ''),
+            'coauthorIds' => $coauthorIds,
+            'imageCredit' => (string) ($meta[NJ_EDITORIAL_META_IMAGE_CREDIT] ?? ''),
+            'imageCaption' => (string) ($meta[NJ_EDITORIAL_META_IMAGE_CAPTION] ?? ''),
+        ],
+        'distribution' => [
+            'originalSourceUrl' => (string) ($meta[NJ_EDITORIAL_META_ORIGINAL_SOURCE_URL] ?? ''),
+            'canonicalUrl' => (string) ($meta[NJ_EDITORIAL_META_CANONICAL_URL] ?? ''),
+            'socialTitle' => (string) ($meta[NJ_EDITORIAL_META_SOCIAL_TITLE] ?? ''),
+            'socialDescription' => (string) ($meta[NJ_EDITORIAL_META_SOCIAL_DESCRIPTION] ?? ''),
         ],
     ];
 }
@@ -398,6 +446,66 @@ nj_admin_run(['GET', 'POST'], static function (string $method): array {
     $homeRank = max(0, min(99, (int) ($body['homeRank'] ?? 0)));
     $homeHeadline = trim((string) ($body['homeHeadline'] ?? ''));
 
+    $articleType = trim((string) ($body['articleType'] ?? 'news'));
+    if (!in_array($articleType, ['news', 'analysis', 'opinion', 'interview', 'service', 'live'], true)) {
+        throw new NjApiHttpException(422, 'invalid_article_type');
+    }
+
+    $kicker = trim((string) ($body['kicker'] ?? ''));
+    $standfirst = trim((string) ($body['standfirst'] ?? ''));
+    $dateline = trim((string) ($body['dateline'] ?? ''));
+    $imageCredit = trim((string) ($body['imageCredit'] ?? ''));
+    $imageCaption = trim((string) ($body['imageCaption'] ?? ''));
+    $originalSourceUrl = trim((string) ($body['originalSourceUrl'] ?? ''));
+    $canonicalUrl = trim((string) ($body['canonicalUrl'] ?? ''));
+    $socialTitle = trim((string) ($body['socialTitle'] ?? ''));
+    $socialDescription = trim((string) ($body['socialDescription'] ?? ''));
+
+    $textLimits = [
+        'kicker' => [$kicker, 160],
+        'standfirst' => [$standfirst, 1000],
+        'dateline' => [$dateline, 160],
+        'imageCredit' => [$imageCredit, 300],
+        'imageCaption' => [$imageCaption, 1200],
+        'socialTitle' => [$socialTitle, 300],
+        'socialDescription' => [$socialDescription, 1000],
+    ];
+
+    foreach ($textLimits as $field => [$value, $limit]) {
+        $length = function_exists('mb_strlen') ? mb_strlen($value, 'UTF-8') : strlen($value);
+        if ($length > $limit) {
+            throw new NjApiHttpException(422, 'editorial_' . $field . '_too_large');
+        }
+    }
+
+    foreach ([
+        'original_source_url' => $originalSourceUrl,
+        'canonical_url' => $canonicalUrl,
+    ] as $field => $url) {
+        if ($url !== '' && !filter_var($url, FILTER_VALIDATE_URL)) {
+            throw new NjApiHttpException(422, 'invalid_' . $field);
+        }
+    }
+
+    $coauthorIdsInput = is_array($body['coauthorIds'] ?? null) ? $body['coauthorIds'] : [];
+    $coauthorIds = array_values(array_unique(array_filter(
+        array_map('intval', $coauthorIdsInput),
+        static fn (int $id): bool => $id > 0
+    )));
+
+    if (count($coauthorIds) > 10) {
+        throw new NjApiHttpException(422, 'too_many_coauthors');
+    }
+
+    if ($coauthorIds !== []) {
+        $allowedAssignees = array_column(nj_editorial_assignees($pdo), 'id');
+        foreach ($coauthorIds as $coauthorId) {
+            if (!in_array($coauthorId, $allowedAssignees, true)) {
+                throw new NjApiHttpException(422, 'invalid_coauthor');
+            }
+        }
+    }
+
     if ((function_exists('mb_strlen') ? mb_strlen($homeHeadline, 'UTF-8') : strlen($homeHeadline)) > 280) {
         throw new NjApiHttpException(422, 'home_headline_too_large');
     }
@@ -440,6 +548,36 @@ nj_admin_run(['GET', 'POST'], static function (string $method): array {
         nj_admin_upsert_postmeta($pdo, $postId, NJ_EDITORIAL_META_HOME_RANK, (string) $homeRank);
         nj_admin_upsert_postmeta($pdo, $postId, NJ_EDITORIAL_META_HOME_UNTIL, $homeUntil);
         nj_admin_upsert_postmeta($pdo, $postId, NJ_EDITORIAL_META_HOME_HEADLINE, $homeHeadline);
+
+        nj_admin_upsert_postmeta($pdo, $postId, NJ_EDITORIAL_META_ARTICLE_TYPE, $articleType);
+        nj_admin_upsert_postmeta($pdo, $postId, NJ_EDITORIAL_META_KICKER, $kicker);
+        nj_admin_upsert_postmeta($pdo, $postId, NJ_EDITORIAL_META_STANDFIRST, $standfirst);
+        nj_admin_upsert_postmeta($pdo, $postId, NJ_EDITORIAL_META_DATELINE, $dateline);
+        nj_admin_upsert_postmeta(
+            $pdo,
+            $postId,
+            NJ_EDITORIAL_META_COAUTHORS,
+            json_encode($coauthorIds, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]'
+        );
+        nj_admin_upsert_postmeta($pdo, $postId, NJ_EDITORIAL_META_IMAGE_CREDIT, $imageCredit);
+        nj_admin_upsert_postmeta($pdo, $postId, NJ_EDITORIAL_META_IMAGE_CAPTION, $imageCaption);
+        nj_admin_upsert_postmeta($pdo, $postId, NJ_EDITORIAL_META_ORIGINAL_SOURCE_URL, $originalSourceUrl);
+        nj_admin_upsert_postmeta($pdo, $postId, NJ_EDITORIAL_META_CANONICAL_URL, $canonicalUrl);
+        nj_admin_upsert_postmeta($pdo, $postId, NJ_EDITORIAL_META_SOCIAL_TITLE, $socialTitle);
+        nj_admin_upsert_postmeta($pdo, $postId, NJ_EDITORIAL_META_SOCIAL_DESCRIPTION, $socialDescription);
+
+        nj_admin_log_post_activity(
+            $pdo,
+            $postId,
+            (int) $user['id'],
+            'editorial_metadata_saved',
+            [
+                'articleType' => $articleType,
+                'coauthorCount' => count($coauthorIds),
+                'hasCanonical' => $canonicalUrl !== '',
+                'hasOriginalSource' => $originalSourceUrl !== '',
+            ]
+        );
 
         $posts = nj_table('posts');
         $touch = $pdo->prepare(
