@@ -1,11 +1,23 @@
 <?php
 declare(strict_types=1);
 
+function nj_content_clean_text_source(string $source): string
+{
+    $source = preg_replace('/\[embedyt\].*?\[\/embedyt\]/is', ' ', $source) ?? $source;
+    $source = preg_replace('/\[caption[^\]]*\].*?\[\/caption\]/is', ' ', $source) ?? $source;
+    $source = preg_replace('/<img\b[^>]*>/is', ' ', $source) ?? $source;
+    $source = preg_replace('/\[(?:\/)?[a-z][^\]]*\]/i', ' ', $source) ?? $source;
+
+    $text = html_entity_decode(strip_tags($source), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    $text = preg_replace('/\s+/u', ' ', trim($text)) ?? trim($text);
+
+    return $text;
+}
+
 function nj_content_excerpt(string $excerpt, string $content, int $maxLength = 240): string
 {
     $source = trim($excerpt) !== '' ? $excerpt : $content;
-    $text = html_entity_decode(strip_tags($source), ENT_QUOTES | ENT_HTML5, 'UTF-8');
-    $text = preg_replace('/\\s+/u', ' ', trim($text)) ?? trim($text);
+    $text = nj_content_clean_text_source($source);
 
     if ($text === '') {
         return '';
@@ -20,7 +32,7 @@ function nj_content_excerpt(string $excerpt, string $content, int $maxLength = 2
         ? mb_substr($text, 0, $maxLength - 1, 'UTF-8')
         : substr($text, 0, $maxLength - 1);
 
-    return rtrim($cut, " \\t\\n\\r\\0\\x0B,.;:!?-") . '…';
+    return rtrim($cut, " \t\n\r\0\x0B,.;:!?-") . '…';
 }
 
 function nj_content_local_media_url(string $url): string
@@ -38,19 +50,65 @@ function nj_content_local_media_url(string $url): string
     return $url;
 }
 
+function nj_content_media_key(string $url): string
+{
+    $path = parse_url($url, PHP_URL_PATH);
+    $basename = basename(is_string($path) ? $path : $url);
+
+    return strtolower((string) preg_replace(
+        '/-\d+x\d+(?=\.[a-z0-9]+$)/i',
+        '',
+        $basename
+    ));
+}
+
+function nj_content_heading_id(string $text, int $fallbackIndex): string
+{
+    $normalized = html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+
+    if (function_exists('iconv')) {
+        $transliterated = iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $normalized);
+        if (is_string($transliterated) && $transliterated !== '') {
+            $normalized = $transliterated;
+        }
+    }
+
+    $normalized = strtolower($normalized);
+    $normalized = preg_replace('/[^a-z0-9]+/', '-', $normalized) ?? '';
+    $normalized = trim($normalized, '-');
+
+    return $normalized !== '' ? $normalized : 'secao-' . $fallbackIndex;
+}
+
+function nj_content_youtube_ids(string $html): array
+{
+    preg_match_all(
+        '#(?:youtube\.com/watch\?v=|youtu\.be/)([A-Za-z0-9_-]{6,20})#i',
+        $html,
+        $matches
+    );
+
+    $ids = [];
+    foreach ($matches[1] ?? [] as $id) {
+        $ids[$id] = true;
+    }
+
+    return array_keys($ids);
+}
+
 function nj_content_sanitize_html(string $html): string
 {
     if (trim($html) === '') {
         return '';
     }
 
-    $html = preg_replace('#<(script|style|form|input|button|textarea|select|object|embed|iframe|svg)[^>]*>.*?</\\1>#is', '', $html) ?? $html;
+    $html = preg_replace('#<(script|style|form|input|button|textarea|select|object|embed|iframe|svg)[^>]*>.*?</\1>#is', '', $html) ?? $html;
     $html = preg_replace('#<(script|style|form|input|button|textarea|select|object|embed|iframe|svg)[^>]*/?>#is', '', $html) ?? $html;
-    $html = preg_replace('/\\son[a-z]+\\s*=\\s*("[^"]*"|\'[^\']*\'|[^\\s>]+)/i', '', $html) ?? $html;
-    $html = preg_replace('/\\sstyle\\s*=\\s*("[^"]*"|\'[^\']*\')/i', '', $html) ?? $html;
-    $html = preg_replace('/\\s(?:data-elementor-[a-z0-9_-]+|data-e-[a-z0-9_-]+)\\s*=\\s*("[^"]*"|\'[^\']*\')/i', '', $html) ?? $html;
+    $html = preg_replace('/\son[a-z]+\s*=\s*("[^"]*"|\'[^\']*\'|[^\s>]+)/i', '', $html) ?? $html;
+    $html = preg_replace('/\sstyle\s*=\s*("[^"]*"|\'[^\']*\')/i', '', $html) ?? $html;
+    $html = preg_replace('/\s(?:data-elementor-[a-z0-9_-]+|data-e-[a-z0-9_-]+)\s*=\s*("[^"]*"|\'[^\']*\')/i', '', $html) ?? $html;
     $html = preg_replace_callback(
-        '/\\s(href|src)\\s*=\\s*(["\'])(.*?)\\2/i',
+        '/\s(href|src)\s*=\s*(["\'])(.*?)\2/i',
         static function (array $matches): string {
             $attribute = strtolower($matches[1]);
             $quote = $matches[2];
@@ -70,6 +128,352 @@ function nj_content_sanitize_html(string $html): string
     ) ?? $html;
 
     return $html;
+}
+
+function nj_content_caption_shortcode_to_html(string $html): string
+{
+    return preg_replace_callback(
+        '/\[caption[^\]]*\](.*?)\[\/caption\]/is',
+        static function (array $matches): string {
+            $inner = (string) $matches[1];
+
+            if (!preg_match('/<img\b[^>]*>/is', $inner, $imageMatch)) {
+                return nj_content_clean_text_source($inner);
+            }
+
+            $image = $imageMatch[0];
+            $captionSource = preg_replace('/<img\b[^>]*>/is', ' ', $inner) ?? '';
+            $caption = nj_content_clean_text_source($captionSource);
+
+            return '<figure class="article-legacy-figure">'
+                . $image
+                . ($caption !== ''
+                    ? '<figcaption>' . htmlspecialchars($caption, ENT_QUOTES | ENT_HTML5, 'UTF-8') . '</figcaption>'
+                    : '')
+                . '</figure>';
+        },
+        $html
+    ) ?? $html;
+}
+
+function nj_content_dom_inner_html(DOMElement $element): string
+{
+    $html = '';
+    foreach ($element->childNodes as $child) {
+        $html .= $element->ownerDocument?->saveHTML($child) ?? '';
+    }
+
+    return $html;
+}
+
+function nj_content_dom_replace_text_nodes(DOMDocument $dom, DOMElement $root): void
+{
+    $children = [];
+    foreach ($root->childNodes as $child) {
+        $children[] = $child;
+    }
+
+    foreach ($children as $child) {
+        if (!$child instanceof DOMText) {
+            continue;
+        }
+
+        $raw = str_replace("\xc2\xa0", ' ', $child->wholeText);
+        $blocks = preg_split('/\n\s*\n+/u', trim($raw)) ?: [];
+        $replacementNodes = [];
+
+        foreach ($blocks as $block) {
+            $text = preg_replace('/\s+/u', ' ', trim($block)) ?? trim($block);
+            if ($text === '') {
+                continue;
+            }
+
+            $paragraph = $dom->createElement('p');
+            $paragraph->appendChild($dom->createTextNode($text));
+            $replacementNodes[] = $paragraph;
+        }
+
+        foreach ($replacementNodes as $node) {
+            $root->insertBefore($node, $child);
+        }
+
+        $root->removeChild($child);
+    }
+}
+
+function nj_content_dom_promote_headings(DOMDocument $dom, DOMElement $root): array
+{
+    $toc = [];
+    $headingIndex = 0;
+    $usedIds = [];
+
+    $children = [];
+    foreach ($root->childNodes as $child) {
+        $children[] = $child;
+    }
+
+    foreach ($children as $child) {
+        if (!$child instanceof DOMElement) {
+            continue;
+        }
+
+        $tag = strtolower($child->tagName);
+        $text = preg_replace('/\s+/u', ' ', trim($child->textContent)) ?? '';
+
+        if ($text === '') {
+            continue;
+        }
+
+        $shouldPromote = false;
+
+        if ($tag === 'strong' && strlen($text) <= 220) {
+            $shouldPromote = true;
+        }
+
+        if ($tag === 'p' && strlen($text) <= 220) {
+            $elements = [];
+            foreach ($child->childNodes as $inner) {
+                if ($inner instanceof DOMElement) {
+                    $elements[] = strtolower($inner->tagName);
+                } elseif ($inner instanceof DOMText && trim($inner->wholeText) !== '') {
+                    $elements[] = '#text';
+                }
+            }
+
+            $allowed = array_values(array_filter(
+                $elements,
+                static fn (string $name): bool => in_array($name, ['strong', 'b', 'span'], true)
+            ));
+
+            if ($elements !== [] && count($allowed) === count($elements)) {
+                $shouldPromote = true;
+            }
+        }
+
+        if (!$shouldPromote) {
+            continue;
+        }
+
+        $headingIndex++;
+        $baseId = nj_content_heading_id($text, $headingIndex);
+        $id = $baseId;
+        $suffix = 2;
+
+        while (isset($usedIds[$id])) {
+            $id = $baseId . '-' . $suffix;
+            $suffix++;
+        }
+
+        $usedIds[$id] = true;
+
+        $heading = $dom->createElement('h2');
+        $heading->setAttribute('id', $id);
+        $heading->appendChild($dom->createTextNode($text));
+        $root->replaceChild($heading, $child);
+
+        $toc[] = [
+            'id' => $id,
+            'label' => $text,
+        ];
+    }
+
+    return $toc;
+}
+
+function nj_content_dom_extract_gallery(
+    DOMElement $root,
+    string $featuredImageUrl
+): array {
+    $gallery = [];
+    $featuredKey = $featuredImageUrl !== '' ? nj_content_media_key($featuredImageUrl) : '';
+    $galleryOpen = true;
+    $leadRemoved = false;
+
+    $children = [];
+    foreach ($root->childNodes as $child) {
+        $children[] = $child;
+    }
+
+    foreach ($children as $child) {
+        if (!$child instanceof DOMElement) {
+            continue;
+        }
+
+        $tag = strtolower($child->tagName);
+        $text = preg_replace('/\s+/u', ' ', trim($child->textContent)) ?? '';
+
+        if (
+            !$leadRemoved
+            && $tag === 'p'
+            && $text !== ''
+            && strlen($text) <= 220
+            && $child->getElementsByTagName('strong')->length > 0
+        ) {
+            $root->removeChild($child);
+            $leadRemoved = true;
+            continue;
+        }
+
+        if ($galleryOpen && in_array($tag, ['img', 'figure'], true)) {
+            $image = $tag === 'img'
+                ? $child
+                : $child->getElementsByTagName('img')->item(0);
+
+            if ($image instanceof DOMElement) {
+                $src = nj_content_local_media_url($image->getAttribute('src'));
+                $key = nj_content_media_key($src);
+
+                $caption = '';
+                if ($tag === 'figure') {
+                    $figcaptions = $child->getElementsByTagName('figcaption');
+                    if ($figcaptions->length > 0) {
+                        $caption = preg_replace(
+                            '/\s+/u',
+                            ' ',
+                            trim($figcaptions->item(0)?->textContent ?? '')
+                        ) ?? '';
+                    }
+                }
+
+                if ($src !== '' && ($featuredKey === '' || $key !== $featuredKey)) {
+                    $gallery[$key !== '' ? $key : $src] = [
+                        'url' => $src,
+                        'alt' => trim($image->getAttribute('alt')) !== ''
+                            ? trim($image->getAttribute('alt'))
+                            : $caption,
+                        'caption' => $caption,
+                    ];
+                }
+            }
+
+            $root->removeChild($child);
+            continue;
+        }
+
+        if ($text === '') {
+            continue;
+        }
+
+        if ($tag === 'p' && strlen($text) <= 220 && $gallery === []) {
+            continue;
+        }
+
+        $galleryOpen = false;
+    }
+
+    return array_values($gallery);
+}
+
+function nj_content_dom_enhance_media(DOMElement $root): void
+{
+    foreach ($root->getElementsByTagName('img') as $image) {
+        $image->setAttribute('loading', 'lazy');
+        $image->setAttribute('decoding', 'async');
+
+        $src = nj_content_local_media_url($image->getAttribute('src'));
+        if ($src !== '') {
+            $image->setAttribute('src', $src);
+        }
+    }
+
+    foreach ($root->getElementsByTagName('a') as $link) {
+        $href = trim($link->getAttribute('href'));
+
+        if (
+            preg_match('#^https?://#i', $href)
+            && !str_starts_with($href, 'https://nossojornal.com.br')
+        ) {
+            $link->setAttribute('target', '_blank');
+            $link->setAttribute('rel', 'noopener noreferrer external');
+        }
+    }
+}
+
+function nj_content_normalize_article(string $html, string $featuredImageUrl = ''): array
+{
+    if (trim($html) === '') {
+        return [
+            'html' => '',
+            'toc' => [],
+            'gallery' => [],
+            'videos' => [],
+        ];
+    }
+
+    $youtubeIds = nj_content_youtube_ids($html);
+    $html = preg_replace('/\[embedyt\].*?\[\/embedyt\]/is', '', $html) ?? $html;
+    $html = nj_content_caption_shortcode_to_html($html);
+    $html = preg_replace('/\[(?:\/)?[a-z][^\]]*\]/i', '', $html) ?? $html;
+    $html = str_replace(['&nbsp;', "\xc2\xa0"], ["\n\n", ' '], $html);
+    $html = nj_content_sanitize_html($html);
+
+    if (!class_exists('DOMDocument')) {
+        return [
+            'html' => $html,
+            'toc' => [],
+            'gallery' => [],
+            'videos' => array_map(
+                static fn (string $id): array => [
+                    'provider' => 'youtube',
+                    'id' => $id,
+                    'embedUrl' => 'https://www.youtube-nocookie.com/embed/' . rawurlencode($id),
+                ],
+                $youtubeIds
+            ),
+        ];
+    }
+
+    $dom = new DOMDocument('1.0', 'UTF-8');
+    $previousLibxml = libxml_use_internal_errors(true);
+
+    $loaded = $dom->loadHTML(
+        '<?xml encoding="utf-8" ?><div id="nj-article-root">' . $html . '</div>',
+        LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD
+    );
+
+    libxml_clear_errors();
+    libxml_use_internal_errors($previousLibxml);
+
+    if (!$loaded) {
+        return [
+            'html' => $html,
+            'toc' => [],
+            'gallery' => [],
+            'videos' => [],
+        ];
+    }
+
+    $root = $dom->getElementById('nj-article-root');
+    if (!$root instanceof DOMElement) {
+        return [
+            'html' => $html,
+            'toc' => [],
+            'gallery' => [],
+            'videos' => [],
+        ];
+    }
+
+    nj_content_dom_replace_text_nodes($dom, $root);
+    $gallery = nj_content_dom_extract_gallery($root, $featuredImageUrl);
+    $toc = nj_content_dom_promote_headings($dom, $root);
+    nj_content_dom_enhance_media($root);
+
+    $normalizedHtml = nj_content_dom_inner_html($root);
+    $normalizedHtml = preg_replace('/<p>\s*<\/p>/i', '', $normalizedHtml) ?? $normalizedHtml;
+
+    return [
+        'html' => trim($normalizedHtml),
+        'toc' => $toc,
+        'gallery' => $gallery,
+        'videos' => array_map(
+            static fn (string $id): array => [
+                'provider' => 'youtube',
+                'id' => $id,
+                'embedUrl' => 'https://www.youtube-nocookie.com/embed/' . rawurlencode($id),
+            ],
+            $youtubeIds
+        ),
+    ];
 }
 
 function nj_content_categories_for_posts(PDO $pdo, array $postIds): array
@@ -160,6 +564,9 @@ function nj_content_hydrate_articles(PDO $pdo, array $rows, bool $includeBody = 
         $categories = $categoriesByPost[$id] ?? [];
         $primary = nj_content_primary_category($categories, (int) ($row['primary_category_id'] ?? 0));
         $title = trim(html_entity_decode(strip_tags((string) $row['title']), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+        $featuredImageUrl = trim((string) ($row['featured_image_url'] ?? '')) !== ''
+            ? nj_content_local_media_url((string) $row['featured_image_url'])
+            : '';
 
         $article = [
             'id' => $id,
@@ -173,9 +580,9 @@ function nj_content_hydrate_articles(PDO $pdo, array $rows, bool $includeBody = 
                 'id' => (int) ($row['author_id'] ?? 0),
                 'name' => trim((string) ($row['author_name'] ?? '')),
             ],
-            'featuredImage' => trim((string) ($row['featured_image_url'] ?? '')) !== ''
+            'featuredImage' => $featuredImageUrl !== ''
                 ? [
-                    'url' => nj_content_local_media_url((string) $row['featured_image_url']),
+                    'url' => $featuredImageUrl,
                     'alt' => trim((string) ($row['featured_image_alt'] ?? '')) !== ''
                         ? (string) $row['featured_image_alt']
                         : $title,
@@ -187,7 +594,15 @@ function nj_content_hydrate_articles(PDO $pdo, array $rows, bool $includeBody = 
         ];
 
         if ($includeBody) {
-            $article['contentHtml'] = nj_content_sanitize_html((string) ($row['content'] ?? ''));
+            $normalized = nj_content_normalize_article(
+                (string) ($row['content'] ?? ''),
+                $featuredImageUrl
+            );
+
+            $article['contentHtml'] = $normalized['html'];
+            $article['toc'] = $normalized['toc'];
+            $article['gallery'] = $normalized['gallery'];
+            $article['videos'] = $normalized['videos'];
         }
 
         $articles[] = $article;
