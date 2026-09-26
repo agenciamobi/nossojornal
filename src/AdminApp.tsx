@@ -859,13 +859,16 @@ function DashboardView({ user }: { user: AdminUser }) {
   );
 }
 
-function PostsView() {
+function PostsView({ csrfToken }: { csrfToken: string }) {
   const params = useMemo(() => new URLSearchParams(window.location.search), []);
   const status = params.get('status') ?? 'all';
   const query = params.get('q') ?? '';
   const page = Math.max(1, Number.parseInt(params.get('page') ?? '1', 10) || 1);
 
   const [data, setData] = useState<PostsPayload['data']>();
+  const [writeReadiness, setWriteReadiness] = useState<WriteReadinessPayload['data']>();
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState(false);
   const [error, setError] = useState(false);
 
   useEffect(() => {
@@ -878,20 +881,94 @@ function PostsView() {
         setData(payload.data);
       })
       .catch(() => setError(true));
+
+    void adminFetch<WriteReadinessPayload>('/api/admin/write-readiness.php')
+      .then((payload) => {
+        if (payload.ok && payload.data) setWriteReadiness(payload.data);
+      })
+      .catch(() => {
+        // A listagem continua funcional em modo leitura.
+      });
   }, [page, query, status]);
 
   if (error) return <AdminError />;
   if (!data) return <AdminLoading />;
 
+  const canCreateDraft = Boolean(
+    writeReadiness?.database.insert.available
+      && writeReadiness?.database.update.available,
+  );
+
+  async function createDraft() {
+    if (!canCreateDraft || creating) return;
+
+    setCreating(true);
+    setCreateError(false);
+
+    try {
+      const payload = await adminFetch<{
+        ok: boolean;
+        data?: {
+          post: {
+            id: number;
+            adminUrl: string;
+          };
+        };
+      }>('/api/admin/post-create-draft.php', {
+        method: 'POST',
+        headers: {
+          'X-CSRF-Token': csrfToken,
+        },
+        body: JSON.stringify({
+          title: 'Nova notícia',
+        }),
+      });
+
+      if (!payload.ok || !payload.data) {
+        throw new Error('draft_create_invalid_response');
+      }
+
+      window.location.href = payload.data.post.adminUrl;
+    } catch {
+      setCreateError(true);
+      setCreating(false);
+    }
+  }
+
   return (
     <>
-      <AdminPageHeader
-        eyebrow="Conteúdo"
-        title="Notícias"
-        description="Posts importados do WordPress legado."
-      />
+      <div className="admin-page-heading-row">
+        <AdminPageHeader
+          eyebrow="Conteúdo"
+          title="Notícias"
+          description="Posts importados do WordPress legado."
+        />
 
-      <ReadOnlyNotice />
+        <button
+          type="button"
+          className="admin-create-button"
+          disabled={!canCreateDraft || creating}
+          title={canCreateDraft ? 'Criar novo rascunho' : 'Aguardando INSERT + UPDATE no runtime MySQL'}
+          onClick={() => void createDraft()}
+        >
+          {creating ? 'Criando…' : '+ Nova notícia'}
+        </button>
+      </div>
+
+      {canCreateDraft ? (
+        <div className="admin-write-ready" role="status">
+          <strong>Criação de rascunho disponível.</strong>
+          <span>Novas notícias serão criadas como draft antes de qualquer publicação.</span>
+        </div>
+      ) : (
+        <ReadOnlyNotice />
+      )}
+
+      {createError && (
+        <div className="admin-save-feedback admin-save-feedback--error" role="alert">
+          Não foi possível criar o rascunho. O runtime pode continuar sem INSERT/UPDATE.
+        </div>
+      )}
 
       <form className="admin-toolbar" method="get" action="/sistema/noticias">
         <div className="admin-filter-tabs" aria-label="Filtrar notícias por status">
@@ -2023,7 +2100,7 @@ export function AdminApp() {
 
         <main className="admin-content">
           {view === 'dashboard' && <DashboardView user={user} />}
-          {view === 'posts' && <PostsView />}
+          {view === 'posts' && <PostsView csrfToken={csrfToken} />}
           {view === 'post' && <PostEditorView csrfToken={csrfToken} />}
           {view === 'categories' && <CategoriesView />}
           {view === 'category' && <CategoryEditorView csrfToken={csrfToken} />}
