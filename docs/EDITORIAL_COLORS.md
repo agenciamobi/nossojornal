@@ -71,9 +71,9 @@ Ela remove apenas valores da chave `nj_editorial_color` para os slugs conhecidos
 
 A cor editorial aparece como código de navegação, não como preenchimento dominante:
 
-- underline/estado ativo no Header;
+- underline/estado ativo no Header, inclusive quando o menu vem de nav_menu;
 - marcador nas cidades da cobertura regional;
-- badge de categoria;
+- badge/chip de categoria;
 - régua horizontal das seções da homepage;
 - bloco de título encaixado na régua;
 - CTA da editoria;
