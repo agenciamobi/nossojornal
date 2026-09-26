@@ -224,6 +224,19 @@ export function AdminRichEditor({
 
   const wordCount = useMemo(() => countWords(value), [value]);
   const characterCount = useMemo(() => countCharacters(value), [value]);
+  const readingMinutes = useMemo(
+    () => (wordCount === 0 ? 0 : Math.max(1, Math.ceil(wordCount / 220))),
+    [wordCount],
+  );
+  const structureStats = useMemo(() => {
+    const element = document.createElement('div');
+    element.innerHTML = value;
+    return {
+      headings: element.querySelectorAll('h2, h3').length,
+      images: element.querySelectorAll('img').length,
+      links: element.querySelectorAll('a[href]').length,
+    };
+  }, [value]);
 
   useEffect(() => {
     if (sourceMode) {
@@ -633,7 +646,11 @@ export function AdminRichEditor({
       <footer className="admin-rich-editor__statusbar">
         <span>{wordCount.toLocaleString('pt-BR')} palavras</span>
         <span>{characterCount.toLocaleString('pt-BR')} caracteres</span>
-        <span>Ctrl+S salva a notícia</span>
+        <span>{readingMinutes ? readingMinutes + ' min de leitura' : 'tempo de leitura —'}</span>
+        <span>{structureStats.headings} subtítulos</span>
+        <span>{structureStats.links} links</span>
+        <span>{structureStats.images} imagens</span>
+        <span>Ctrl+S salva</span>
       </footer>
 
       {mediaOpen && (
