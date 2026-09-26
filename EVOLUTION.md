@@ -2204,3 +2204,60 @@ A operação restaura somente título, resumo e conteúdo da revisão `post_type
 Slug, status, categorias, tags, SEO, imagem destacada e metadados editoriais permanecem intocados.
 
 Antes do update, o estado corrente é preservado com `nj_admin_create_revision(..., 'before_wordpress_restore')`. A mutation é transacional e registra `wordpress_revision_restored` na atividade da matéria.
+
+## 40. Navegação nativa do WordPress
+
+A próxima capacidade do acervo WordPress foi conectada ao portal: menus.
+
+### API pública
+
+Foi criado:
+
+```text
+GET /api/v1/navigation.php
+```
+
+O endpoint projeta menus e itens existentes sem expor schema físico ou options sensíveis.
+
+Fontes nativas:
+
+```text
+terms
+term_taxonomy(nav_menu)
+term_relationships
+posts(nav_menu_item)
+postmeta(_menu_item_*)
+```
+
+O resolver transforma objetos WordPress em rotas do portal atual e descarta referências privadas, quebradas ou incompatíveis.
+
+### Compatibilidade de URLs
+
+- post → `/noticia/:slug`;
+- page → `/:slug`;
+- category → `/categoria/:slug`;
+- post_tag → `/tag/:slug`;
+- links absolutos para o próprio domínio são normalizados para paths locais;
+- links externos permanecem externos e recebem atributos seguros no frontend.
+
+### Header
+
+O cabeçalho passa a preferir um menu nativo reconhecido como `primary`.
+
+Quando o menu não existe, falha ou não possui itens válidos, continua usando automaticamente as editorias atuais. A navegação institucional superior também aceita menu `utility`, preservando os links hardcoded como fallback.
+
+O primeiro nível pode possuir submenu em desktop. No mobile, o primeiro nível permanece horizontal para não quebrar a ergonomia existente.
+
+### Footer
+
+Menus identificados como `footer` alimentam até três colunas do rodapé. Estruturas hierárquicas viram colunas por grupo; menus planos continuam utilizáveis como uma coluna de navegação.
+
+Sem menu de rodapé reconhecido, o layout atual permanece intacto.
+
+### Arquitetura
+
+Foi adicionado `src/navigation.ts` como cliente compartilhado e cacheado para Header e Footer. Isso evita requests duplicados e mantém o contrato da API separado da apresentação.
+
+A mudança é incremental e fail-safe: nenhum menu WordPress passa a ser autoridade obrigatória enquanto o acervo não estiver devidamente configurado.
+
+Próxima capacidade WordPress-native de maior valor: usar `_wp_attachment_metadata` para mídia responsiva, dimensões conhecidas e escolha de derivados adequados.
