@@ -24,6 +24,9 @@ type Tag = {
 type FeaturedImage = {
   url: string;
   alt: string;
+  width: number | null;
+  height: number | null;
+  srcSet: string;
 };
 
 type Article = {
@@ -405,7 +408,17 @@ function ArticleCard({ article }: { article: Article }) {
     >
       <a className="archive-card__media" href={article.url} aria-label={article.title}>
         {article.featuredImage ? (
-          <img src={article.featuredImage.url} alt={article.featuredImage.alt} loading="lazy" />
+          <img
+            src={article.featuredImage.url}
+            srcSet={article.featuredImage.srcSet || undefined}
+            sizes={article.featuredImage.srcSet
+              ? '(max-width: 720px) 100vw, (max-width: 1100px) 50vw, 420px'
+              : undefined}
+            width={article.featuredImage.width ?? undefined}
+            height={article.featuredImage.height ?? undefined}
+            alt={article.featuredImage.alt}
+            loading="lazy"
+          />
         ) : (
           <span>{article.primaryCategory?.name ?? 'Nosso Jornal'}</span>
         )}
@@ -819,7 +832,16 @@ function ArticlePage({ slug }: { slug: string }) {
 
           {article.featuredImage && (
             <figure className="article-detail__hero">
-              <img src={article.featuredImage.url} alt={article.featuredImage.alt} />
+              <img
+                src={article.featuredImage.url}
+                srcSet={article.featuredImage.srcSet || undefined}
+                sizes={article.featuredImage.srcSet
+                  ? '(max-width: 1100px) 100vw, 1100px'
+                  : undefined}
+                width={article.featuredImage.width ?? undefined}
+                height={article.featuredImage.height ?? undefined}
+                alt={article.featuredImage.alt}
+              />
               {(payload?.editorial.imageCaption || payload?.editorial.imageCredit) && (
                 <figcaption>
                   {payload?.editorial.imageCaption && <span>{payload.editorial.imageCaption}</span>}
