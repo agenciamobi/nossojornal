@@ -46,7 +46,7 @@ SQL);
 
     if ($slug === 'contato') {
         preg_match_all(
-            '/<a\\b[^>]*href=(["\\'])(https:\\/\\/wa\\.me\\/[^"\\']+|mailto:[^"\\']+|tel:[^"\\']+)\\1[^>]*>(.*?)<\\/a>/is',
+            "~<a\\b[^>]*href=([\"'])(https://wa\\.me/[^\"']+|mailto:[^\"']+|tel:[^\"']+)\\1[^>]*>(.*?)</a>~is",
             $contentHtml,
             $matches,
             PREG_SET_ORDER
