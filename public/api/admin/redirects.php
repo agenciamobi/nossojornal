@@ -16,6 +16,9 @@ function nj_redirect_payload(array $row): array
         'statusCode' => in_array($status, [301, 302, 307, 308, 410], true) ? $status : 301,
         'enabled' => (string) $row['post_status'] === 'publish',
         'note' => (string) ($row['post_excerpt'] ?? ''),
+        'origin' => (string) ($row['redirect_origin'] ?? '') === 'auto_slug'
+            ? 'automatic'
+            : 'manual',
         'createdAt' => nj_content_iso8601((string) $row['post_date']),
         'modifiedAt' => nj_content_iso8601((string) $row['post_modified']),
     ];
@@ -192,6 +195,9 @@ SQL);
                 nj_admin_upsert_postmeta($pdo, $id, '_nj_redirect_from', $source);
                 nj_admin_upsert_postmeta($pdo, $id, '_nj_redirect_to', $destination);
                 nj_admin_upsert_postmeta($pdo, $id, '_nj_redirect_status', (string) $statusCode);
+                // Any explicit save in this screen becomes a manual rule. This
+                // prevents future slug automation from overwriting an operator decision.
+                nj_admin_upsert_postmeta($pdo, $id, '_nj_redirect_origin', 'manual');
 
                 $pdo->commit();
             } catch (Throwable $error) {
@@ -232,7 +238,14 @@ SELECT
         WHERE pm.post_id = p.ID AND pm.meta_key = '_nj_redirect_status'
         ORDER BY pm.meta_id DESC
         LIMIT 1
-    ), '301') AS redirect_status
+    ), '301') AS redirect_status,
+    COALESCE((
+        SELECT pm.meta_value
+        FROM {$postmeta} pm
+        WHERE pm.post_id = p.ID AND pm.meta_key = '_nj_redirect_origin'
+        ORDER BY pm.meta_id DESC
+        LIMIT 1
+    ), '') AS redirect_origin
 FROM {$posts} p
 WHERE p.post_type = 'nj_redirect' AND p.post_status <> 'trash'
 ORDER BY p.post_modified DESC, p.ID DESC
