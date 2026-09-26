@@ -469,6 +469,8 @@ type PautaFeedSource = {
   kind: string;
   priority: number;
   enabled: boolean;
+  refreshMinutes: number;
+  maxItems: number;
   health: {
         status: 'never' | 'healthy' | 'error';
         lastAttemptAt: string;
@@ -478,6 +480,8 @@ type PautaFeedSource = {
         lastCaptured: number;
         totalCaptured: number;
     consecutiveFailures: number;
+    nextRefreshAt: string;
+    due: boolean;
   };
 };
 
@@ -7175,6 +7179,8 @@ function PautasView({ csrfToken }: { csrfToken: string }) {
   const [feedUrl, setFeedUrl] = useState('');
   const [feedKind, setFeedKind] = useState('jornalística');
   const [feedPriority, setFeedPriority] = useState(70);
+  const [feedRefreshMinutes, setFeedRefreshMinutes] = useState(180);
+  const [feedMaxItems, setFeedMaxItems] = useState(12);
   const [feedEnabled, setFeedEnabled] = useState(true);
   const [feedSaving, setFeedSaving] = useState(false);
 
@@ -7311,6 +7317,8 @@ function PautasView({ csrfToken }: { csrfToken: string }) {
     setFeedUrl('');
     setFeedKind('jornalística');
     setFeedPriority(70);
+    setFeedRefreshMinutes(180);
+    setFeedMaxItems(12);
     setFeedEnabled(true);
   }
 
@@ -7322,6 +7330,8 @@ function PautasView({ csrfToken }: { csrfToken: string }) {
     setFeedUrl(source.feedUrl);
     setFeedKind(source.kind);
     setFeedPriority(source.priority);
+    setFeedRefreshMinutes(source.refreshMinutes);
+    setFeedMaxItems(source.maxItems);
     setFeedEnabled(source.enabled);
     setMessage('idle');
   }
@@ -7346,6 +7356,8 @@ function PautasView({ csrfToken }: { csrfToken: string }) {
             feedUrl,
             kind: feedKind,
             priority: feedPriority,
+            refreshMinutes: feedRefreshMinutes,
+            maxItems: feedMaxItems,
             enabled: feedEnabled,
           },
         }),
@@ -7433,39 +7445,23 @@ function PautasView({ csrfToken }: { csrfToken: string }) {
     return payload.data;
   }
 
-  async function captureFeed(feedUrl = '') {
+  async function captureSources(
+    sources: PautaFeedSource[],
+    captureKey: string,
+    scopeLabel = '',
+  ) {
     if (capturing) return;
 
-    setCapturing(feedUrl || 'all');
+    if (sources.length === 0) {
+      setCaptureResult('Nenhuma fonte ativa corresponde a essa captura.');
+      return;
+    }
+
+    setCapturing(captureKey);
     setCaptureResult('');
     setMessage('idle');
 
     try {
-      if (feedUrl) {
-        const next = await captureOneFeed(feedUrl);
-        const captured = next.captured ?? 0;
-
-        setData((current) => current
-          ? {
-              ...current,
-              ...next,
-              owner: next.owner ?? current.owner,
-              pipeline: next.pipeline ?? current.pipeline,
-              sources: next.sources ?? current.sources,
-              assignees: next.assignees ?? current.assignees,
-            }
-          : next
-        );
-
-        setCaptureResult(
-          captured > 0
-            ? captured + ' pauta' + (captured === 1 ? '' : 's') + ' nova' + (captured === 1 ? '' : 's') + ' adicionada' + (captured === 1 ? '' : 's') + '.'
-            : 'Nenhuma pauta nova encontrada nesse feed.',
-        );
-        return;
-      }
-
-      const sources = (data?.sources ?? []).filter((source) => source.enabled);
       let cursor = 0;
       let captured = 0;
       let failures = 0;
@@ -7493,19 +7489,64 @@ function PautasView({ csrfToken }: { csrfToken: string }) {
       }
 
       setData(refreshed.data);
+
+      const scope = scopeLabel ? ' em ' + scopeLabel : '';
       setCaptureResult(
         captured > 0
-          ? captured + ' pauta' + (captured === 1 ? '' : 's') + ' nova' + (captured === 1 ? '' : 's') + ' adicionada' + (captured === 1 ? '' : 's') + '.'
-            + (failures > 0 ? ' ' + failures + ' feed' + (failures === 1 ? '' : 's') + ' não responderam.' : '')
+          ? captured + ' pauta' + (captured === 1 ? '' : 's')
+            + ' nova' + (captured === 1 ? '' : 's')
+            + ' adicionada' + (captured === 1 ? '' : 's')
+            + scope + '.'
+            + (failures > 0
+              ? ' ' + failures + ' feed' + (failures === 1 ? '' : 's') + ' não responderam.'
+              : '')
           : failures > 0
-            ? 'Nenhuma pauta nova. ' + failures + ' feed' + (failures === 1 ? '' : 's') + ' não responderam.'
-            : 'Nenhuma pauta nova encontrada.',
+            ? 'Nenhuma pauta nova' + scope + '. '
+              + failures + ' feed' + (failures === 1 ? '' : 's') + ' não responderam.'
+            : 'Nenhuma pauta nova encontrada' + scope + '.',
       );
     } catch {
       setMessage('error');
     } finally {
       setCapturing('');
     }
+  }
+
+  async function captureFeed(feedUrl = '') {
+    if (feedUrl) {
+      const source = (data?.sources ?? []).find(
+        (item) => item.enabled && item.feedUrl === feedUrl,
+      );
+      if (!source) {
+        setCaptureResult('Essa fonte está pausada ou não está mais no catálogo.');
+        return;
+      }
+
+      await captureSources([source], feedUrl, source.name);
+      return;
+    }
+
+    await captureSources(
+      (data?.sources ?? []).filter((source) => source.enabled),
+      'all',
+      'todas as fontes',
+    );
+  }
+
+  async function captureDueFeeds() {
+    const due = (data?.sources ?? []).filter(
+      (source) => source.enabled && source.health.due,
+    );
+
+    await captureSources(due, 'due', 'fontes vencidas');
+  }
+
+  async function captureSourceGroup(groupName: string, sources: PautaFeedSource[]) {
+    await captureSources(
+      sources.filter((source) => source.enabled),
+      'group:' + groupName,
+      groupName,
+    );
   }
 
   async function markReviewed() {
