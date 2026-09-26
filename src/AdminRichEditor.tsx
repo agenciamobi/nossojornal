@@ -140,7 +140,7 @@ function sanitizePastedHtml(html: string) {
 
     if (element.tagName === 'IMG') {
       const src = element.getAttribute('src') ?? '';
-      if (/^(javascript|data:text/html):/i.test(src)) {
+      if (/^(javascript|data:text\/html):/i.test(src)) {
         element.remove();
       }
     }
