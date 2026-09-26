@@ -883,3 +883,74 @@ O sanitizador compartilhado remove scripts, formulários, iframes arbitrários, 
 ### Robustez HTTP
 
 Erros de slug, categoria, matéria ou página inexistente agora usam `NjApiHttpException` e retornam códigos HTTP explícitos em vez de cair em `internal_error`.
+
+
+## 17. Normalização editorial do acervo
+
+A análise de uma matéria longa do acervo revelou shortcodes, captions, imagens em sequência e subtítulos armazenados como `<strong>`. A API passa a interpretar esse legado antes de entregar conteúdo ao React.
+
+### Indexação pública
+
+O shell Vite deixa de usar `noindex,nofollow` e passa a publicar:
+
+```text
+index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1
+```
+
+Os endpoints JSON continuam com `X-Robots-Tag: noindex, nofollow`.
+
+### Normalizador de matérias
+
+`_content.php` passa a:
+
+- remover shortcodes residuais de excerpts e metadados;
+- reconhecer vídeos YouTube do shortcode `[embedyt]`;
+- converter captions legadas;
+- transformar blocos de texto solto em parágrafos;
+- promover subtítulos legados em headings reais;
+- gerar IDs estáveis e sumário da matéria;
+- extrair sequências iniciais de imagens para galeria;
+- deduplicar da galeria a imagem já usada como destaque;
+- aplicar lazy loading às imagens internas;
+- normalizar URLs do acervo para `/wp-content/uploads/...`;
+- marcar links externos com atributos seguros.
+
+O contrato de uma matéria pode incluir:
+
+```json
+{
+  "contentHtml": "...",
+  "toc": [],
+  "gallery": [],
+  "videos": []
+}
+```
+
+### Galeria
+
+O frontend apresenta até quatro imagens no mosaico inicial. Fotografias adicionais ficam em expansão acessível por `details/summary`, mantendo todas as imagens do acervo sem transformar a leitura em uma coluna interminável.
+
+### Vídeo
+
+Vídeos reconhecidos são renderizados em iframe responsivo via `youtube-nocookie.com`, com loading lazy e permissões explicitamente limitadas.
+
+### Sumário
+
+Headings normalizados alimentam o rail `Nesta matéria`. As categorias passam a ocupar um bloco separado chamado `Editorias`.
+
+### Sobre
+
+O deck duplicado da página Sobre foi removido e a marca histórica recebeu limite de largura para não dominar a composição.
+
+### Contato
+
+A API agora consulta também `_elementor_data` da página de contato em modo somente leitura. O parser extrai links e valores de WhatsApp, telefone, e-mail e localização. Quando há mais de um e-mail legado, o frontend prefere o endereço institucional `@nossojornal.com.br` quando disponível.
+
+### Próximo gate
+
+1. sincronizar a `main`;
+2. inspecionar código;
+3. revalidar deploy;
+4. publicar;
+5. validar uma matéria longa, Sobre e Contato;
+6. só depois ligar o shell server-side de metadados por rota.
