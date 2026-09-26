@@ -471,6 +471,16 @@ type PautasPayload = {
       feedUrl: string;
       kind: string;
       priority: number;
+      health: {
+        status: 'never' | 'healthy' | 'error';
+        lastAttemptAt: string;
+        lastSuccessAt: string;
+        lastHttpStatus: number;
+        lastDurationMs: number;
+        lastCaptured: number;
+        totalCaptured: number;
+        consecutiveFailures: number;
+      };
     }>;
     items: PautaItem[];
     assignees?: Array<{
@@ -7601,10 +7611,63 @@ function PautasView({ csrfToken }: { csrfToken: string }) {
         <div className="admin-pautas-sources">
           {(data.sources ?? []).map((source) => (
             <article key={source.feedUrl}>
-              <div>
-                <span className="admin-pautas-source__category">{source.category}</span>
+              <div className="admin-pautas-source__identity">
+                <div className="admin-pautas-source__eyebrow">
+                  <span className="admin-pautas-source__category">{source.category}</span>
+                  <span
+                    className={'admin-feed-health admin-feed-health--' + source.health.status}
+                    title={
+                      source.health.status === 'healthy'
+                        ? 'Feed respondeu na última tentativa'
+                        : source.health.status === 'error'
+                          ? 'Feed falhou na última tentativa'
+                          : 'Feed ainda não foi verificado'
+                    }
+                  >
+                    {source.health.status === 'healthy'
+                      ? 'Saudável'
+                      : source.health.status === 'error'
+                        ? 'Falha'
+                        : 'Não verificado'}
+                  </span>
+                </div>
                 <h3>{source.name}</h3>
                 <p>{source.kind} • prioridade editorial {source.priority}</p>
+
+                <dl className="admin-feed-health__meta">
+                  <div>
+                    <dt>Último sucesso</dt>
+                    <dd>
+                      {source.health.lastSuccessAt
+                        ? formatAdminDate(source.health.lastSuccessAt)
+                        : 'Nunca'}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Resposta</dt>
+                    <dd>
+                      {source.health.lastDurationMs > 0
+                        ? source.health.lastDurationMs.toLocaleString('pt-BR') + ' ms'
+                        : '—'}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Última captura</dt>
+                    <dd>{source.health.lastCaptured.toLocaleString('pt-BR')}</dd>
+                  </div>
+                  <div>
+                    <dt>Total capturado</dt>
+                    <dd>{source.health.totalCaptured.toLocaleString('pt-BR')}</dd>
+                  </div>
+                </dl>
+
+                {source.health.status === 'error' && (
+                  <small className="admin-feed-health__error">
+                    {source.health.consecutiveFailures.toLocaleString('pt-BR')}
+                    {' '}
+                    {source.health.consecutiveFailures === 1 ? 'falha consecutiva' : 'falhas consecutivas'}
+                  </small>
+                )}
               </div>
 
               <div className="admin-pautas-source__actions">

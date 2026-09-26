@@ -1832,3 +1832,21 @@ Os campos técnicos de captura são somente leitura. O editor pode alterar o tra
 A regra de segurança é simples: ter uma origem externa não muda o canonical automaticamente.
 
 A Mesa também usa URL, ID externo e fingerprint para evitar capturas repetidas.
+
+## Health dos feeds da Mesa de Pautas
+
+A seção Radar em `/sistema/pautas` acompanha a saúde das fontes RSS/Atom.
+
+Cada fonte pode aparecer como:
+
+```text
+Saudável
+Falha
+Não verificado
+```
+
+Também são exibidos último sucesso, duração da resposta, quantidade de pautas novas na última captura, total incorporado e falhas consecutivas.
+
+O estado é salvo em uma option privada da aplicação chamada `nj_pautas_feed_state`. Ela não é exposta pela API pública e não contém secrets.
+
+A captura continua manual nesta fase. Falhar um feed não invalida os demais quando o operador usa “Capturar agora”; o frontend continua contabilizando as falhas separadamente.

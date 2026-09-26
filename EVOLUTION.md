@@ -2503,3 +2503,65 @@ A camada de metadata diferencia conteúdo próprio, adaptado e republicado. Prov
 A implementação segue o princípio observado no 10up Distributor: conteúdo distribuído deve manter conexão explícita com sua origem, sem transformar essa conexão em autoridade paralela ao conteúdo local.
 
 Próximo ponto de maior valor: amadurecer a Mesa de Pautas com estado por fonte, health de feeds, horário da última captura e filtros de triagem inspirados em FreshRSS/Miniflux, mantendo a redação humana como autoridade de publicação.
+
+## 45. Health operacional dos feeds da Mesa de Pautas
+
+O Radar de fontes deixa de mostrar apenas um catálogo estático e passa a guardar estado operacional por feed.
+
+### Estado persistido
+
+Foi adicionada uma única option privada e explicitamente allowlisted:
+
+```text
+nj_pautas_feed_state
+```
+
+O valor é JSON da própria aplicação e não contém credenciais.
+
+Para cada feed são mantidos:
+
+```text
+status
+lastAttemptAt
+lastSuccessAt
+lastHttpStatus
+lastDurationMs
+lastCaptured
+totalCaptured
+consecutiveFailures
+```
+
+A chave interna é o SHA-256 da URL do feed, evitando usar URLs longas como chave do objeto.
+
+### Captura
+
+O fetch RSS/Atom agora mede status HTTP e duração.
+
+Uma captura bem-sucedida zera falhas consecutivas, atualiza último sucesso e soma quantas pautas inéditas foram incorporadas.
+
+Uma falha preserva o último sucesso conhecido e incrementa o contador de falhas.
+
+### Interface
+
+O Radar mostra por fonte:
+
+- Saudável, Falha ou Não verificado;
+- último sucesso;
+- tempo da última resposta;
+- pautas novas na última captura;
+- total incorporado;
+- quantidade de falhas consecutivas.
+
+O estado continua privado da redação e não entra em nenhuma API pública.
+
+### Referências
+
+FreshRSS foi usado como referência para visibilidade de datas de atualização e estado de feeds.
+
+Miniflux foi usado como referência para separar refresh manual, saúde do feed e tratamento explícito de erros. Não copiamos arquitetura, scheduler ou banco desses projetos.
+
+### Limite desta rodada
+
+O Sistema ainda não agenda polling próprio.
+
+O botão de captura continua sendo uma ação humana. O próximo passo pode ser conectar o Radar ao control plane/jobs do MOBI Core para refresh periódico, mantendo a mesma API e a mesma trilha de health.
