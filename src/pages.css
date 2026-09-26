@@ -1396,3 +1396,86 @@
     gap: 9px;
   }
 }
+
+
+/* Magazine article metadata */
+.article-detail__eyebrow-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.article-type-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  border: 1px solid color-mix(in srgb, var(--editorial-color, #0a3284) 28%, #d7dce2);
+  border-radius: 999px;
+  padding: 2px 9px;
+  background: color-mix(in srgb, var(--editorial-color, #0a3284) 7%, white);
+  color: var(--editorial-color, #0a3284);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .055em;
+  text-transform: uppercase;
+}
+
+.article-detail__dateline {
+  color: #33465d;
+  font-weight: 800;
+}
+
+.article-detail__hero figcaption {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  border-bottom: 1px solid #e0e4e8;
+  padding: 9px 2px 11px;
+  color: #5d6670;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.article-detail__hero figcaption span {
+  max-width: 75%;
+}
+
+.article-detail__hero figcaption small {
+  flex: 0 0 auto;
+  color: #737c85;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: right;
+}
+
+.article-original-source {
+  display: inline-block;
+  margin-top: 7px;
+  color: var(--editorial-color, #0a3284);
+  font-size: 13px;
+  font-weight: 750;
+  line-height: 1.45;
+}
+
+.article-original-source:hover,
+.article-original-source:focus-visible {
+  text-decoration: underline;
+}
+
+@media (max-width: 640px) {
+  .article-detail__hero figcaption {
+    display: block;
+  }
+
+  .article-detail__hero figcaption span {
+    max-width: none;
+  }
+
+  .article-detail__hero figcaption small {
+    display: block;
+    margin-top: 5px;
+    text-align: left;
+  }
+}
