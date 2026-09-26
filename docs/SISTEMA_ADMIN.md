@@ -1983,3 +1983,15 @@ Alterações não salvas são protegidas pelo mesmo guard dos demais editores. T
 O campo Fim não pode ser anterior ao Início. A remoção continua exigindo confirmação.
 
 Prazos editoriais e publicações agendadas vindos das Notícias continuam sendo editados em sua matéria de origem, evitando duas autoridades para o mesmo dado.
+
+## Categorias: busca e proteção de URL
+
+A área de Categorias permite buscar por nome, slug, descrição ou categoria superior.
+
+No cadastro de uma categoria, o slug acompanha automaticamente o nome até que o campo seja alterado manualmente. `Gerar pelo nome` restaura essa sugestão.
+
+Em categorias existentes, o endereço fica bloqueado por padrão. A ação `Alterar endereço` libera o campo e exibe aviso quando a URL pública for mudar.
+
+A alteração de slug exige confirmação adicional porque redirects automáticos de categoria ainda não fazem parte deste contrato.
+
+Erros de slug duplicado, hierarquia inválida e demais validações conhecidas são apresentados com mensagem específica em vez de erro genérico.

@@ -2936,3 +2936,53 @@ A timeline diferencia Cobertura, Entrevista, Reunião, Evento e Prazo usando o `
 O item em edição recebe destaque visual e as ações de editar/remover passam a funcionar melhor em desktop e mobile.
 
 Próximo ponto de maior valor: polir Categorias e cadastros auxiliares, especialmente geração de slug, busca e feedback contextual de validação.
+
+## 52. Polimento de Categorias e segurança de slug
+
+A administração de categorias recebe uma rodada focada em cadastro, descoberta e prevenção de alterações acidentais de URL.
+
+### Diretório
+
+`/sistema/categorias` passa a aceitar busca por:
+
+- nome;
+- slug;
+- descrição;
+- categoria superior.
+
+A API devolve contexto da categoria superior mesmo quando ela não faz parte do resultado filtrado.
+
+O diretório também mostra quantidade exibida, total da taxonomia, categorias principais e subcategorias do resultado atual.
+
+### Cadastro
+
+O cadastro novo passa a seguir o padrão já usado no MOBI CMS:
+
+```text
+nome muda
+→ slug acompanha automaticamente
+→ operador edita slug manualmente
+→ slug passa a ser autoridade humana
+```
+
+O botão `Gerar pelo nome` devolve o campo ao valor derivado do nome.
+
+Descrição recebe contador e limite coerente com o backend.
+
+Erros como slug duplicado, parent inválido ou descrição excessiva passam a ser traduzidos em feedback contextual.
+
+### Edição segura
+
+Em categorias existentes, o slug fica bloqueado por padrão.
+
+Para alterar a URL pública, o operador precisa escolher explicitamente `Alterar endereço`.
+
+Antes de salvar um slug diferente, a interface pede confirmação e informa que o redirect automático de categoria ainda não está implementado.
+
+Essa proteção reduz mudanças de URL por acidente enquanto preserva a capacidade de manutenção quando realmente necessária.
+
+### Referência
+
+O comportamento de slug acompanhando o nome até a primeira edição manual foi reaproveitado do editor de termos do `agenciamobi/mobicms`, sem importar sua arquitetura de dados.
+
+Próximo ponto de maior valor: aplicar o mesmo nível de validação contextual e ergonomia aos cadastros da Central de Fontes e Biblioteca de Mídia.
