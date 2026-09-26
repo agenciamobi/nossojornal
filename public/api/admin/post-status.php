@@ -178,6 +178,18 @@ SQL);
             array_map('intval', $taxonomyStatement->fetchAll(PDO::FETCH_COLUMN))
         );
 
+        nj_admin_log_post_activity(
+            $pdo,
+            $postId,
+            (int) $user['id'],
+            'status_changed',
+            [
+                'from' => $currentStatus,
+                'to' => $targetStatus,
+                'action' => $action,
+            ]
+        );
+
         $readBack = $pdo->prepare(<<<SQL
 SELECT
     post_status AS status,
