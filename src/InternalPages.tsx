@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { cleanLegacyText } from './contentText';
 import './pages.css';
 
 type Category = {
@@ -332,7 +333,7 @@ function ArticleCard({ article }: { article: Article }) {
           </a>
         )}
         <h2><a href={article.url}>{article.title}</a></h2>
-        {article.excerpt && <p>{article.excerpt}</p>}
+        {cleanLegacyText(article.excerpt) && <p>{cleanLegacyText(article.excerpt)}</p>}
         <div className="archive-card__meta">
           <span>{formatDate(article.publishedAt)}</span>
           {article.author.name && <span>{article.author.name}</span>}
@@ -363,20 +364,29 @@ function ArticleGallery({
       </div>
 
       <div className="article-gallery__preview">
-        {preview.map((image, index) => (
-          <figure
-            className={index === 0 ? 'article-gallery__item article-gallery__item--lead' : 'article-gallery__item'}
-            key={image.url}
-          >
-            <img
-              src={image.url}
-              alt={image.alt || articleTitle}
-              loading={index === 0 ? 'eager' : 'lazy'}
-              decoding="async"
-            />
-            {image.caption && <figcaption>{image.caption}</figcaption>}
-          </figure>
-        ))}
+        {preview.map((image, index) => {
+          const hiddenCount = index === preview.length - 1 ? remaining.length : 0;
+
+          return (
+            <figure
+              className={index === 0 ? 'article-gallery__item article-gallery__item--lead' : 'article-gallery__item'}
+              key={image.url}
+            >
+              <img
+                src={image.url}
+                alt={image.alt || articleTitle}
+                loading={index === 0 ? 'eager' : 'lazy'}
+                decoding="async"
+              />
+              {image.caption && <figcaption>{image.caption}</figcaption>}
+              {hiddenCount > 0 && (
+                <span className="article-gallery__count" aria-hidden="true">
+                  +{hiddenCount} fotos
+                </span>
+              )}
+            </figure>
+          );
+        })}
       </div>
 
       {remaining.length > 0 && (
@@ -633,7 +643,9 @@ function ArticlePage({ slug }: { slug: string }) {
             )}
 
             <h1>{article.title}</h1>
-            {article.excerpt && <p className="article-detail__deck">{article.excerpt}</p>}
+            {cleanLegacyText(article.excerpt) && (
+              <p className="article-detail__deck">{cleanLegacyText(article.excerpt)}</p>
+            )}
 
             <div className="article-detail__meta-row">
               <div className="article-detail__byline">
