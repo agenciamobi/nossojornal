@@ -1,5 +1,6 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { AdminRichEditor, type RichEditorMediaItem } from './AdminRichEditor';
+import { AdminEditorialDiagnostics } from './AdminEditorialDiagnostics';
 import './admin.css';
 
 type AdminUser = {
@@ -3115,6 +3116,29 @@ function PostEditorView({
             />
           </label>
 
+          <AdminEditorialDiagnostics
+            title={title}
+            slug={slug}
+            excerpt={excerpt}
+            content={content}
+            seoTitle={seoTitle}
+            seoDescription={seoDescription}
+            urlPrefix="/noticia/"
+            disabled={!canEdit}
+            onSlugChange={(value) => {
+              setSlug(value);
+              setSaveState('idle');
+            }}
+            onSeoTitleChange={(value) => {
+              setSeoTitle(value);
+              setSaveState('idle');
+            }}
+            onSeoDescriptionChange={(value) => {
+              setSeoDescription(value);
+              setSaveState('idle');
+            }}
+          />
+
           <AdminRichEditor
             label="Conteúdo da notícia"
             value={content}
@@ -4186,6 +4210,29 @@ function PageEditorView({
               }}
             />
           </label>
+
+          <AdminEditorialDiagnostics
+            title={title}
+            slug={slug}
+            excerpt={excerpt}
+            content={content}
+            seoTitle={seoTitle}
+            seoDescription={seoDescription}
+            urlPrefix="/"
+            disabled={!canEdit}
+            onSlugChange={item.slugLocked ? undefined : (value) => {
+              setSlug(value);
+              setSaveState('idle');
+            }}
+            onSeoTitleChange={(value) => {
+              setSeoTitle(value);
+              setSaveState('idle');
+            }}
+            onSeoDescriptionChange={(value) => {
+              setSeoDescription(value);
+              setSaveState('idle');
+            }}
+          />
 
           <AdminRichEditor
             label="Conteúdo da página"
