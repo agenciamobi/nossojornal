@@ -1243,3 +1243,58 @@ O login reutiliza `njsite_users`, roles e capabilities WordPress, sem expor hash
 O primeiro release é read-only. O CRUD será aberto somente após homologação do MySQL write.
 
 Especificação detalhada: `docs/ADMIN_MVP.md`.
+
+
+## 21. Mesa de Pautas exclusiva
+
+A rota administrativa:
+
+```text
+/sistema/pautas
+```
+
+é exclusiva do usuário WordPress:
+
+```text
+user_login === 'agenciamobi'
+```
+
+A restrição existe em duas camadas:
+
+1. o menu só é renderizado no painel quando o usuário autenticado possui `login === 'agenciamobi'`;
+2. `GET /api/admin/pautas.php` executa a mesma validação no backend e retorna `403 pautas_access_denied` para qualquer outro usuário, inclusive outro administrador.
+
+A API administrativa expõe:
+
+```text
+permissions.managePautas
+```
+
+derivada diretamente do `user_login`.
+
+### Fundação da Mesa
+
+O MVP já possui catálogo inicial de fontes RSS para:
+
+- Pelotas;
+- tecnologia;
+- inteligência artificial;
+- universo;
+- ciência;
+- curiosidades;
+- pesquisa em IA.
+
+O fluxo definido é:
+
+```text
+RSS → Captura → Mesa de Pautas → Seleção → Pesquisa → Redação → Draft → Revisão → Agendamento
+```
+
+O endpoint informa também as tabelas planejadas:
+
+```text
+nj_feed_sources
+nj_news_queue
+```
+
+A persistência e as ações `Ignorar | Salvar | Produzir matéria` permanecem aguardando write homologado no banco.
