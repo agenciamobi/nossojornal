@@ -178,14 +178,18 @@ function nj_pautas_parse_feed(string $xmlBody): array
             }
         }
     } else {
-        $namespaces = $xml->getNamespaces(true);
-        $entries = $xml->entry ?? [];
+        $entries = $xml->xpath('//*[local-name()="entry"]') ?: [];
 
         foreach ($entries as $entry) {
-            $title = trim((string) $entry->title);
+            $titleNodes = $entry->xpath('./*[local-name()="title"]') ?: [];
+            $summaryNodes = $entry->xpath('./*[local-name()="summary" or local-name()="content"]') ?: [];
+            $linkNodes = $entry->xpath('./*[local-name()="link"]') ?: [];
+
+            $title = trim((string) ($titleNodes[0] ?? ''));
+            $summary = trim((string) ($summaryNodes[0] ?? ''));
             $link = '';
 
-            foreach ($entry->link as $linkNode) {
+            foreach ($linkNodes as $linkNode) {
                 $attributes = $linkNode->attributes();
                 $candidate = trim((string) ($attributes['href'] ?? ''));
                 $rel = trim((string) ($attributes['rel'] ?? 'alternate'));
@@ -195,8 +199,6 @@ function nj_pautas_parse_feed(string $xmlBody): array
                     break;
                 }
             }
-
-            $summary = trim((string) ($entry->summary ?? $entry->content ?? ''));
 
             if ($title === '' || !filter_var($link, FILTER_VALIDATE_URL)) {
                 continue;
@@ -430,42 +432,29 @@ nj_admin_run(['GET', 'POST'], static function (string $method): array {
 
     if ($action === 'capture') {
         $feedUrl = trim((string) ($body['feedUrl'] ?? ''));
-        $sources = nj_pautas_sources();
-        $selectedSources = [];
 
         if ($feedUrl === '') {
-            $selectedSources = $sources;
-        } else {
-            foreach ($sources as $source) {
-                if (hash_equals((string) $source['feedUrl'], $feedUrl)) {
-                    $selectedSources[] = $source;
-                    break;
-                }
+            throw new NjApiHttpException(422, 'feed_required');
+        }
+
+        $selectedSource = null;
+        foreach (nj_pautas_sources() as $source) {
+            if (hash_equals((string) $source['feedUrl'], $feedUrl)) {
+                $selectedSource = $source;
+                break;
             }
         }
 
-        if ($selectedSources === []) {
+        if (!is_array($selectedSource)) {
             throw new NjApiHttpException(422, 'feed_not_allowed');
         }
 
-        $captured = 0;
-        $failures = 0;
-
-        foreach ($selectedSources as $source) {
-            try {
-                $captured += nj_pautas_capture($pdo, $user, $source);
-            } catch (NjApiHttpException $error) {
-                $failures++;
-                if (count($selectedSources) === 1) {
-                    throw $error;
-                }
-            }
-        }
+        $captured = nj_pautas_capture($pdo, $user, $selectedSource);
 
         return [
             'items' => nj_pautas_items($pdo),
             'captured' => $captured,
-            'captureFailures' => $failures,
+            'captureFailures' => 0,
             'draft' => null,
         ];
     }
