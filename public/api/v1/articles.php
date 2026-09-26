@@ -1,0 +1,135 @@
+<?php
+declare(strict_types=1);
+
+require __DIR__ . '/_bootstrap.php';
+require __DIR__ . '/_content.php';
+
+nj_run(static function (): array {
+    $page = filter_input(INPUT_GET, 'page', FILTER_VALIDATE_INT, [
+        'options' => ['default' => 1, 'min_range' => 1],
+    ]);
+    $perPage = filter_input(INPUT_GET, 'per_page', FILTER_VALIDATE_INT, [
+        'options' => ['default' => 12, 'min_range' => 1, 'max_range' => 24],
+    ]);
+
+    $page = is_int($page) ? $page : 1;
+    $perPage = is_int($perPage) ? $perPage : 12;
+    $offset = ($page - 1) * $perPage;
+
+    $categorySlug = trim((string) ($_GET['category'] ?? ''));
+    $query = trim((string) ($_GET['q'] ?? ''));
+
+    if ($categorySlug !== '' && !preg_match('/^[a-z0-9-]+$/', $categorySlug)) {
+        nj_json_response(400, [
+            'ok' => false,
+            'error' => ['code' => 'invalid_category'],
+        ]);
+    }
+
+    if (function_exists('mb_substr')) {
+        $query = mb_substr($query, 0, 120, 'UTF-8');
+    } else {
+        $query = substr($query, 0, 120);
+    }
+
+    $pdo = nj_db();
+    $posts = nj_table('posts');
+    $postmeta = nj_table('postmeta');
+    $users = nj_table('users');
+    $terms = nj_table('terms');
+    $taxonomy = nj_table('term_taxonomy');
+    $relationships = nj_table('term_relationships');
+
+    $where = [
+        "p.post_type = 'post'",
+        "p.post_status = 'publish'",
+        "p.post_password = ''",
+        "p.post_title <> ''",
+        "p.post_name <> ''",
+    ];
+    $params = [];
+    $category = null;
+
+    if ($categorySlug !== '') {
+        $categoryStatement = $pdo->prepare(<<<SQL
+SELECT
+    t.term_id AS id,
+    tt.term_taxonomy_id AS taxonomy_id,
+    t.name,
+    t.slug,
+    tt.parent AS parent_id
+FROM {$terms} t
+INNER JOIN {$taxonomy} tt
+    ON tt.term_id = t.term_id
+    AND tt.taxonomy = 'category'
+WHERE t.slug = :slug
+LIMIT 1
+SQL);
+        $categoryStatement->execute(['slug' => $categorySlug]);
+        $categoryRow = $categoryStatement->fetch();
+
+        if (!$categoryRow) {
+            nj_json_response(404, [
+                'ok' => false,
+                'error' => ['code' => 'category_not_found'],
+            ]);
+        }
+
+        $category = [
+            'id' => (int) $categoryRow['id'],
+            'taxonomyId' => (int) $categoryRow['taxonomy_id'],
+            'name' => (string) $categoryRow['name'],
+            'slug' => (string) $categoryRow['slug'],
+            'parentId' => (int) $categoryRow['parent_id'] > 0 ? (int) $categoryRow['parent_id'] : null,
+            'url' => '/categoria/' . rawurlencode((string) $categoryRow['slug']),
+        ];
+
+        $where[] = "EXISTS (
+            SELECT 1
+            FROM {$relationships} category_tr
+            WHERE
+                category_tr.object_id = p.ID
+                AND category_tr.term_taxonomy_id = :taxonomy_id
+        )";
+        $params['taxonomy_id'] = $category['taxonomyId'];
+    }
+
+    if ($query !== '') {
+        $where[] = "(p.post_title LIKE :search OR p.post_excerpt LIKE :search OR p.post_content LIKE :search)";
+        $params['search'] = '%' . $query . '%';
+    }
+
+    $whereSql = implode("\n    AND ", $where);
+
+    $countStatement = $pdo->prepare("SELECT COUNT(*) FROM {$posts} p WHERE {$whereSql}");
+    $countStatement->execute($params);
+    $total = (int) $countStatement->fetchColumn();
+
+    $select = nj_content_article_select($posts, $postmeta, $users);
+    $sql = $select . <<<SQL
+
+WHERE {$whereSql}
+ORDER BY p.post_date DESC, p.ID DESC
+LIMIT {$perPage} OFFSET {$offset}
+SQL;
+
+    $statement = $pdo->prepare($sql);
+    $statement->execute($params);
+    $items = nj_content_hydrate_articles($pdo, $statement->fetchAll());
+
+    $totalPages = max(1, (int) ceil($total / $perPage));
+
+    return [
+        'items' => $items,
+        'category' => $category,
+        'query' => $query,
+        'pagination' => [
+            'page' => $page,
+            'perPage' => $perPage,
+            'total' => $total,
+            'totalPages' => $totalPages,
+            'hasPrevious' => $page > 1,
+            'hasNext' => $page < $totalPages,
+        ],
+    ];
+}, 'public, max-age=30, stale-while-revalidate=120');
