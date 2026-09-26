@@ -194,7 +194,7 @@ function nj_meta_block(array $meta): string
         );
 
         if (is_string($json)) {
-            $tags[] = '<script type="application/ld+json">' . $json . '</script>';
+            $tags[] = '<script type="application/ld+json" data-nj-server-jsonld="true">' . $json . '</script>';
         }
     }
 
