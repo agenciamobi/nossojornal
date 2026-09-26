@@ -69,6 +69,11 @@ SQL);
             throw new NjApiHttpException(404, 'category_not_found');
         }
 
+        $categoryColorOverrides = nj_category_color_overrides(
+            $pdo,
+            [(int) $categoryRow['id']]
+        );
+
         $category = [
             'id' => (int) $categoryRow['id'],
             'taxonomyId' => (int) $categoryRow['taxonomy_id'],
@@ -76,6 +81,15 @@ SQL);
             'slug' => (string) $categoryRow['slug'],
             'parentId' => (int) $categoryRow['parent_id'] > 0 ? (int) $categoryRow['parent_id'] : null,
             'url' => '/categoria/' . rawurlencode((string) $categoryRow['slug']),
+            'color' => nj_category_color_for(
+                (int) $categoryRow['id'],
+                (string) $categoryRow['slug'],
+                $categoryColorOverrides
+            ),
+            'colorSource' => nj_category_color_source_for(
+                (int) $categoryRow['id'],
+                $categoryColorOverrides
+            ),
         ];
 
         $where[] = "EXISTS (
