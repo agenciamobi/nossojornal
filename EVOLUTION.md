@@ -954,3 +954,76 @@ A API agora consulta também `_elementor_data` da página de contato em modo som
 4. publicar;
 5. validar uma matéria longa, Sobre e Contato;
 6. só depois ligar o shell server-side de metadados por rota.
+
+
+## 18. Metadados server-side e consistência editorial
+
+A rodada posterior à validação visual corrige inconsistências detectadas em produção e adiciona entrega de metadados antes da hidratação React.
+
+### Resumos e cache
+
+Home e arquivos usam o mesmo normalizador editorial de `_content.php`. O frontend mantém uma segunda defesa contra shortcodes legados em cards e decks. As janelas de cache de home, últimas e arquivos foram reduzidas para:
+
+```text
+max-age=10
+stale-while-revalidate=30
+```
+
+### Datas
+
+Datas editoriais vindas do WordPress são normalizadas no backend em ISO 8601 com timezone `America/Sao_Paulo`.
+
+O Header gera tanto o texto visível quanto o atributo `datetime` no mesmo calendário de Brasília, evitando divergência de dia causada por UTC.
+
+Home e páginas internas também formatam publicação no timezone editorial, independentemente do fuso do navegador do leitor.
+
+### Galeria
+
+Quando existem fotos adicionais além das quatro exibidas inicialmente, a última miniatura do mosaico recebe overlay `+N fotos`. A expansão completa continua disponível via `details/summary`.
+
+### Shell server-side
+
+O build passa a copiar:
+
+```text
+public/meta.php
+public/.htaccess
+```
+
+`.htaccess` preserva arquivos físicos, diretórios persistentes e endpoints `/api/`, encaminhando apenas rotas públicas não físicas para `meta.php`.
+
+`meta.php` carrega o `index.html` compilado e substitui o bloco `NJ_META_START/NJ_META_END` antes da resposta.
+
+Para matérias, o primeiro HTML já contém:
+
+- title;
+- description;
+- robots;
+- canonical;
+- Open Graph;
+- Twitter Card;
+- imagem e alt;
+- article:published_time;
+- article:modified_time;
+- article:section;
+- JSON-LD NewsArticle;
+- JSON-LD BreadcrumbList.
+
+Rotas históricas `/:slug` recebem canonical em `/noticia/:slug`.
+
+Busca permanece `noindex,follow`. Classificados e Comunicados também permanecem `noindex,follow` enquanto ainda não possuem fonte editorial final.
+
+Rotas ou editorias inexistentes passam a receber HTTP 404 no shell, além da experiência de erro do React.
+
+O JSON-LD server-side é marcado com `data-nj-server-jsonld`; o React só injeta seu fallback quando esse bloco não existir, evitando structured data duplicado.
+
+### Gate de produção
+
+1. sincronizar código;
+2. inspecionar código;
+3. revalidar deploy;
+4. publicar;
+5. confirmar que a raiz continua HTTP 200;
+6. abrir `view-source:` de uma matéria e confirmar metadados antes do JavaScript;
+7. validar uma URL inválida retornando HTTP 404;
+8. validar Header e cards sem resíduos de shortcode.
