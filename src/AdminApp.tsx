@@ -64,8 +64,91 @@ type DashboardPayload = {
       users: number;
       media: number;
       comments: { approved: number; pending: number; spam: number };
+      workflow: {
+        idea: number;
+        reporting: number;
+        writing: number;
+        review: number;
+        ready: number;
+        scheduled: number;
+        published: number;
+      };
+      overdue: number;
+      urgentPautas: number;
     };
     recentPosts: AdminPost[];
+    editorial: {
+      overdue: Array<{
+        id: number;
+        title: string;
+        status: string;
+        stage: string;
+        priority: string;
+        deadline: string;
+        deadlineAt: string;
+        assignee: string;
+        adminUrl: string;
+      }>;
+      nextDeadlines: Array<{
+        id: number;
+        title: string;
+        status: string;
+        stage: string;
+        priority: string;
+        deadline: string;
+        deadlineAt: string;
+        assignee: string;
+        adminUrl: string;
+      }>;
+      review: Array<{
+        id: number;
+        title: string;
+        status: string;
+        stage: string;
+        priority: string;
+        deadline: string;
+        assignee: string;
+        adminUrl: string;
+      }>;
+      ready: Array<{
+        id: number;
+        title: string;
+        status: string;
+        stage: string;
+        priority: string;
+        deadline: string;
+        assignee: string;
+        adminUrl: string;
+      }>;
+      scheduled: Array<{
+        id: number;
+        title: string;
+        status: string;
+        stage: string;
+        priority: string;
+        deadline: string;
+        scheduledAt: string;
+        assignee: string;
+        adminUrl: string;
+      }>;
+      urgentPautas: Array<{
+        id: number;
+        title: string;
+        priority: string;
+        stage: string;
+        deadline: string;
+        adminUrl: string;
+      }>;
+      agenda: Array<{
+        id: number;
+        title: string;
+        kind: string;
+        start: string;
+        location: string;
+        note: string;
+        adminUrl: string;
+      }>;
+    };
   };
 };
 
@@ -1068,7 +1151,6 @@ function DashboardView({ user }: { user: AdminUser }) {
         setData(payload.data);
       })
       .catch(() => setError(true));
-
   }, []);
 
   if (error) return <AdminError />;
@@ -1077,32 +1159,234 @@ function DashboardView({ user }: { user: AdminUser }) {
   const stats = [
     { label: 'Publicadas', value: data.summary.posts.published, href: '/sistema/noticias?status=publish' },
     { label: 'Rascunhos', value: data.summary.posts.draft, href: '/sistema/noticias?status=draft' },
-    { label: 'Categorias', value: data.summary.categories, href: '/sistema/categorias' },
-    ...(user.permissions.uploadFiles
-      ? [{ label: 'Mídia', value: data.summary.media, href: '/sistema/midia' }]
+    { label: 'Em revisão', value: data.summary.workflow.review, href: '#revisao' },
+    { label: 'Prontas', value: data.summary.workflow.ready, href: '#prontas' },
+    { label: 'Prazos vencidos', value: data.summary.overdue, href: '#prazos', alert: data.summary.overdue > 0 },
+    ...(user.login === 'agenciamobi'
+      ? [{ label: 'Pautas prioritárias', value: data.summary.urgentPautas, href: '/sistema/pautas', alert: data.summary.urgentPautas > 0 }]
       : []),
-    ...(user.permissions.moderateComments
-      ? [{ label: 'Comentários', value: data.summary.comments.pending, href: '/sistema/comentarios?status=pending' }]
-      : []),
-    { label: 'Usuários', value: data.summary.users, href: user.permissions.listUsers ? '/sistema/usuarios' : '/sistema' },
   ];
+
+  function editorialPriorityLabel(priority: string) {
+    return ({
+      urgent: 'Urgente',
+      high: 'Alta',
+      normal: 'Normal',
+      low: 'Baixa',
+    } as Record<string, string>)[priority] ?? priority;
+  }
+
+  function agendaKindLabel(kind: string) {
+    return ({
+      coverage: 'Cobertura',
+      interview: 'Entrevista',
+      meeting: 'Reunião',
+      deadline: 'Prazo',
+      event: 'Evento',
+    } as Record<string, string>)[kind] ?? kind;
+  }
 
   return (
     <>
-      <AdminPageHeader
-        eyebrow="Visão geral"
-        title="Painel"
-        description="Resumo editorial e atividade recente do Nosso Jornal."
-      />
+      <div className="admin-dashboard-heading">
+        <AdminPageHeader
+          eyebrow="Redação"
+          title="Painel"
+          description="O que precisa da sua atenção agora."
+        />
 
-      <section className="admin-stats" aria-label="Resumo">
+        <div className="admin-dashboard-quick-actions">
+          {user.permissions.publishPosts && <a href="/sistema/capa">Organizar capa</a>}
+          <a href="/sistema/agenda">Abrir agenda</a>
+          <a href="/sistema/noticias">Nova matéria</a>
+          {user.login === 'agenciamobi' && <a href="/sistema/pautas">Mesa de Pautas</a>}
+        </div>
+      </div>
+
+      <section className="admin-stats admin-stats--editorial" aria-label="Resumo editorial">
         {stats.map((stat) => (
-          <a href={stat.href} className="admin-stat" key={stat.label}>
+          <a
+            href={stat.href}
+            className={'admin-stat' + (stat.alert ? ' admin-stat--alert' : '')}
+            key={stat.label}
+          >
             <strong>{stat.value}</strong>
             <span>{stat.label}</span>
           </a>
         ))}
       </section>
+
+      {(data.editorial.overdue.length > 0 || data.editorial.nextDeadlines.length > 0) && (
+        <section className="admin-editorial-desk" id="prazos">
+          <div className="admin-widget__head">
+            <div>
+              <span>Prazo</span>
+              <h2>Relógio da redação</h2>
+            </div>
+            <a href="/sistema/agenda">Ver agenda</a>
+          </div>
+
+          <div className="admin-deadline-columns">
+            <div>
+              <h3>Vencidos</h3>
+              {data.editorial.overdue.length === 0 ? (
+                <p className="admin-dashboard-empty">Nenhum prazo vencido.</p>
+              ) : (
+                data.editorial.overdue.map((item) => (
+                  <a className="admin-deadline-row admin-deadline-row--overdue" href={item.adminUrl} key={item.id}>
+                    <div>
+                      <strong>{item.title}</strong>
+                      <span>{item.assignee} • {editorialPriorityLabel(item.priority)}</span>
+                    </div>
+                    <time>{formatAdminDate(item.deadlineAt)}</time>
+                  </a>
+                ))
+              )}
+            </div>
+
+            <div>
+              <h3>Próximos 7 dias</h3>
+              {data.editorial.nextDeadlines.length === 0 ? (
+                <p className="admin-dashboard-empty">Nenhum prazo próximo.</p>
+              ) : (
+                data.editorial.nextDeadlines.map((item) => (
+                  <a className="admin-deadline-row" href={item.adminUrl} key={item.id}>
+                    <div>
+                      <strong>{item.title}</strong>
+                      <span>{item.assignee} • {editorialPriorityLabel(item.priority)}</span>
+                    </div>
+                    <time>{formatAdminDate(item.deadlineAt)}</time>
+                  </a>
+                ))
+              )}
+            </div>
+          </div>
+        </section>
+      )}
+
+      <div className="admin-dashboard-editorial-grid">
+        <section className="admin-widget" id="revisao">
+          <div className="admin-widget__head">
+            <div>
+              <span>Workflow</span>
+              <h2>Em revisão</h2>
+            </div>
+            <strong className="admin-widget__count">{data.editorial.review.length}</strong>
+          </div>
+
+          <div className="admin-workflow-list">
+            {data.editorial.review.map((item) => (
+              <a href={item.adminUrl} key={item.id}>
+                <span className={'admin-priority admin-priority--' + item.priority}>
+                  {editorialPriorityLabel(item.priority)}
+                </span>
+                <strong>{item.title}</strong>
+                <small>{item.assignee}</small>
+              </a>
+            ))}
+            {data.editorial.review.length === 0 && (
+              <p className="admin-dashboard-empty">Nenhuma matéria aguardando revisão.</p>
+            )}
+          </div>
+        </section>
+
+        <section className="admin-widget" id="prontas">
+          <div className="admin-widget__head">
+            <div>
+              <span>Workflow</span>
+              <h2>Prontas para publicar</h2>
+            </div>
+            <strong className="admin-widget__count">{data.editorial.ready.length}</strong>
+          </div>
+
+          <div className="admin-workflow-list">
+            {data.editorial.ready.map((item) => (
+              <a href={item.adminUrl} key={item.id}>
+                <span className={'admin-priority admin-priority--' + item.priority}>
+                  {editorialPriorityLabel(item.priority)}
+                </span>
+                <strong>{item.title}</strong>
+                <small>{item.assignee}</small>
+              </a>
+            ))}
+            {data.editorial.ready.length === 0 && (
+              <p className="admin-dashboard-empty">Nenhuma matéria marcada como pronta.</p>
+            )}
+          </div>
+        </section>
+
+        <section className="admin-widget">
+          <div className="admin-widget__head">
+            <div>
+              <span>Publicação</span>
+              <h2>Agendadas</h2>
+            </div>
+            <a href="/sistema/agenda">Agenda</a>
+          </div>
+
+          <div className="admin-workflow-list">
+            {data.editorial.scheduled.map((item) => (
+              <a href={item.adminUrl} key={item.id}>
+                <strong>{item.title}</strong>
+                <small>{formatAdminDate(item.scheduledAt)}</small>
+              </a>
+            ))}
+            {data.editorial.scheduled.length === 0 && (
+              <p className="admin-dashboard-empty">Nenhuma publicação agendada.</p>
+            )}
+          </div>
+        </section>
+
+        <section className="admin-widget">
+          <div className="admin-widget__head">
+            <div>
+              <span>Próximos dias</span>
+              <h2>Coberturas e compromissos</h2>
+            </div>
+            <a href="/sistema/agenda">Ver todas</a>
+          </div>
+
+          <div className="admin-workflow-list">
+            {data.editorial.agenda.map((item) => (
+              <a href={item.adminUrl} key={item.id}>
+                <span className="admin-agenda-kind">{agendaKindLabel(item.kind)}</span>
+                <strong>{item.title}</strong>
+                <small>
+                  {formatAdminDate(item.start)}
+                  {item.location ? ' • ' + item.location : ''}
+                </small>
+              </a>
+            ))}
+            {data.editorial.agenda.length === 0 && (
+              <p className="admin-dashboard-empty">Nenhuma cobertura próxima.</p>
+            )}
+          </div>
+        </section>
+      </div>
+
+      {user.login === 'agenciamobi' && data.editorial.urgentPautas.length > 0 && (
+        <section className="admin-widget admin-dashboard-pautas">
+          <div className="admin-widget__head">
+            <div>
+              <span>Mesa de Pautas</span>
+              <h2>Prioridade alta</h2>
+            </div>
+            <a href="/sistema/pautas">Abrir mesa</a>
+          </div>
+
+          <div className="admin-workflow-list admin-workflow-list--horizontal">
+            {data.editorial.urgentPautas.map((item) => (
+              <a href={item.adminUrl} key={item.id}>
+                <span className={'admin-priority admin-priority--' + item.priority}>
+                  {editorialPriorityLabel(item.priority)}
+                </span>
+                <strong>{item.title}</strong>
+                {item.deadline && <small>{formatAdminDate(item.deadline)}</small>}
+              </a>
+            ))}
+          </div>
+        </section>
+      )}
 
       <div className="admin-dashboard-grid">
         <section className="admin-widget">
@@ -1146,18 +1430,21 @@ function DashboardView({ user }: { user: AdminUser }) {
         <aside className="admin-widget admin-widget--compact">
           <div className="admin-widget__head">
             <div>
-              <span>Agora</span>
-              <h2>No sistema</h2>
+              <span>Hoje</span>
+              <h2>Fluxo editorial</h2>
             </div>
           </div>
 
           <dl className="admin-system-list">
-            <div><dt>Notícias</dt><dd>{data.summary.posts.total}</dd></div>
-            <div><dt>Pendentes</dt><dd>{data.summary.posts.pending}</dd></div>
-            <div><dt>Agendados</dt><dd>{data.summary.posts.future}</dd></div>
-            <div><dt>Comentários pendentes</dt><dd>{data.summary.comments.pending}</dd></div>
+            <div><dt>Em apuração</dt><dd>{data.summary.workflow.reporting}</dd></div>
+            <div><dt>Em redação</dt><dd>{data.summary.workflow.writing}</dd></div>
+            <div><dt>Em revisão</dt><dd>{data.summary.workflow.review}</dd></div>
+            <div><dt>Prontas</dt><dd>{data.summary.workflow.ready}</dd></div>
+            <div><dt>Agendadas</dt><dd>{data.summary.workflow.scheduled}</dd></div>
+            {user.permissions.moderateComments && (
+              <div><dt>Comentários pendentes</dt><dd>{data.summary.comments.pending}</dd></div>
+            )}
           </dl>
-
         </aside>
       </div>
     </>
