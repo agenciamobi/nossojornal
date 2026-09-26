@@ -1453,3 +1453,36 @@ Depois da validação dessas mutations:
 6. agendamento;
 7. criação e edição de usuários;
 8. persistência completa da Mesa de Pautas.
+
+
+## 23. Documento canônico do /sistema
+
+A documentação consolidada do painel administrativo passa a viver em:
+
+```text
+docs/ADMIN_MVP.md
+```
+
+Esse arquivo é a referência para:
+
+- arquitetura do `/sistema`;
+- autenticação e compatibilidade com usuários WordPress;
+- sessão, CSRF e segurança;
+- capabilities;
+- rotas;
+- endpoints;
+- Dashboard;
+- Notícias;
+- Categorias;
+- Mídia;
+- Usuários;
+- Configurações;
+- Mesa de Pautas;
+- write readiness;
+- mutations canárias;
+- relação com o MOBI Core;
+- sequência de homologação;
+- próximos gates;
+- fluxo de deploy.
+
+As seções históricas deste `EVOLUTION.md` registram a ordem das mudanças. Em caso de divergência sobre o estado atual do painel, consultar primeiro `docs/ADMIN_MVP.md`.
