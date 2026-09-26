@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/api/v1/_bootstrap.php';
 require __DIR__ . '/api/v1/_content.php';
+require_once __DIR__ . '/api/v1/_authors.php';
 
 const NJ_SITE_URL = 'https://nossojornal.com.br';
 
@@ -104,6 +105,15 @@ SQL);
         : $article['excerpt'];
 
     return $article;
+}
+
+function nj_meta_author_by_slug(string $slug): ?array
+{
+    if (!preg_match('/^[a-z0-9-]+$/', $slug)) {
+        return null;
+    }
+
+    return nj_author_profile(nj_db(), $slug);
 }
 
 function nj_meta_category_by_slug(string $slug): ?array
@@ -359,6 +369,90 @@ try {
             $meta['description'] = 'Notícias da editoria ' . $category['name'] . ' no Nosso Jornal.';
             $meta['canonical'] = '/categoria/' . rawurlencode((string) $category['slug']);
         }
+    } elseif (preg_match('#^/autor/([a-z0-9-]+)$#', $path, $match)) {
+        $author = nj_meta_author_by_slug($match[1]);
+
+        if ($author === null) {
+            $status = 404;
+            $meta['title'] = 'Autor não encontrado';
+            $meta['description'] = 'O perfil de autor solicitado não foi encontrado no Nosso Jornal.';
+            $meta['robots'] = 'noindex,follow';
+        } else {
+            $authorUrl = nj_meta_absolute_url((string) $author['url']);
+            $avatar = is_array($author['avatar'] ?? null) ? $author['avatar'] : null;
+            $image = is_array($avatar) ? (string) ($avatar['url'] ?? '') : '';
+            $imageAlt = is_array($avatar) ? (string) ($avatar['alt'] ?? '') : '';
+            $imageWidth = is_array($avatar) ? max(0, (int) ($avatar['width'] ?? 0)) : 0;
+            $imageHeight = is_array($avatar) ? max(0, (int) ($avatar['height'] ?? 0)) : 0;
+            $description = trim((string) $author['bio']);
+
+            if ($description === '') {
+                $description = 'Notícias e reportagens assinadas por '
+                    . (string) $author['name']
+                    . ' no Nosso Jornal.';
+            }
+
+            $sameAs = [];
+            if (trim((string) ($author['website'] ?? '')) !== '') {
+                $sameAs[] = (string) $author['website'];
+            }
+            foreach ((array) ($author['social'] ?? []) as $social) {
+                if (is_array($social) && trim((string) ($social['url'] ?? '')) !== '') {
+                    $sameAs[] = (string) $social['url'];
+                }
+            }
+
+            $meta = [
+                'title' => (string) $author['name'],
+                'description' => $description,
+                'canonical' => (string) $author['url'],
+                'type' => 'profile',
+                'image' => $image,
+                'imageAlt' => $imageAlt,
+                'imageWidth' => $imageWidth,
+                'imageHeight' => $imageHeight,
+                'jsonLd' => [
+                    '@context' => 'https://schema.org',
+                    '@graph' => [
+                        [
+                            '@type' => 'Person',
+                            '@id' => $authorUrl . '#person',
+                            'name' => (string) $author['name'],
+                            'url' => $authorUrl,
+                            'description' => $description,
+                            'jobTitle' => trim((string) ($author['role'] ?? '')) !== ''
+                                ? (string) $author['role']
+                                : null,
+                            'image' => $image !== '' ? nj_meta_absolute_url($image) : null,
+                            'sameAs' => $sameAs !== [] ? $sameAs : null,
+                            'worksFor' => [
+                                '@type' => 'Organization',
+                                'name' => 'Nosso Jornal',
+                                'url' => NJ_SITE_URL,
+                            ],
+                        ],
+                        [
+                            '@type' => 'BreadcrumbList',
+                            '@id' => $authorUrl . '#breadcrumb',
+                            'itemListElement' => [
+                                [
+                                    '@type' => 'ListItem',
+                                    'position' => 1,
+                                    'name' => 'Capa',
+                                    'item' => NJ_SITE_URL . '/',
+                                ],
+                                [
+                                    '@type' => 'ListItem',
+                                    'position' => 2,
+                                    'name' => (string) $author['name'],
+                                    'item' => $authorUrl,
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ];
+        }
     } else {
         $slug = null;
 
@@ -425,6 +519,9 @@ try {
                                     ? [
                                         '@type' => 'Person',
                                         'name' => (string) $article['author']['name'],
+                                        'url' => trim((string) ($article['author']['url'] ?? '')) !== ''
+                                            ? nj_meta_absolute_url((string) $article['author']['url'])
+                                            : null,
                                     ]
                                     : [
                                         '@type' => 'Organization',
