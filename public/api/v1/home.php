@@ -119,7 +119,16 @@ SELECT
             AND pm_home_until.meta_key = '_nj_home_until'
         ORDER BY pm_home_until.meta_id DESC
         LIMIT 1
-    ), '') AS home_until
+    ), '') AS home_until,
+    COALESCE((
+        SELECT pm_home_headline.meta_value
+        FROM {$postmeta} pm_home_headline
+        WHERE
+            pm_home_headline.post_id = p.ID
+            AND pm_home_headline.meta_key = '_nj_home_headline'
+        ORDER BY pm_home_headline.meta_id DESC
+        LIMIT 1
+    ), '') AS home_headline
 FROM {$posts} p
 LEFT JOIN {$users} u
     ON u.ID = p.post_author
@@ -273,12 +282,14 @@ SQL;
             'views' => (int) $row['views'],
             'primaryCategory' => $primaryCategory,
             'categories' => $categories,
+            'homeHeadline' => trim((string) $row['home_headline']),
             'homePlacement' => [
                 'slot' => in_array((string) $row['home_slot'], ['automatic', 'hero', 'featured'], true)
                     ? (string) $row['home_slot']
                     : 'automatic',
                 'rank' => max(0, min(99, (int) $row['home_rank'])),
                 'until' => trim((string) $row['home_until']),
+                'headline' => trim((string) $row['home_headline']),
             ],
         ];
     }
