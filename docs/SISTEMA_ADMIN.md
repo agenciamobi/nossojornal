@@ -1906,3 +1906,30 @@ Uma fonte pausada continua aparecendo com seu histórico de health, mas não par
 Por segurança, somente URLs HTTPS públicas são aceitas. Hosts locais, redes privadas, ranges reservados, URLs com credenciais, portas alternativas e redirects são rejeitados. A resposta de feed também possui limite de tamanho.
 
 A captura nunca aceita uma URL avulsa enviada pelo browser: o backend só busca uma URL que esteja cadastrada e ativa no catálogo.
+
+## Políticas de captura do Radar
+
+Cada fonte RSS/Atom pode definir:
+
+```text
+Cadência desejada
+Itens por captura
+```
+
+Cadências disponíveis no editor:
+
+```text
+1h
+3h
+6h
+12h
+24h
+```
+
+O Radar calcula a próxima janela com base na última tentativa registrada e sinaliza fontes `Vencidas`.
+
+A ação `Capturar vencidas` consulta somente fontes ativas fora da janela configurada.
+
+As fontes são agrupadas pelo campo Tema/categoria e cada grupo possui uma ação de captura própria.
+
+Essas políticas não criam automação sozinhas. Elas são a fonte de verdade operacional para uma integração futura com jobs do MOBI Core.
