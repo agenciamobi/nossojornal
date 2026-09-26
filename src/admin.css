@@ -4244,3 +4244,298 @@
     flex: 1;
   }
 }
+
+
+/* Newsroom cockpit ------------------------------------------------------- */
+
+.admin-dashboard-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.admin-dashboard-quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 18px;
+}
+
+.admin-dashboard-quick-actions a {
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #2271b1;
+  border-radius: 3px;
+  padding: 0 10px;
+  background: #fff;
+  color: #2271b1;
+  font-size: 9px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.admin-dashboard-quick-actions a:first-child {
+  background: #2271b1;
+  color: #fff;
+}
+
+.admin-stats--editorial .admin-stat--alert {
+  border-color: #d63638;
+  box-shadow: inset 0 3px 0 #d63638;
+}
+
+.admin-stats--editorial .admin-stat--alert strong {
+  color: #b32d2e;
+}
+
+.admin-editorial-desk {
+  margin: 18px 0;
+  border: 1px solid #c3c4c7;
+  background: #fff;
+  box-shadow: 0 1px 1px rgba(0,0,0,.04);
+}
+
+.admin-editorial-desk > .admin-widget__head {
+  border-bottom: 1px solid #dcdcde;
+}
+
+.admin-deadline-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+}
+
+.admin-deadline-columns > div {
+  min-width: 0;
+  padding: 12px;
+}
+
+.admin-deadline-columns > div + div {
+  border-left: 1px solid #dcdcde;
+}
+
+.admin-deadline-columns h3 {
+  margin: 0 0 8px;
+  color: #50575e;
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+.admin-deadline-row {
+  min-height: 54px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border-top: 1px solid #f0f0f1;
+  padding: 8px 4px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.admin-deadline-row:first-of-type {
+  border-top: 0;
+}
+
+.admin-deadline-row > div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.admin-deadline-row strong {
+  overflow: hidden;
+  color: #1d2327;
+  font-size: 10px;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-deadline-row span {
+  color: #787c82;
+  font-size: 8px;
+}
+
+.admin-deadline-row time {
+  flex: 0 0 auto;
+  color: #50575e;
+  font-size: 8px;
+  font-weight: 750;
+  text-align: right;
+}
+
+.admin-deadline-row--overdue {
+  border-left: 3px solid #d63638;
+  padding-left: 9px;
+}
+
+.admin-deadline-row--overdue time {
+  color: #b32d2e;
+}
+
+.admin-dashboard-editorial-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.admin-widget__count {
+  min-width: 25px;
+  height: 25px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: #f0f0f1;
+  color: #50575e;
+  font-size: 9px;
+}
+
+.admin-workflow-list {
+  display: grid;
+}
+
+.admin-workflow-list > a {
+  min-height: 54px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: 8px;
+  row-gap: 3px;
+  align-items: center;
+  border-bottom: 1px solid #f0f0f1;
+  padding: 9px 12px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.admin-workflow-list > a:last-child {
+  border-bottom: 0;
+}
+
+.admin-workflow-list > a:hover {
+  background: #f6f7f7;
+}
+
+.admin-workflow-list > a > strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #1d2327;
+  font-size: 10px;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-workflow-list > a > small {
+  grid-column: 2;
+  color: #787c82;
+  font-size: 8px;
+}
+
+.admin-workflow-list > a > .admin-agenda-kind + strong {
+  grid-column: 2;
+}
+
+.admin-priority,
+.admin-agenda-kind {
+  border-radius: 999px;
+  padding: 3px 6px;
+  background: #f0f0f1;
+  color: #646970;
+  font-size: 7px;
+  font-weight: 850;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+}
+
+.admin-priority--urgent {
+  background: #fbeaea;
+  color: #b32d2e;
+}
+
+.admin-priority--high {
+  background: #fcf0d4;
+  color: #996800;
+}
+
+.admin-priority--low {
+  background: #eaf2fb;
+  color: #135e96;
+}
+
+.admin-agenda-kind {
+  background: #eaf2fb;
+  color: #135e96;
+}
+
+.admin-dashboard-empty {
+  margin: 0;
+  padding: 20px 12px;
+  color: #8c8f94;
+  font-size: 9px;
+  text-align: center;
+}
+
+.admin-dashboard-pautas {
+  margin-bottom: 18px;
+}
+
+.admin-workflow-list--horizontal {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.admin-workflow-list--horizontal > a:nth-last-child(-n+2) {
+  border-bottom: 0;
+}
+
+@media (max-width: 960px) {
+  .admin-dashboard-heading {
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .admin-dashboard-quick-actions {
+    justify-content: flex-start;
+    margin: -8px 0 18px;
+  }
+
+  .admin-dashboard-editorial-grid,
+  .admin-deadline-columns {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-deadline-columns > div + div {
+    border-top: 1px solid #dcdcde;
+    border-left: 0;
+  }
+}
+
+@media (max-width: 720px) {
+  .admin-dashboard-quick-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    width: 100%;
+  }
+
+  .admin-dashboard-quick-actions a {
+    justify-content: center;
+  }
+
+  .admin-workflow-list--horizontal {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-workflow-list--horizontal > a {
+    border-bottom: 1px solid #f0f0f1;
+  }
+
+  .admin-workflow-list--horizontal > a:last-child {
+    border-bottom: 0;
+  }
+}
