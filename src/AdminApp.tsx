@@ -82,6 +82,44 @@ type PostsPayload = {
   };
 };
 
+type PostDetailPayload = {
+  ok: boolean;
+  data?: {
+    post: {
+      id: number;
+      title: string;
+      slug: string;
+      excerpt: string;
+      content: string;
+      status: string;
+      publishedAt: string;
+      modifiedAt: string;
+      author: { id: number; name: string };
+      categories: Array<{ id: number; name: string; slug: string }>;
+      featuredImage: {
+        id: number;
+        url: string;
+        title: string;
+        alt: string;
+      } | null;
+      seo: {
+        title: string;
+        description: string;
+        primaryCategoryId: number;
+      };
+      publicUrl: string | null;
+    };
+    categories: Array<{
+      id: number;
+      name: string;
+      slug: string;
+      parentId: number | null;
+      color: string;
+    }>;
+    mode: 'read_only';
+  };
+};
+
 type CategoriesPayload = {
   ok: boolean;
   data?: {
@@ -166,12 +204,13 @@ type PautasPayload = {
   };
 };
 
-type AdminView = 'dashboard' | 'posts' | 'categories' | 'media' | 'users' | 'settings' | 'pautas';
+type AdminView = 'dashboard' | 'posts' | 'post' | 'categories' | 'media' | 'users' | 'settings' | 'pautas';
 
 function resolveAdminView(pathname: string): AdminView {
   const clean = pathname.replace(/\/+$/, '');
 
   if (clean === '/sistema/noticias') return 'posts';
+  if (/^\/sistema\/noticias\/\d+$/.test(clean)) return 'post';
   if (clean === '/sistema/categorias') return 'categories';
   if (clean === '/sistema/midia') return 'media';
   if (clean === '/sistema/usuarios') return 'users';
@@ -485,8 +524,16 @@ function AdminNav({ user, view }: { user: AdminUser; view: AdminView }) {
                 <a
                   key={entry.key}
                   href={entry.href}
-                  className={view === entry.key ? 'admin-nav__item admin-nav__item--active' : 'admin-nav__item'}
-                  aria-current={view === entry.key ? 'page' : undefined}
+                  className={
+                    view === entry.key || (view === 'post' && entry.key === 'posts')
+                      ? 'admin-nav__item admin-nav__item--active'
+                      : 'admin-nav__item'
+                  }
+                  aria-current={
+                    view === entry.key || (view === 'post' && entry.key === 'posts')
+                      ? 'page'
+                      : undefined
+                  }
                 >
                   <span className="admin-nav__icon">
                     <AdminIcon name={entry.icon} />
@@ -783,8 +830,11 @@ function PostsView() {
             {data.items.map((post) => (
               <tr key={post.id}>
                 <td className="admin-table__primary">
-                  <strong>{post.title}</strong>
+                  <strong>
+                    <a href={'/sistema/noticias/' + post.id}>{post.title}</a>
+                  </strong>
                   <div className="admin-row-actions">
+                    <a href={'/sistema/noticias/' + post.id}>Abrir</a>
                     <span>#{post.id}</span>
                     {post.publicUrl && post.status === 'publish' && (
                       <a href={post.publicUrl} target="_blank" rel="noopener noreferrer">Ver ↗</a>
@@ -824,6 +874,204 @@ function PostsView() {
         base="/sistema/noticias"
         params={{ status, q: query }}
       />
+    </>
+  );
+}
+
+function PostEditorView() {
+  const match = window.location.pathname.match(/^\/sistema\/noticias\/(\d+)\/?$/);
+  const postId = match ? Number.parseInt(match[1], 10) : 0;
+  const [data, setData] = useState<PostDetailPayload['data']>();
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    if (!postId) {
+      setError(true);
+      return;
+    }
+
+    void adminFetch<PostDetailPayload>('/api/admin/post.php?id=' + postId)
+      .then((payload) => {
+        if (!payload.ok || !payload.data) throw new Error('post_invalid');
+        setData(payload.data);
+      })
+      .catch(() => setError(true));
+  }, [postId]);
+
+  if (error) return <AdminError />;
+  if (!data) return <AdminLoading />;
+
+  const post = data.post;
+  const selectedCategoryIds = new Set(post.categories.map((category) => category.id));
+
+  return (
+    <>
+      <header className="admin-editor-header">
+        <div>
+          <a href="/sistema/noticias" className="admin-editor-header__back">← Notícias</a>
+          <div className="admin-editor-header__title">
+            <span className={'admin-status admin-status--' + post.status}>
+              {statusLabel(post.status)}
+            </span>
+            <h1>Editar notícia</h1>
+          </div>
+          <p>#{post.id} • última alteração {formatAdminDate(post.modifiedAt)}</p>
+        </div>
+
+        <div className="admin-editor-header__actions">
+          {post.publicUrl && post.status === 'publish' && (
+            <a href={post.publicUrl} target="_blank" rel="noopener noreferrer">
+              Ver no site ↗
+            </a>
+          )}
+          <button type="button" disabled title="Aguardando write MySQL">
+            Salvar rascunho
+          </button>
+          <button type="button" className="admin-button--primary" disabled title="Aguardando write MySQL">
+            Publicar
+          </button>
+        </div>
+      </header>
+
+      <ReadOnlyNotice />
+
+      <div className="admin-editor-layout">
+        <section className="admin-editor-main">
+          <label className="admin-editor-field admin-editor-field--title">
+            <span>Título</span>
+            <input value={post.title} readOnly />
+          </label>
+
+          <label className="admin-editor-field">
+            <span>Slug</span>
+            <input value={post.slug} readOnly />
+          </label>
+
+          <label className="admin-editor-field">
+            <span>Resumo</span>
+            <textarea value={post.excerpt} readOnly rows={5} />
+          </label>
+
+          <label className="admin-editor-field">
+            <span>Conteúdo</span>
+            <textarea
+              className="admin-editor-content"
+              value={post.content}
+              readOnly
+              rows={28}
+            />
+          </label>
+
+          <section className="admin-editor-card">
+            <div className="admin-editor-card__head">
+              <span>SEO</span>
+              <strong>Metadados</strong>
+            </div>
+
+            <div className="admin-editor-card__body admin-editor-card__body--fields">
+              <label className="admin-editor-field">
+                <span>Título SEO</span>
+                <input value={post.seo.title} readOnly />
+              </label>
+
+              <label className="admin-editor-field">
+                <span>Descrição SEO</span>
+                <textarea value={post.seo.description} readOnly rows={4} />
+              </label>
+            </div>
+          </section>
+        </section>
+
+        <aside className="admin-editor-sidebar">
+          <section className="admin-editor-card">
+            <div className="admin-editor-card__head">
+              <span>Publicação</span>
+              <strong>Estado</strong>
+            </div>
+
+            <dl className="admin-editor-meta">
+              <div>
+                <dt>Status</dt>
+                <dd>{statusLabel(post.status)}</dd>
+              </div>
+              <div>
+                <dt>Autor</dt>
+                <dd>{post.author.name}</dd>
+              </div>
+              <div>
+                <dt>Publicado</dt>
+                <dd>{formatAdminDate(post.publishedAt)}</dd>
+              </div>
+              <div>
+                <dt>Atualizado</dt>
+                <dd>{formatAdminDate(post.modifiedAt)}</dd>
+              </div>
+            </dl>
+          </section>
+
+          <section className="admin-editor-card">
+            <div className="admin-editor-card__head">
+              <span>Taxonomia</span>
+              <strong>Categorias</strong>
+            </div>
+
+            <div className="admin-editor-categories">
+              {data.categories.map((category) => (
+                <label key={category.id}>
+                  <input
+                    type="checkbox"
+                    checked={selectedCategoryIds.has(category.id)}
+                    readOnly
+                  />
+                  <i style={{ background: category.color }} aria-hidden="true" />
+                  <span>{category.name}</span>
+                </label>
+              ))}
+            </div>
+          </section>
+
+          <section className="admin-editor-card">
+            <div className="admin-editor-card__head">
+              <span>Imagem</span>
+              <strong>Destacada</strong>
+            </div>
+
+            {post.featuredImage ? (
+              <figure className="admin-editor-featured">
+                <img
+                  src={post.featuredImage.url}
+                  alt={post.featuredImage.alt || post.featuredImage.title || post.title}
+                />
+                <figcaption>
+                  <strong>{post.featuredImage.title || 'Imagem destacada'}</strong>
+                  <span>#{post.featuredImage.id}</span>
+                </figcaption>
+              </figure>
+            ) : (
+              <div className="admin-editor-empty">Sem imagem destacada.</div>
+            )}
+          </section>
+
+          <section className="admin-editor-card">
+            <div className="admin-editor-card__head">
+              <span>Próxima capacidade</span>
+              <strong>Write</strong>
+            </div>
+
+            <div className="admin-editor-next">
+              <p>Assim que o runtime MySQL permitir escrita, este editor será ligado a:</p>
+              <ul>
+                <li>Salvar rascunho</li>
+                <li>Publicar e despublicar</li>
+                <li>Agendar publicação</li>
+                <li>Alterar categorias</li>
+                <li>Trocar imagem destacada</li>
+                <li>Atualizar SEO</li>
+              </ul>
+            </div>
+          </section>
+        </aside>
+      </div>
     </>
   );
 }
@@ -1300,6 +1548,7 @@ export function AdminApp() {
         <main className="admin-content">
           {view === 'dashboard' && <DashboardView user={user} />}
           {view === 'posts' && <PostsView />}
+          {view === 'post' && <PostEditorView />}
           {view === 'categories' && <CategoriesView />}
           {view === 'media' && <MediaView />}
           {view === 'users' && <UsersView />}
