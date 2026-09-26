@@ -348,43 +348,71 @@ export function App() {
         </main>
       )}
 
-      <footer className="site-footer" id="sobre">
-        <div className="container site-footer__grid">
-          <div>
+      <footer className="site-footer site-footer--magazine" id="sobre">
+        <div className="container site-footer__mast">
+          <div className="site-footer__identity">
             <Brand />
-            <p>
-              Jornalismo local e regional de Hulha Negra e municípios da região.
-            </p>
+            <div>
+              <span className="site-footer__kicker">Jornalismo local • cobertura regional</span>
+              <p>Informação de Hulha Negra, da região e do Rio Grande do Sul.</p>
+            </div>
           </div>
 
-          <div>
-            <strong>Notícias</strong>
-            <a href="/ultimas">Últimas</a>
+          <a className="site-footer__latest-link" href="/ultimas">
+            <span>Atualização contínua</span>
+            <strong>Últimas notícias</strong>
+          </a>
+        </div>
+
+        <div className="container site-footer__rule" />
+
+        <div className="container site-footer__mag-grid">
+          <nav aria-label="Editorias no rodapé">
+            <span className="site-footer__column-title">Editorias</span>
             <a href="/categoria/hulha-negra">Hulha Negra</a>
             <a href="/categoria/politica">Política</a>
+            <a href="/categoria/seguranca">Segurança</a>
+            <a href="/categoria/economia">Economia</a>
+            <a href="/categoria/educacao">Educação</a>
             <a href="/categoria/rural">Rural</a>
-          </div>
+            <a href="/categoria/esportes">Esportes</a>
+          </nav>
 
-          <div>
-            <strong>Serviços</strong>
+          <nav aria-label="Cobertura regional no rodapé">
+            <span className="site-footer__column-title">Cobertura regional</span>
+            <a href="/categoria/bage">Bagé</a>
+            <a href="/categoria/acegua">Aceguá</a>
+            <a href="/categoria/candiota">Candiota</a>
+            <a href="/categoria/dom-pedrito">Dom Pedrito</a>
+            <a href="/categoria/herval">Herval</a>
+            <a href="/categoria/pinheiro-machado">Pinheiro Machado</a>
+            <a href="/categoria/piratini">Piratini</a>
+          </nav>
+
+          <nav aria-label="Serviços do Nosso Jornal">
+            <span className="site-footer__column-title">Serviços</span>
+            <a href="/ultimas">Últimas notícias</a>
             <a href="/classificados">Classificados</a>
             <a href="/comunicados">Comunicados</a>
             <a href="/busca">Busca</a>
-            <a href="/contato">Contato</a>
-          </div>
-
-          <div>
-            <strong>Nosso Jornal</strong>
             <a href="/sobre">Sobre</a>
-            <a href="/categoria/cobertura-regional">Cobertura Regional</a>
-            <a href="/categoria/rio-grande-do-sul">Rio Grande do Sul</a>
-            <a href="/categoria/brasil">Brasil</a>
+            <a href="/contato">Contato</a>
+          </nav>
+
+          <div className="site-footer__edition">
+            <span className="site-footer__column-title">Nosso Jornal</span>
+            <strong>Hulha Negra • Rio Grande do Sul</strong>
+            <p>
+              Portal regional com cobertura de notícias, política, economia,
+              segurança, educação, rural, esporte e comunidade.
+            </p>
+            <a href="/contato">Fale com a redação</a>
           </div>
         </div>
 
         <div className="container site-footer__bottom">
-          <span>Nosso Jornal</span>
-          <span>Hulha Negra • Rio Grande do Sul</span>
+          <span>© {new Date().getFullYear()} Nosso Jornal</span>
+          <span>Jornalismo local • cobertura regional</span>
         </div>
       </footer>
     </div>
