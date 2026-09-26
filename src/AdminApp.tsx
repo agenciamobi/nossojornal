@@ -280,12 +280,15 @@ type CategoriesPayload = {
       name: string;
       slug: string;
       parentId: number | null;
+      parentName: string;
       count: number;
       color: string;
       colorSource: 'palette' | 'termmeta';
       publicUrl: string;
     }>;
     count: number;
+    total: number;
+    query: string;
   };
 };
 
@@ -882,6 +885,15 @@ function generateAdminPassword(length = 22) {
   window.crypto.getRandomValues(values);
 
   return Array.from(values, (value) => alphabet[value % alphabet.length]).join('');
+}
+
+function slugifyAdminValue(value: string) {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
 }
 
 function statusLabel(status: string) {
@@ -5297,22 +5309,29 @@ function PageEditorView({
 }
 
 function CategoriesView() {
+  const params = useMemo(() => new URLSearchParams(window.location.search), []);
+  const query = params.get('q') ?? '';
+
   const [data, setData] = useState<CategoriesPayload['data']>();
   const [error, setError] = useState(false);
 
   useEffect(() => {
-    void adminFetch<CategoriesPayload>('/api/admin/categories.php')
+    const search = new URLSearchParams();
+    if (query) search.set('q', query);
+
+    void adminFetch<CategoriesPayload>('/api/admin/categories.php?' + search.toString())
       .then((payload) => {
         if (!payload.ok || !payload.data) throw new Error('categories_invalid');
         setData(payload.data);
       })
       .catch(() => setError(true));
-  }, []);
+  }, [query]);
 
   if (error) return <AdminError />;
   if (!data) return <AdminLoading />;
 
-  const byId = new Map(data.items.map((item) => [item.id, item]));
+  const rootCount = data.items.filter((item) => item.parentId === null).length;
+  const childCount = data.items.length - rootCount;
 
   return (
     <>
@@ -5325,6 +5344,37 @@ function CategoriesView() {
         <a className="admin-create-button" href="/sistema/categorias/nova">+ Nova categoria</a>
       </div>
 
+      <section className="admin-directory-summary" aria-label="Resumo de categorias">
+        <div>
+          <span>Exibidas</span>
+          <strong>{data.count.toLocaleString('pt-BR')}</strong>
+          <small>de {data.total.toLocaleString('pt-BR')} categorias</small>
+        </div>
+        <div>
+          <span>Principais</span>
+          <strong>{rootCount.toLocaleString('pt-BR')}</strong>
+          <small>sem categoria superior</small>
+        </div>
+        <div>
+          <span>Subcategorias</span>
+          <strong>{childCount.toLocaleString('pt-BR')}</strong>
+          <small>no resultado atual</small>
+        </div>
+      </section>
+
+      <form className="admin-toolbar admin-toolbar--directory" method="get" action="/sistema/categorias">
+        <div className="admin-search">
+          <input
+            type="search"
+            name="q"
+            defaultValue={query}
+            placeholder="Buscar nome, slug, descrição ou categoria superior"
+            aria-label="Buscar categorias"
+          />
+          <button type="submit">Buscar</button>
+          {query && <a className="admin-toolbar__clear" href="/sistema/categorias">Limpar</a>}
+        </div>
+      </form>
 
       <div className="admin-table-wrap">
         <table className="admin-table">
@@ -5345,17 +5395,13 @@ function CategoriesView() {
                     <a href={'/sistema/categorias/' + category.id}>{category.name}</a>
                   </strong>
                   <div className="admin-row-actions">
-                    <a href={'/sistema/categorias/' + category.id}>Abrir</a>
+                    <a href={'/sistema/categorias/' + category.id}>Editar</a>
                     <span>#{category.id}</span>
                     <a href={category.publicUrl} target="_blank" rel="noopener noreferrer">Ver ↗</a>
                   </div>
                 </td>
                 <td><code>{category.slug}</code></td>
-                <td>
-                  {category.parentId
-                    ? byId.get(category.parentId)?.name ?? '#' + category.parentId
-                    : '—'}
-                </td>
+                <td>{category.parentName || '—'}</td>
                 <td>
                   <span className="admin-color">
                     <i style={{ background: category.color }} />
@@ -5363,11 +5409,18 @@ function CategoriesView() {
                     <small>{category.colorSource === 'termmeta' ? 'Personalizada' : 'Padrão'}</small>
                   </span>
                 </td>
-                <td>{category.count}</td>
+                <td>{category.count.toLocaleString('pt-BR')}</td>
               </tr>
             ))}
           </tbody>
         </table>
+
+        {data.items.length === 0 && (
+          <div className="admin-empty-state">
+            Nenhuma categoria corresponde a “{query}”.
+            <a href="/sistema/categorias"> Mostrar todas</a>
+          </div>
+        )}
       </div>
     </>
   );
@@ -5377,10 +5430,12 @@ function NewCategoryView({ csrfToken }: { csrfToken: string }) {
   const [data, setData] = useState<CategoriesPayload['data']>();
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
+  const [slugTouched, setSlugTouched] = useState(false);
   const [description, setDescription] = useState('');
   const [parentId, setParentId] = useState<number | null>(null);
   const [color, setColor] = useState('#0B57D0');
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'error'>('idle');
+  const [errorMessage, setErrorMessage] = useState('');
   const [error, setError] = useState(false);
 
   useEffect(() => {
@@ -5396,6 +5451,7 @@ function NewCategoryView({ csrfToken }: { csrfToken: string }) {
   if (!data) return <AdminLoading />;
 
   const canCreate = true;
+  const normalizedSlug = slugifyAdminValue(slug);
   const changed =
     name.trim() !== ''
     || slug.trim() !== ''
@@ -5403,10 +5459,17 @@ function NewCategoryView({ csrfToken }: { csrfToken: string }) {
     || parentId !== null
     || color.toUpperCase() !== '#0B57D0';
 
+  const canSubmit =
+    canCreate
+    && name.trim() !== ''
+    && normalizedSlug !== ''
+    && saveState !== 'saving';
+
   async function createCategory() {
-    if (!canCreate || name.trim() === '' || saveState === 'saving') return;
+    if (!canSubmit) return;
 
     setSaveState('saving');
+    setErrorMessage('');
 
     try {
       const payload = await adminFetch<{
@@ -5421,9 +5484,9 @@ function NewCategoryView({ csrfToken }: { csrfToken: string }) {
         method: 'POST',
         headers: { 'X-CSRF-Token': csrfToken },
         body: JSON.stringify({
-          name,
-          slug,
-          description,
+          name: name.trim(),
+          slug: normalizedSlug,
+          description: description.trim(),
           parentId,
           color,
         }),
@@ -5434,7 +5497,19 @@ function NewCategoryView({ csrfToken }: { csrfToken: string }) {
       }
 
       window.location.href = payload.data.category.adminUrl;
-    } catch {
+    } catch (cause) {
+      const code = cause instanceof Error ? cause.message : '';
+      const messages: Record<string, string> = {
+        category_slug_exists: 'Este endereço já está sendo usado por outra categoria.',
+        invalid_category_name: 'Informe um nome válido para a categoria.',
+        invalid_category_slug: 'O endereço precisa gerar um slug válido.',
+        invalid_category_color: 'Escolha uma cor editorial válida.',
+        invalid_category_parent: 'A categoria superior escolhida não é válida.',
+        category_description_too_large: 'A descrição ultrapassou o limite permitido.',
+        database_write_unavailable: 'O banco está temporariamente sem escrita para este recurso.',
+      };
+
+      setErrorMessage(messages[code] ?? 'Não foi possível criar a categoria. Verifique os campos e tente novamente.');
       setSaveState('error');
     }
   }
@@ -5446,6 +5521,7 @@ function NewCategoryView({ csrfToken }: { csrfToken: string }) {
         saving={saveState === 'saving'}
         onSave={createCategory}
       />
+
       <header className="admin-editor-header">
         <div>
           <a href="/sistema/categorias" className="admin-editor-header__back">← Categorias</a>
@@ -5457,10 +5533,14 @@ function NewCategoryView({ csrfToken }: { csrfToken: string }) {
         </div>
 
         <div className="admin-editor-header__actions">
+          <AdminEditorSaveIndicator
+            dirty={changed}
+            state={saveState === 'saving' ? 'saving' : saveState === 'error' ? 'error' : 'idle'}
+          />
           <button
             type="button"
             className="admin-button--primary"
-            disabled={!canCreate || name.trim() === '' || saveState === 'saving'}
+            disabled={!canSubmit}
             onClick={() => void createCategory()}
           >
             {saveState === 'saving' ? 'Criando…' : 'Criar categoria'}
@@ -5470,7 +5550,7 @@ function NewCategoryView({ csrfToken }: { csrfToken: string }) {
 
       {saveState === 'error' && (
         <div className="admin-save-feedback admin-save-feedback--error" role="alert">
-          Não foi possível criar a categoria. Verifique o nome e o slug.
+          {errorMessage}
         </div>
       )}
 
@@ -5488,29 +5568,48 @@ function NewCategoryView({ csrfToken }: { csrfToken: string }) {
                 value={name}
                 readOnly={!canCreate}
                 autoFocus
+                maxLength={200}
                 onChange={(event) => {
-                  setName(event.target.value);
-                  if (slug === '') {
-                    setSlug(
-                      event.target.value
-                        .normalize('NFD')
-                        .replace(/[\u0300-\u036f]/g, '')
-                        .toLowerCase()
-                        .replace(/[^a-z0-9]+/g, '-')
-                        .replace(/^-+|-+$/g, ''),
-                    );
+                  const nextName = event.target.value;
+                  setName(nextName);
+                  if (!slugTouched) {
+                    setSlug(slugifyAdminValue(nextName));
                   }
+                  setSaveState('idle');
                 }}
               />
             </label>
 
             <label className="admin-editor-field">
               <span>Slug</span>
-              <input
-                value={slug}
-                readOnly={!canCreate}
-                onChange={(event) => setSlug(event.target.value)}
-              />
+              <div className="admin-slug-editor">
+                <input
+                  value={slug}
+                  readOnly={!canCreate}
+                  spellCheck={false}
+                  aria-invalid={slug !== '' && normalizedSlug === ''}
+                  onChange={(event) => {
+                    setSlug(slugifyAdminValue(event.target.value));
+                    setSlugTouched(true);
+                    setSaveState('idle');
+                  }}
+                />
+                <button
+                  type="button"
+                  disabled={!name.trim()}
+                  onClick={() => {
+                    setSlug(slugifyAdminValue(name));
+                    setSlugTouched(false);
+                    setSaveState('idle');
+                  }}
+                >
+                  Gerar pelo nome
+                </button>
+              </div>
+              <small className="admin-field-help">
+                /categoria/{normalizedSlug || 'slug-da-editoria'}
+                {!slugTouched && name.trim() ? ' • acompanhando o nome automaticamente' : ''}
+              </small>
             </label>
 
             <label className="admin-editor-field">
@@ -5519,8 +5618,15 @@ function NewCategoryView({ csrfToken }: { csrfToken: string }) {
                 value={description}
                 readOnly={!canCreate}
                 rows={6}
-                onChange={(event) => setDescription(event.target.value)}
+                maxLength={20000}
+                onChange={(event) => {
+                  setDescription(event.target.value);
+                  setSaveState('idle');
+                }}
               />
+              <small className="admin-field-help">
+                {description.length.toLocaleString('pt-BR')} / 20.000 caracteres
+              </small>
             </label>
 
             <label className="admin-editor-field">
@@ -5528,11 +5634,16 @@ function NewCategoryView({ csrfToken }: { csrfToken: string }) {
               <select
                 value={parentId ?? ''}
                 disabled={!canCreate}
-                onChange={(event) => setParentId(event.target.value === '' ? null : Number(event.target.value))}
+                onChange={(event) => {
+                  setParentId(event.target.value === '' ? null : Number(event.target.value));
+                  setSaveState('idle');
+                }}
               >
-                <option value="">Nenhuma</option>
+                <option value="">Nenhuma, esta será uma categoria principal</option>
                 {data.items.map((item) => (
-                  <option value={item.id} key={item.id}>{item.name}</option>
+                  <option value={item.id} key={item.id}>
+                    {item.parentName ? item.parentName + ' → ' : ''}{item.name}
+                  </option>
                 ))}
               </select>
             </label>
@@ -5556,7 +5667,10 @@ function NewCategoryView({ csrfToken }: { csrfToken: string }) {
               value={color}
               disabled={!canCreate}
               aria-label="Cor editorial"
-              onChange={(event) => setColor(event.target.value.toUpperCase())}
+              onChange={(event) => {
+                setColor(event.target.value.toUpperCase());
+                setSaveState('idle');
+              }}
             />
           </div>
         </aside>
