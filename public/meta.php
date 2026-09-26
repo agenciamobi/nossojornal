@@ -399,7 +399,15 @@ if (!is_string($output)) {
 
 http_response_code($status);
 header('Content-Type: text/html; charset=utf-8');
-header('Cache-Control: public, max-age=30, stale-while-revalidate=120');
+
+if ($path === '/sistema' || str_starts_with($path, '/sistema/')) {
+    header('Cache-Control: no-store, private');
+    header('Pragma: no-cache');
+    header('X-Frame-Options: DENY');
+} else {
+    header('Cache-Control: public, max-age=30, stale-while-revalidate=120');
+}
+
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: strict-origin-when-cross-origin');
 header('Vary: Accept-Encoding');
