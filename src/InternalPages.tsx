@@ -13,6 +13,14 @@ type Category = {
   color: string;
 };
 
+type Tag = {
+  id: number;
+  taxonomyId: number;
+  name: string;
+  slug: string;
+  url: string;
+};
+
 type FeaturedImage = {
   url: string;
   alt: string;
@@ -49,6 +57,7 @@ type Article = {
   views: number;
   primaryCategory: Category | null;
   categories: Category[];
+  tags: Tag[];
 };
 
 type ArticlePayload = {
@@ -71,6 +80,12 @@ type ArticlePayload = {
       imageCredit: string;
       imageCaption: string;
       originalSourceUrl: string;
+      series: {
+        name: string;
+        slug: string;
+        order: number;
+        url: string | null;
+      };
     };
     seo: {
       title: string;
@@ -87,7 +102,29 @@ type ArticlesPayload = {
   data?: {
     items: Article[];
     category: Category | null;
+    tag: Tag | null;
     query: string;
+    pagination: {
+      page: number;
+      perPage: number;
+      total: number;
+      totalPages: number;
+      hasPrevious: boolean;
+      hasNext: boolean;
+    };
+  };
+};
+
+type SeriesPayload = {
+  ok: boolean;
+  data?: {
+    series: {
+      name: string;
+      slug: string;
+      url: string;
+      count: number;
+    };
+    items: Article[];
     pagination: {
       page: number;
       perPage: number;
@@ -124,6 +161,8 @@ export type PublicRoute =
   | { kind: 'home' }
   | { kind: 'article'; slug: string }
   | { kind: 'category'; slug: string }
+  | { kind: 'tag'; slug: string }
+  | { kind: 'series'; slug: string }
   | { kind: 'latest' }
   | { kind: 'search' }
   | { kind: 'static'; slug: 'sobre' | 'contato' }
@@ -147,6 +186,12 @@ export function resolvePublicRoute(pathname: string): PublicRoute {
 
   const category = clean.match(/^\/categoria\/([^/]+)$/);
   if (category) return { kind: 'category', slug: decodeURIComponent(category[1]) };
+
+  const tag = clean.match(/^\/tag\/([^/]+)$/);
+  if (tag) return { kind: 'tag', slug: decodeURIComponent(tag[1]) };
+
+  const series = clean.match(/^\/dossie\/([^/]+)$/);
+  if (series) return { kind: 'series', slug: decodeURIComponent(series[1]) };
 
   const legacyArticle = clean.match(/^\/([^/]+)$/);
   if (legacyArticle) return { kind: 'article', slug: decodeURIComponent(legacyArticle[1]) };
@@ -866,12 +911,14 @@ function ArticlePage({ slug }: { slug: string }) {
 
 function ArchivePage({
   categorySlug,
+  tagSlug,
   searchQuery,
   mode,
 }: {
   categorySlug?: string;
+  tagSlug?: string;
   searchQuery?: string;
-  mode: 'category' | 'latest' | 'search';
+  mode: 'category' | 'tag' | 'latest' | 'search';
 }) {
   const params = new URLSearchParams(window.location.search);
   const currentPage = Math.max(1, Number.parseInt(params.get('page') ?? '1', 10) || 1);
@@ -883,6 +930,7 @@ function ArchivePage({
       setPayload({
         items: [],
         category: null,
+        tag: null,
         query: '',
         pagination: {
           page: 1,
@@ -903,6 +951,7 @@ function ArchivePage({
     });
 
     if (categorySlug) query.set('category', categorySlug);
+    if (tagSlug) query.set('tag', tagSlug);
     if (searchQuery) query.set('q', searchQuery);
 
     const controller = new AbortController();
@@ -931,37 +980,47 @@ function ArchivePage({
       });
 
     return () => controller.abort();
-  }, [categorySlug, currentPage, mode, searchQuery]);
+  }, [categorySlug, currentPage, mode, searchQuery, tagSlug]);
 
   const title =
     mode === 'category'
       ? payload?.category?.name ?? 'Editoria'
-      : mode === 'search'
-        ? searchQuery
-          ? `Busca por “${searchQuery}”`
-          : 'Buscar no Nosso Jornal'
-        : 'Últimas notícias';
+      : mode === 'tag'
+        ? payload?.tag?.name ?? 'Assunto'
+        : mode === 'search'
+          ? searchQuery
+            ? `Busca por “${searchQuery}”`
+            : 'Buscar no Nosso Jornal'
+          : 'Últimas notícias';
 
   const description =
     mode === 'category'
       ? `Notícias publicadas na editoria ${payload?.category?.name ?? ''} do Nosso Jornal.`
-      : mode === 'search'
-        ? searchQuery
-          ? `Resultados de busca para ${searchQuery} no Nosso Jornal.`
-          : 'Pesquise no acervo de notícias do Nosso Jornal.'
-        : 'As notícias mais recentes publicadas pelo Nosso Jornal.';
+      : mode === 'tag'
+        ? `Notícias e reportagens relacionadas a ${payload?.tag?.name ?? 'este assunto'}.`
+        : mode === 'search'
+          ? searchQuery
+            ? `Resultados de busca para ${searchQuery} no Nosso Jornal.`
+            : 'Pesquise no acervo de notícias do Nosso Jornal.'
+          : 'As notícias mais recentes publicadas pelo Nosso Jornal.';
 
   usePageMeta(title, description, window.location.pathname + window.location.search);
 
   if (state === 'loading') return <LoadingState />;
-  if (state === 'not-found') return <ErrorState title="Editoria não encontrada" />;
+  if (state === 'not-found') {
+    return <ErrorState title={mode === 'tag' ? 'Assunto não encontrado' : 'Editoria não encontrada'} />;
+  }
   if (state === 'error' || !payload) return <ErrorState />;
 
   const categoryColor = mode === 'category' ? payload.category?.color : undefined;
 
   return (
     <main
-      className={mode === 'category' ? 'internal-main archive-page archive-page--category' : 'internal-main archive-page'}
+      className={mode === 'category'
+        ? 'internal-main archive-page archive-page--category'
+        : mode === 'tag'
+          ? 'internal-main archive-page archive-page--tag'
+          : 'internal-main archive-page'}
       style={editorialStyle(categoryColor)}
     >
       <div className="container">
@@ -974,7 +1033,13 @@ function ArchivePage({
 
         <header className="archive-header">
           <span className="internal-kicker">
-            {mode === 'category' ? 'Editoria' : mode === 'search' ? 'Pesquisa' : 'Atualização'}
+            {mode === 'category'
+              ? 'Editoria'
+              : mode === 'tag'
+                ? 'Assunto'
+                : mode === 'search'
+                  ? 'Pesquisa'
+                  : 'Atualização'}
           </span>
           <h1>{title}</h1>
           <p>{description}</p>
@@ -1003,6 +1068,95 @@ function ArchivePage({
             <a href="/ultimas">Ver últimas notícias</a>
           </div>
         )}
+      </div>
+    </main>
+  );
+}
+
+function SeriesPage({ slug }: { slug: string }) {
+  const params = new URLSearchParams(window.location.search);
+  const currentPage = Math.max(1, Number.parseInt(params.get('page') ?? '1', 10) || 1);
+  const [payload, setPayload] = useState<SeriesPayload['data']>();
+  const [state, setState] = useState<'loading' | 'ready' | 'error' | 'not-found'>('loading');
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const query = new URLSearchParams({
+      slug,
+      page: String(currentPage),
+      per_page: '12',
+    });
+
+    fetch('/api/v1/series.php?' + query.toString(), {
+      headers: { Accept: 'application/json' },
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        if (response.status === 404) {
+          setState('not-found');
+          return null;
+        }
+        if (!response.ok) throw new Error('series_request_failed');
+        return response.json() as Promise<SeriesPayload>;
+      })
+      .then((response) => {
+        if (!response) return;
+        if (!response.ok || !response.data) throw new Error('series_invalid_payload');
+        setPayload(response.data);
+        setState('ready');
+      })
+      .catch((error) => {
+        if (error instanceof DOMException && error.name === 'AbortError') return;
+        setState('error');
+      });
+
+    return () => controller.abort();
+  }, [currentPage, slug]);
+
+  const title = payload?.series.name ?? 'Dossiê';
+  const description = payload
+    ? `Dossiê do Nosso Jornal com ${payload.series.count} publicação${payload.series.count === 1 ? '' : 'ões'} sobre ${payload.series.name}.`
+    : '';
+
+  usePageMeta(title, description, '/dossie/' + slug);
+
+  if (state === 'loading') return <LoadingState />;
+  if (state === 'not-found') return <ErrorState title="Dossiê não encontrado" />;
+  if (state === 'error' || !payload) return <ErrorState />;
+
+  return (
+    <main className="internal-main archive-page archive-page--series">
+      <div className="container">
+        <Breadcrumbs
+          items={[
+            { label: 'Capa', href: '/' },
+            { label: 'Dossiês' },
+            { label: payload.series.name },
+          ]}
+        />
+
+        <header className="archive-header archive-header--series">
+          <span className="internal-kicker">Dossiê</span>
+          <h1>{payload.series.name}</h1>
+          <p>{description}</p>
+          <div className="series-progress">
+            <strong>{payload.series.count}</strong>
+            <span>{payload.series.count === 1 ? 'matéria na série' : 'matérias na série'}</span>
+          </div>
+        </header>
+
+        <div className="archive-grid">
+          {payload.items.map((article, index) => (
+            <div className="series-card-wrap" key={article.id}>
+              <span className="series-card-order">
+                {String((payload.pagination.page - 1) * payload.pagination.perPage + index + 1).padStart(2, '0')}
+              </span>
+              <ArticleCard article={article} />
+            </div>
+          ))}
+        </div>
+
+        <Pagination {...payload.pagination} />
       </div>
     </main>
   );
@@ -1227,6 +1381,8 @@ function NotFoundPage() {
 export function InternalPage({ route }: { route: Exclude<PublicRoute, { kind: 'home' }> }) {
   if (route.kind === 'article') return <ArticlePage slug={route.slug} />;
   if (route.kind === 'category') return <ArchivePage mode="category" categorySlug={route.slug} />;
+  if (route.kind === 'tag') return <ArchivePage mode="tag" tagSlug={route.slug} />;
+  if (route.kind === 'series') return <SeriesPage slug={route.slug} />;
   if (route.kind === 'latest') return <ArchivePage mode="latest" />;
   if (route.kind === 'search') {
     const query = new URLSearchParams(window.location.search).get('q')?.trim() ?? '';
