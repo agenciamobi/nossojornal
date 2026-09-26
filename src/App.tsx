@@ -134,13 +134,15 @@ function StoryMedia({
 function StoryMeta({ article, showViews = false }: { article: Article; showViews?: boolean }) {
   return (
     <div className="home-story-meta">
-      <span>{formatPublishedAt(article.publishedAt)}</span>
+      <span className="home-story-meta__date">{formatPublishedAt(article.publishedAt)}</span>
       {article.author.name && (
         article.author.url
-          ? <a href={article.author.url}>{article.author.name}</a>
-          : <span>{article.author.name}</span>
+          ? <a className="home-story-meta__author" href={article.author.url}>{article.author.name}</a>
+          : <span className="home-story-meta__author">{article.author.name}</span>
       )}
-      {showViews && article.views > 0 && <span>{formatViews(article.views)} visualizações</span>}
+      {showViews && article.views > 0 && (
+        <span className="home-story-meta__views">{formatViews(article.views)} visualizações</span>
+      )}
     </div>
   );
 }
