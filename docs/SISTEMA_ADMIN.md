@@ -1120,3 +1120,386 @@ HTML limpo
 +
 consistência visual do jornal
 ```
+
+
+## 27. Sistema operacional de redação
+
+O `/sistema` passa a administrar não apenas o conteúdo publicado, mas também o trabalho editorial anterior e posterior à publicação.
+
+A primeira onda introduz:
+
+- workflow editorial por matéria;
+- prazo interno;
+- responsável;
+- prioridade;
+- Caderno de Apuração;
+- fontes consultadas;
+- checklist de publicação;
+- Central da Capa;
+- Agenda Editorial;
+- Mesa de Pautas operacional;
+- captura RSS;
+- Central de Fontes;
+- blocos editoriais estruturados;
+- cockpit da redação no Dashboard.
+
+### 27.1 Workflow editorial
+
+Cada notícia pode possuir uma etapa própria da redação:
+
+```text
+Ideia
+→ Apuração
+→ Redação
+→ Revisão
+→ Pronta
+→ Agendada
+→ Publicada
+```
+
+O workflow é persistido em `postmeta` e não substitui `post_status`.
+
+Isso separa duas coisas distintas:
+
+```text
+estado editorial interno
+≠
+estado técnico de publicação
+```
+
+Campos:
+
+```text
+_nj_editorial_stage
+_nj_editorial_priority
+_nj_editorial_deadline
+_nj_editorial_assignee
+```
+
+O status técnico sincroniza etapas importantes:
+
+```text
+future  → scheduled
+publish → published
+draft   → writing
+```
+
+### 27.2 Caderno de Apuração
+
+Cada matéria possui uma área privada da redação.
+
+Persistência:
+
+```text
+_nj_reporting_notes
+_nj_reporting_sources
+```
+
+O caderno permite guardar:
+
+- perguntas em aberto;
+- dados para verificar;
+- contexto;
+- trechos de entrevistas;
+- fontes consultadas;
+- contatos;
+- links e documentos;
+- observações privadas.
+
+Nada desse conteúdo é enviado ao frontend público.
+
+### 27.3 Fontes da matéria
+
+Uma matéria pode armazenar snapshots de fontes consultadas com:
+
+- nome;
+- organização/função;
+- contato;
+- URL/documento;
+- observação.
+
+A fonte pode ser digitada manualmente ou importada da Central de Fontes.
+
+O snapshot é intencional: uma futura alteração no cadastro central não modifica retroativamente o registro de apuração daquela matéria.
+
+### 27.4 Checklist editorial
+
+Checklist manual:
+
+- título revisado;
+- fatos conferidos;
+- nomes e cargos conferidos;
+- datas e números conferidos;
+- fontes identificadas;
+- direitos/crédito de imagem;
+- texto alternativo;
+- links;
+- editoria;
+- SEO;
+- revisão final.
+
+Checks automáticos:
+
+- título;
+- resumo;
+- imagem destacada;
+- categoria;
+- metadados de busca.
+
+Publicar ou agendar com pendências gera confirmação explícita.
+
+O checklist orienta a redação, mas não transforma o CMS em um bloqueio rígido.
+
+## 28. Central da Capa
+
+Rota:
+
+```text
+/sistema/capa
+```
+
+A Central da Capa permite controlar a página inicial independentemente da ordem cronológica.
+
+Posições:
+
+```text
+Automático
+Manchete principal
+Destaque
+```
+
+Também permite:
+
+- ordem dos destaques;
+- validade da fixação;
+- retorno automático ao fluxo normal quando a validade expira.
+
+Metadados:
+
+```text
+_nj_home_slot
+_nj_home_rank
+_nj_home_until
+```
+
+A Home pública resolve a manchete nesta ordem:
+
+```text
+Hero manual ativo
+→ categoria Capa
+→ notícia mais recente
+```
+
+Destaques manuais ativos entram antes das últimas notícias automáticas.
+
+A administração da Capa exige:
+
+```text
+publish_posts
++
+edit_others_posts
+```
+
+## 29. Agenda Editorial
+
+Rota:
+
+```text
+/sistema/agenda
+```
+
+A Agenda reúne na mesma linha do tempo:
+
+- prazos internos das matérias;
+- publicações agendadas;
+- coberturas;
+- entrevistas;
+- reuniões;
+- eventos;
+- prazos avulsos.
+
+Eventos próprios usam o post type privado:
+
+```text
+nj_agenda_event
+```
+
+Metadados:
+
+```text
+_nj_event_start
+_nj_event_end
+_nj_event_location
+_nj_event_kind
+```
+
+A Agenda não cria conteúdo público.
+
+## 30. Mesa de Pautas operacional
+
+A Mesa de Pautas deixa de ser apenas catálogo de RSS.
+
+Entidade:
+
+```text
+post_type = nj_pauta
+post_status = private
+```
+
+Campos:
+
+```text
+etapa
+prioridade
+tema
+origem
+URL de referência
+prazo
+responsável
+anotações
+draft vinculado
+```
+
+Etapas:
+
+```text
+Entrada
+Selecionada
+Apuração
+Pronta
+Em redação
+```
+
+A tela utiliza um quadro editorial em colunas.
+
+### Produzir matéria
+
+A ação:
+
+```text
+Produzir matéria
+```
+
+cria um draft real em `post_type=post`.
+
+São transportados para o novo draft:
+
+- título;
+- prioridade;
+- prazo;
+- responsável;
+- anotações da pauta;
+- origem/link como fonte de apuração.
+
+A pauta guarda o ID da matéria gerada, impedindo a criação acidental de vários drafts para a mesma pauta.
+
+## 31. Captura RSS
+
+A Mesa possui:
+
+```text
+Capturar agora
+Capturar por feed
+```
+
+A captura:
+
+- usa somente feeds presentes na allowlist;
+- não aceita URL arbitrária;
+- limita itens por feed;
+- suporta RSS e Atom;
+- remove HTML da descrição;
+- deduplica pela URL original;
+- cria pautas na coluna Entrada;
+- preserva fonte, link e tema;
+- executa feeds em requisições isoladas;
+- usa concorrência controlada no frontend;
+- não segue redirects durante o fetch.
+
+Falha em um feed não interrompe os demais.
+
+## 32. Central de Fontes
+
+Rota:
+
+```text
+/sistema/fontes
+```
+
+Entidade privada:
+
+```text
+post_type = nj_source
+post_status = private
+```
+
+Campos:
+
+- nome;
+- organização;
+- cargo/função;
+- telefone;
+- WhatsApp;
+- e-mail;
+- cidade;
+- assuntos;
+- site/perfil oficial;
+- observações privadas.
+
+A Central possui busca e ações rápidas de contato.
+
+No editor da matéria, o Caderno de Apuração possui:
+
+```text
+Adicionar da Central
+```
+
+que abre uma busca sem sair da notícia.
+
+## 33. Blocos editoriais estruturados
+
+O editor rico ganhou blocos próprios de jornalismo:
+
+```text
+Entenda
+Serviço
+Em números
+Cronologia
+```
+
+São armazenados como HTML com:
+
+```html
+<aside data-nj-block="...">
+```
+
+Não usam shortcode.
+
+O frontend público possui apresentação própria para cada tipo e o editor mostra uma prévia coerente com a matéria final.
+
+## 34. Cockpit da redação
+
+O Dashboard passa a priorizar ação editorial.
+
+Exibe:
+
+- prazos vencidos;
+- prazos dos próximos sete dias;
+- matérias em revisão;
+- matérias prontas;
+- publicações agendadas;
+- coberturas e compromissos próximos;
+- pautas de prioridade alta;
+- atividade recente;
+- contagem por etapa editorial.
+
+Atalhos rápidos:
+
+```text
+Organizar capa
+Abrir agenda
+Notícias
+Mesa de Pautas
+```
+
+O painel deixa de ser apenas inventário do banco e passa a funcionar como entrada da operação diária.
