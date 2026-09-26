@@ -707,6 +707,8 @@ function ArticlePage({ slug }: { slug: string }) {
   }
 
   async function shareArticle() {
+    if (!article) return;
+
     if (navigator.share) {
       try {
         await navigator.share({
