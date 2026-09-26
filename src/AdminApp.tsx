@@ -360,6 +360,30 @@ type PautasPayload = {
   };
 };
 
+type EditorialSourceContact = {
+  id: number;
+  name: string;
+  organization: string;
+  role: string;
+  phone: string;
+  whatsapp: string;
+  email: string;
+  city: string;
+  topics: string[];
+  url: string;
+  notes: string;
+  createdAt: string;
+  modifiedAt: string;
+};
+
+type SourcesPayload = {
+  ok: boolean;
+  data?: {
+    items: EditorialSourceContact[];
+    query?: string;
+  };
+};
+
 type EditorialSource = {
   name: string;
   organization: string;
@@ -467,13 +491,14 @@ type AgendaPayload = {
   };
 };
 
-type AdminView = 'dashboard' | 'homeLayout' | 'agenda' | 'posts' | 'post' | 'pages' | 'page' | 'categories' | 'category' | 'categoryNew' | 'media' | 'mediaItem' | 'comments' | 'users' | 'user' | 'settings' | 'pautas';
+type AdminView = 'dashboard' | 'homeLayout' | 'agenda' | 'sources' | 'posts' | 'post' | 'pages' | 'page' | 'categories' | 'category' | 'categoryNew' | 'media' | 'mediaItem' | 'comments' | 'users' | 'user' | 'settings' | 'pautas';
 
 function resolveAdminView(pathname: string): AdminView {
   const clean = pathname.replace(/\/+$/, '');
 
   if (clean === '/sistema/capa') return 'homeLayout';
   if (clean === '/sistema/agenda') return 'agenda';
+  if (clean === '/sistema/fontes') return 'sources';
   if (clean === '/sistema/noticias') return 'posts';
   if (/^\/sistema\/noticias\/\d+$/.test(clean)) return 'post';
   if (clean === '/sistema/paginas') return 'pages';
@@ -692,6 +717,7 @@ type AdminIconName =
   | 'dashboard'
   | 'home'
   | 'agenda'
+  | 'sources'
   | 'news'
   | 'pages'
   | 'categories'
@@ -741,6 +767,16 @@ function AdminIcon({ name }: { name: AdminIconName }) {
         <rect x="3" y="5" width="18" height="16" rx="2" />
         <path d="M7 3v4M17 3v4M3 10h18" />
         <path d="M7 14h3M14 14h3M7 17h3" />
+      </svg>
+    );
+  }
+
+  if (name === 'sources') {
+    return (
+      <svg {...common}>
+        <path d="M4 5h16v14H4z" />
+        <circle cx="9" cy="10" r="2" />
+        <path d="M6.5 16c.5-2 1.4-3 2.5-3s2 .9 2.5 3M14 9h3M14 12h3M14 15h2" />
       </svg>
     );
   }
@@ -852,6 +888,9 @@ function AdminNav({ user, view }: { user: AdminUser; view: AdminView }) {
       : []),
     ...(user.permissions.listUsers
       ? [{ key: 'users' as const, label: 'Usuários', href: '/sistema/usuarios', icon: 'users' as const, group: 'management' as const }]
+      : []),
+    ...(user.permissions.editPosts
+      ? [{ key: 'sources' as const, label: 'Fontes', href: '/sistema/fontes', icon: 'sources' as const, group: 'management' as const }]
       : []),
     ...(user.login === 'agenciamobi' && user.permissions.managePautas
       ? [{ key: 'pautas' as const, label: 'Mesa de Pautas', href: '/sistema/pautas', icon: 'pautas' as const, group: 'management' as const }]
