@@ -968,6 +968,22 @@ img {
   text-transform: uppercase;
 }
 
+.site-footer__credit {
+  text-align: right;
+}
+
+.site-footer__credit a {
+  color: #9fb6e3;
+  font-weight: 850;
+}
+
+.site-footer__credit a:hover,
+.site-footer__credit a:focus-visible {
+  color: #fff;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 @media (max-width: 980px) {
   .site-footer__mast {
     align-items: flex-start;
