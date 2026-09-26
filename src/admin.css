@@ -3904,6 +3904,13 @@
   border-left-color: #2271b1;
 }
 
+.admin-agenda-item--active {
+  outline: 2px solid #2271b1;
+  outline-offset: 1px;
+  background: #fbfdff;
+}
+
+
 .admin-agenda-item__time {
   color: #1d2327;
   font-size: 13px;
@@ -3956,9 +3963,64 @@
   cursor: pointer;
 }
 
+.admin-agenda-item__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-agenda-item__actions button {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: #2271b1;
+  font-size: 8px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.admin-agenda-item__actions button.danger {
+  color: #b32d2e;
+}
+
+.admin-agenda-item__actions button:disabled {
+  color: #8c8f94;
+  cursor: not-allowed;
+}
+
+
 .admin-agenda-create {
   position: sticky;
   top: 18px;
+}
+
+.admin-agenda-create__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.admin-agenda-create__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-agenda-create__actions > button:not(.admin-button--primary) {
+  min-height: 36px;
+  border: 1px solid #8c8f94;
+  border-radius: 3px;
+  padding: 0 10px;
+  background: #fff;
+  color: #2c3338;
+  font-size: 9px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.admin-agenda-create__actions > button:disabled {
+  color: #8c8f94;
+  cursor: not-allowed;
 }
 
 .admin-agenda-create__button {
@@ -4019,9 +4081,19 @@
     grid-template-columns: 56px minmax(0, 1fr);
   }
 
-  .admin-agenda-item__delete {
+  .admin-agenda-item__delete,
+  .admin-agenda-item__actions {
     grid-column: 2;
     justify-self: start;
+  }
+
+  .admin-agenda-create__row {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-agenda-create__actions {
+    align-items: stretch;
+    flex-direction: column;
   }
 }
 

@@ -1971,3 +1971,15 @@ O Sistema pode gerar uma senha forte localmente. Depois do cadastro, a tela perm
 O editor de um usuário existente também possui o bloco `Redefinir senha`. Deixar os campos vazios preserva a senha atual.
 
 Alterações de função continuam respeitando capabilities e a proteção especial do usuário proprietário da Mesa de Pautas.
+
+## Edição da Agenda editorial
+
+Compromissos criados diretamente pela redação podem ser reabertos e editados pela própria timeline.
+
+A ação `Editar` carrega o compromisso no formulário lateral e permite alterar tipo, horário, local e observações. `Cancelar edição` volta ao modo de novo compromisso.
+
+Alterações não salvas são protegidas pelo mesmo guard dos demais editores. Também é possível usar `Ctrl+S` ou `Cmd+S`.
+
+O campo Fim não pode ser anterior ao Início. A remoção continua exigindo confirmação.
+
+Prazos editoriais e publicações agendadas vindos das Notícias continuam sendo editados em sua matéria de origem, evitando duas autoridades para o mesmo dado.
