@@ -312,21 +312,49 @@ type SettingsPayload = {
   };
 };
 
+type PautaItem = {
+  id: number;
+  title: string;
+  notes: string;
+  stage: 'inbox' | 'selected' | 'research' | 'ready' | 'writing';
+  priority: 'low' | 'normal' | 'high' | 'urgent';
+  topic: string;
+  sourceName: string;
+  sourceUrl: string;
+  deadline: string;
+  assigneeId: number;
+  assignee: string;
+  createdAt: string;
+  modifiedAt: string;
+  draftPostId: number;
+  draftAdminUrl: string | null;
+};
+
 type PautasPayload = {
   ok: boolean;
   data?: {
-    owner: {
+    owner?: {
       login: string;
       userId: number;
     };
-    pipeline: string[];
-    sources: Array<{
+    pipeline?: string[];
+    sources?: Array<{
       name: string;
       category: string;
       feedUrl: string;
       kind: string;
       priority: number;
     }>;
+    items: PautaItem[];
+    assignees?: Array<{
+      id: number;
+      login: string;
+      name: string;
+    }>;
+    draft?: {
+      id: number;
+      adminUrl: string;
+    } | null;
   };
 };
 
@@ -4893,8 +4921,20 @@ function SettingsView({ csrfToken }: { csrfToken: string }) {
   );
 }
 
-function PautasView() {
+function PautasView({ csrfToken }: { csrfToken: string }) {
   const [data, setData] = useState<PautasPayload['data']>();
+  const [editingId, setEditingId] = useState(0);
+  const [title, setTitle] = useState('');
+  const [notes, setNotes] = useState('');
+  const [stage, setStage] = useState<PautaItem['stage']>('inbox');
+  const [priority, setPriority] = useState<PautaItem['priority']>('normal');
+  const [topic, setTopic] = useState('');
+  const [sourceName, setSourceName] = useState('');
+  const [sourceUrl, setSourceUrl] = useState('');
+  const [deadline, setDeadline] = useState('');
+  const [assigneeId, setAssigneeId] = useState(0);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<'idle' | 'saved' | 'error'>('idle');
   const [error, setError] = useState(false);
 
   useEffect(() => {
@@ -4917,60 +4957,341 @@ function PautasView() {
 
   if (!data) return <AdminLoading />;
 
-  const categories = Array.from(new Set(data.sources.map((source) => source.category)));
+  const stageLabels: Record<PautaItem['stage'], string> = {
+    inbox: 'Entrada',
+    selected: 'Selecionada',
+    research: 'Apuração',
+    ready: 'Pronta',
+    writing: 'Em redação',
+  };
+
+  const priorityLabels: Record<PautaItem['priority'], string> = {
+    low: 'Baixa',
+    normal: 'Normal',
+    high: 'Alta',
+    urgent: 'Urgente',
+  };
+
+  function resetForm() {
+    setEditingId(0);
+    setTitle('');
+    setNotes('');
+    setStage('inbox');
+    setPriority('normal');
+    setTopic('');
+    setSourceName('');
+    setSourceUrl('');
+    setDeadline('');
+    setAssigneeId(0);
+    setMessage('idle');
+  }
+
+  function editPauta(item: PautaItem) {
+    setEditingId(item.id);
+    setTitle(item.title);
+    setNotes(item.notes);
+    setStage(item.stage);
+    setPriority(item.priority);
+    setTopic(item.topic);
+    setSourceName(item.sourceName);
+    setSourceUrl(item.sourceUrl);
+    setDeadline(item.deadline);
+    setAssigneeId(item.assigneeId);
+    setMessage('idle');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  async function mutatePauta(
+    action: 'save' | 'trash' | 'to_draft',
+    pautaId = editingId,
+  ) {
+    if (saving) return;
+    if (action === 'save' && !title.trim()) return;
+
+    setSaving(true);
+    setMessage('idle');
+
+    try {
+      const payload = await adminFetch<PautasPayload>('/api/admin/pautas.php', {
+        method: 'POST',
+        headers: { 'X-CSRF-Token': csrfToken },
+        body: JSON.stringify(
+          action === 'save'
+            ? {
+                action,
+                pautaId,
+                title,
+                notes,
+                stage,
+                priority,
+                topic,
+                sourceName,
+                sourceUrl,
+                deadline,
+                assigneeId,
+              }
+            : { action, pautaId },
+        ),
+      });
+
+      if (!payload.ok || !payload.data) throw new Error('pauta_mutation_invalid');
+
+      setData((current) => current
+        ? {
+            ...current,
+            ...payload.data,
+            owner: payload.data?.owner ?? current.owner,
+            pipeline: payload.data?.pipeline ?? current.pipeline,
+            sources: payload.data?.sources ?? current.sources,
+            assignees: payload.data?.assignees ?? current.assignees,
+          }
+        : payload.data
+      );
+
+      if (action === 'to_draft' && payload.data.draft?.adminUrl) {
+        window.location.href = payload.data.draft.adminUrl;
+        return;
+      }
+
+      resetForm();
+      setMessage('saved');
+    } catch {
+      setMessage('error');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const stages = Object.keys(stageLabels) as PautaItem['stage'][];
+  const counts = Object.fromEntries(
+    stages.map((stageKey) => [
+      stageKey,
+      data.items.filter((item) => item.stage === stageKey).length,
+    ]),
+  ) as Record<PautaItem['stage'], number>;
 
   return (
     <>
       <AdminPageHeader
         eyebrow="Planejamento editorial"
         title="Mesa de Pautas"
-        description="Radar editorial para Pelotas, tecnologia, inteligência artificial, universo, ciência e temas correlatos."
+        description="Organize ideias, fontes e apurações antes de elas virarem notícia."
       />
+
+      {message === 'saved' && (
+        <div className="admin-save-feedback admin-save-feedback--success" role="status">
+          Mesa de Pautas atualizada.
+        </div>
+      )}
+      {message === 'error' && (
+        <div className="admin-save-feedback admin-save-feedback--error" role="alert">
+          Não foi possível atualizar a pauta.
+        </div>
+      )}
 
       <section className="admin-pautas-summary" aria-label="Resumo da Mesa de Pautas">
         <div>
-          <span>Fontes</span>
-          <strong>{data.sources.length}</strong>
+          <span>Pautas abertas</span>
+          <strong>{data.items.length}</strong>
         </div>
         <div>
-          <span>Temas</span>
-          <strong>{categories.length}</strong>
+          <span>Em apuração</span>
+          <strong>{counts.research}</strong>
         </div>
         <div>
-          <span>Fluxo</span>
-          <strong>{data.pipeline.length} etapas</strong>
+          <span>Prontas</span>
+          <strong>{counts.ready}</strong>
+        </div>
+        <div>
+          <span>Em redação</span>
+          <strong>{counts.writing}</strong>
         </div>
       </section>
 
-      <section className="admin-widget admin-pautas-pipeline">
-        <div className="admin-widget__head">
-          <div>
-            <span>Fluxo editorial</span>
-            <h2>Da captura à publicação</h2>
-          </div>
-        </div>
+      <div className="admin-pautas-workspace">
+        <aside className="admin-pauta-editor">
+          <section className="admin-editor-card">
+            <div className="admin-editor-card__head">
+              <span>{editingId ? 'Editar' : 'Nova'}</span>
+              <strong>{editingId ? 'Pauta #' + editingId : 'Criar pauta'}</strong>
+            </div>
 
-        <ol>
-          {data.pipeline.map((step, index) => (
-            <li key={step}>
-              <span>{String(index + 1).padStart(2, '0')}</span>
-              <strong>{step}</strong>
-            </li>
+            <div className="admin-editor-card__body admin-editor-card__body--fields">
+              <label className="admin-editor-field">
+                <span>Título / ideia</span>
+                <input
+                  value={title}
+                  autoFocus={!editingId}
+                  onChange={(event) => setTitle(event.target.value)}
+                />
+              </label>
+
+              <div className="admin-pauta-editor__row">
+                <label className="admin-editor-field">
+                  <span>Etapa</span>
+                  <select value={stage} onChange={(event) => setStage(event.target.value as PautaItem['stage'])}>
+                    {Object.entries(stageLabels).map(([value, label]) => (
+                      <option value={value} key={value}>{label}</option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="admin-editor-field">
+                  <span>Prioridade</span>
+                  <select value={priority} onChange={(event) => setPriority(event.target.value as PautaItem['priority'])}>
+                    {Object.entries(priorityLabels).map(([value, label]) => (
+                      <option value={value} key={value}>{label}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              <label className="admin-editor-field">
+                <span>Tema</span>
+                <input
+                  value={topic}
+                  placeholder="Pelotas, IA, ciência, universo…"
+                  onChange={(event) => setTopic(event.target.value)}
+                />
+              </label>
+
+              <label className="admin-editor-field">
+                <span>Responsável</span>
+                <select value={assigneeId || ''} onChange={(event) => setAssigneeId(Number(event.target.value) || 0)}>
+                  <option value="">Eu / não definido</option>
+                  {(data.assignees ?? []).map((assignee) => (
+                    <option value={assignee.id} key={assignee.id}>{assignee.name}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="admin-editor-field">
+                <span>Prazo</span>
+                <input type="datetime-local" value={deadline} onChange={(event) => setDeadline(event.target.value)} />
+              </label>
+
+              <label className="admin-editor-field">
+                <span>Origem</span>
+                <input
+                  value={sourceName}
+                  placeholder="Pessoa, órgão, site ou feed"
+                  onChange={(event) => setSourceName(event.target.value)}
+                />
+              </label>
+
+              <label className="admin-editor-field">
+                <span>Link de referência</span>
+                <input type="url" value={sourceUrl} onChange={(event) => setSourceUrl(event.target.value)} />
+              </label>
+
+              <label className="admin-editor-field">
+                <span>Anotações</span>
+                <textarea
+                  rows={7}
+                  value={notes}
+                  placeholder="O que sabemos, o que falta apurar, perguntas, contexto…"
+                  onChange={(event) => setNotes(event.target.value)}
+                />
+              </label>
+
+              <div className="admin-pauta-editor__actions">
+                <button
+                  type="button"
+                  className="admin-button--primary"
+                  disabled={!title.trim() || saving}
+                  onClick={() => void mutatePauta('save')}
+                >
+                  {saving ? 'Salvando…' : editingId ? 'Salvar pauta' : 'Adicionar pauta'}
+                </button>
+
+                {editingId > 0 && (
+                  <>
+                    <button
+                      type="button"
+                      disabled={saving}
+                      onClick={() => void mutatePauta('to_draft')}
+                    >
+                      Produzir matéria
+                    </button>
+                    <button type="button" disabled={saving} onClick={resetForm}>
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      className="danger"
+                      disabled={saving}
+                      onClick={() => {
+                        if (window.confirm('Arquivar esta pauta?')) {
+                          void mutatePauta('trash');
+                        }
+                      }}
+                    >
+                      Arquivar
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          </section>
+        </aside>
+
+        <section className="admin-pauta-board" aria-label="Quadro de pautas">
+          {stages.map((stageKey) => (
+            <section className="admin-pauta-column" key={stageKey}>
+              <header>
+                <span>{stageLabels[stageKey]}</span>
+                <strong>{counts[stageKey]}</strong>
+              </header>
+
+              <div>
+                {data.items
+                  .filter((item) => item.stage === stageKey)
+                  .map((item) => (
+                    <article
+                      className={
+                        'admin-pauta-card admin-pauta-card--' + item.priority
+                        + (editingId === item.id ? ' admin-pauta-card--active' : '')
+                      }
+                      key={item.id}
+                    >
+                      <button type="button" onClick={() => editPauta(item)}>
+                        <div className="admin-pauta-card__meta">
+                          <span>{priorityLabels[item.priority]}</span>
+                          {item.topic && <span>{item.topic}</span>}
+                        </div>
+                        <h3>{item.title}</h3>
+                        {item.sourceName && <p>{item.sourceName}</p>}
+                        <footer>
+                          <span>{item.assignee}</span>
+                          <span>{item.deadline ? formatAdminDate(item.deadline) : 'Sem prazo'}</span>
+                        </footer>
+                      </button>
+
+                      {item.draftAdminUrl && (
+                        <a href={item.draftAdminUrl}>Abrir matéria →</a>
+                      )}
+                    </article>
+                  ))}
+
+                {counts[stageKey] === 0 && (
+                  <p className="admin-pauta-column__empty">Nenhuma pauta.</p>
+                )}
+              </div>
+            </section>
           ))}
-        </ol>
-      </section>
+        </section>
+      </div>
 
-      <section className="admin-widget">
+      <section className="admin-widget admin-pautas-radar">
         <div className="admin-widget__head">
           <div>
-            <span>RSS</span>
+            <span>Radar</span>
             <h2>Fontes monitoradas</h2>
           </div>
-
         </div>
 
         <div className="admin-pautas-sources">
-          {data.sources.map((source) => (
+          {(data.sources ?? []).map((source) => (
             <article key={source.feedUrl}>
               <div>
                 <span className="admin-pautas-source__category">{source.category}</span>
@@ -4978,19 +5299,13 @@ function PautasView() {
                 <p>{source.kind} • prioridade editorial {source.priority}</p>
               </div>
 
-              <a
-                href={source.feedUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label={'Abrir feed RSS de ' + source.name + ' em nova aba'}
-              >
+              <a href={source.feedUrl} target="_blank" rel="noopener noreferrer">
                 RSS ↗
               </a>
             </article>
           ))}
         </div>
       </section>
-
     </>
   );
 }
@@ -5152,7 +5467,7 @@ export function AdminApp() {
           {view === 'settings' && <SettingsView csrfToken={csrfToken} />}
           {view === 'pautas' && (
             user.login === 'agenciamobi' && user.permissions.managePautas
-              ? <PautasView />
+              ? <PautasView csrfToken={csrfToken} />
               : (
                 <div className="admin-error" role="alert">
                   <strong>Acesso restrito.</strong>
