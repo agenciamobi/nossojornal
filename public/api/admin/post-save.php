@@ -366,6 +366,29 @@ SQL);
         throw $error;
     }
 
+    $savedTagsStatement = $pdo->prepare(<<<SQL
+SELECT
+    t.term_id AS id,
+    t.name,
+    t.slug
+FROM {$relationships} tr
+INNER JOIN {$taxonomy} tt
+    ON tt.term_taxonomy_id = tr.term_taxonomy_id
+    AND tt.taxonomy = 'post_tag'
+INNER JOIN {$terms} t ON t.term_id = tt.term_id
+WHERE tr.object_id = :post_id
+ORDER BY t.name ASC
+SQL);
+    $savedTagsStatement->execute(['post_id' => $postId]);
+    $savedTags = array_map(
+        static fn (array $tag): array => [
+            'id' => (int) $tag['id'],
+            'name' => (string) $tag['name'],
+            'slug' => (string) $tag['slug'],
+        ],
+        $savedTagsStatement->fetchAll()
+    );
+
     return [
         'post' => [
             'id' => $postId,
@@ -376,6 +399,7 @@ SQL);
             'status' => $status,
             'categoryIds' => $categoryIds,
             'tagNames' => $tagNames,
+            'tags' => $savedTags,
             'seo' => [
                 'title' => $seoTitle,
                 'description' => $seoDescription,
