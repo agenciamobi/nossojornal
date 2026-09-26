@@ -71,6 +71,5 @@ SQL);
             'total' => $total,
             'totalPages' => max(1, (int) ceil($total / $perPage)),
         ],
-        'mode' => 'read_only',
     ];
 });
