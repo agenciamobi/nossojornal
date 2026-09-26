@@ -1933,3 +1933,23 @@ A ação `Capturar vencidas` consulta somente fontes ativas fora da janela confi
 As fontes são agrupadas pelo campo Tema/categoria e cada grupo possui uma ação de captura própria.
 
 Essas políticas não criam automação sozinhas. Elas são a fonte de verdade operacional para uma integração futura com jobs do MOBI Core.
+
+## Proteção de edição e atalho de salvamento
+
+Os editores principais do Sistema avisam quando existem alterações não salvas.
+
+Ao tentar sair por link interno, voltar no navegador, recarregar ou fechar a aba, o Sistema pede confirmação enquanto o formulário estiver alterado.
+
+O indicador do editor usa os estados:
+
+```text
+Sem alterações
+Não salvo
+Salvando…
+Salvo
+Falha ao salvar
+```
+
+Nos editores com save explícito, `Ctrl+S` no Windows/Linux e `Cmd+S` no macOS executam o mesmo salvamento do botão da tela.
+
+A proteção também cobre formulários em andamento da Central de Fontes, Mesa de Pautas e criação de categorias.
