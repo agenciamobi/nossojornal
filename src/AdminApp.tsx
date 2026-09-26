@@ -1011,6 +1011,9 @@ function PostEditorView({
   const [seoDescription, setSeoDescription] = useState('');
   const [primaryCategoryId, setPrimaryCategoryId] = useState(0);
   const [scheduledAt, setScheduledAt] = useState('');
+  const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
+  const [mediaPickerOpen, setMediaPickerOpen] = useState(false);
+  const [imageState, setImageState] = useState<'idle' | 'working' | 'error'>('idle');
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [statusState, setStatusState] = useState<'idle' | 'working' | 'saved' | 'error'>('idle');
   const [error, setError] = useState(false);
@@ -1217,6 +1220,67 @@ function PostEditorView({
       setStatusState('saved');
     } catch {
       setStatusState('error');
+    }
+  }
+
+  async function openMediaPicker() {
+    setMediaPickerOpen(true);
+
+    if (mediaItems.length > 0) return;
+
+    try {
+      const payload = await adminFetch<MediaPayload>('/api/admin/media.php?page=1&per_page=60');
+      if (payload.ok && payload.data) {
+        setMediaItems(payload.data.items.filter((item) => item.mimeType.startsWith('image/')));
+      }
+    } catch {
+      setImageState('error');
+    }
+  }
+
+  async function setFeaturedImage(item: MediaItem | null) {
+    if (!canEdit || imageState === 'working') return;
+
+    setImageState('working');
+
+    try {
+      const payload = await adminFetch<{
+        ok: boolean;
+        data?: {
+          featuredImage: {
+            id: number;
+            title: string;
+            url: string;
+            alt: string;
+          } | null;
+        };
+      }>('/api/admin/post-featured-image.php', {
+        method: 'POST',
+        headers: { 'X-CSRF-Token': csrfToken },
+        body: JSON.stringify({
+          postId: post.id,
+          attachmentId: item?.id ?? 0,
+        }),
+      });
+
+      if (!payload.ok || !payload.data) {
+        throw new Error('featured_image_invalid_response');
+      }
+
+      setData((current) => current
+        ? {
+            ...current,
+            post: {
+              ...current.post,
+              featuredImage: payload.data!.featuredImage,
+            },
+          }
+        : current
+      );
+      setImageState('idle');
+      setMediaPickerOpen(false);
+    } catch {
+      setImageState('error');
     }
   }
 
@@ -1515,9 +1579,61 @@ function PostEditorView({
             ) : (
               <div className="admin-editor-empty">Nenhuma imagem selecionada.</div>
             )}
+
+            <div className="admin-editor-media-actions">
+              <button
+                type="button"
+                disabled={!canEdit || imageState === 'working'}
+                onClick={() => void openMediaPicker()}
+              >
+                {post.featuredImage ? 'Trocar imagem' : 'Escolher imagem'}
+              </button>
+              {post.featuredImage && (
+                <button
+                  type="button"
+                  className="danger"
+                  disabled={!canEdit || imageState === 'working'}
+                  onClick={() => void setFeaturedImage(null)}
+                >
+                  Remover
+                </button>
+              )}
+            </div>
+
+            {imageState === 'error' && (
+              <p className="admin-editor-media-error">Não foi possível atualizar a imagem.</p>
+            )}
           </section>
         </aside>
       </div>
+
+      {mediaPickerOpen && (
+        <div className="admin-media-picker" role="dialog" aria-modal="true" aria-label="Escolher imagem destacada">
+          <div className="admin-media-picker__panel">
+            <header>
+              <div>
+                <span>Biblioteca de mídia</span>
+                <h2>Escolher imagem destacada</h2>
+              </div>
+              <button type="button" onClick={() => setMediaPickerOpen(false)} aria-label="Fechar">×</button>
+            </header>
+
+            <div className="admin-media-picker__grid">
+              {mediaItems.map((item) => (
+                <button
+                  type="button"
+                  key={item.id}
+                  disabled={imageState === 'working'}
+                  onClick={() => void setFeaturedImage(item)}
+                >
+                  <img src={item.url} alt={item.alt || item.title} loading="lazy" />
+                  <span>{item.title}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
