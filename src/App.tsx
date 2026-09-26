@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { SiteHeader } from './Header';
 import { InternalPage, resolvePublicRoute } from './InternalPages';
 import { SiteFooter } from './SiteFooter';
+import { cleanLegacyText } from './contentText';
 import './home.css';
 
 type Category = {
@@ -236,7 +237,7 @@ export function App() {
                   <a href={hero.url}>{hero.title}</a>
                 </h1>
 
-                {hero.excerpt && <p>{hero.excerpt}</p>}
+                {cleanLegacyText(hero.excerpt) && <p>{cleanLegacyText(hero.excerpt)}</p>}
                 <StoryMeta article={hero} />
               </div>
             </article>
@@ -291,7 +292,7 @@ export function App() {
                       <h3>
                         <a href={article.url}>{article.title}</a>
                       </h3>
-                      {article.excerpt && <p>{article.excerpt}</p>}
+                      {cleanLegacyText(article.excerpt) && <p>{cleanLegacyText(article.excerpt)}</p>}
                       <StoryMeta article={article} />
                     </div>
                   </article>
@@ -353,7 +354,9 @@ export function App() {
                         <h3>
                           <a href={article.url}>{article.title}</a>
                         </h3>
-                        {index === 0 && article.excerpt && <p>{article.excerpt}</p>}
+                        {index === 0 && cleanLegacyText(article.excerpt) && (
+                          <p>{cleanLegacyText(article.excerpt)}</p>
+                        )}
                         <StoryMeta article={article} />
                       </div>
                     </article>
