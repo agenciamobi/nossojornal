@@ -6704,6 +6704,9 @@ function UserEditorView({
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
   const [role, setRole] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [newPasswordConfirm, setNewPasswordConfirm] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
   const [publicBio, setPublicBio] = useState('');
   const [publicRole, setPublicRole] = useState('');
   const [website, setWebsite] = useState('');
@@ -6745,10 +6748,14 @@ function UserEditorView({
   const profileCanSave = user.permissions.editUsers;
   const roleCanSave = user.permissions.editUsers && data.canChangeRole;
   const originalRole = data.user.roles[0] ?? '';
+  const passwordChangeValid =
+    newPassword === ''
+    || (newPassword.length >= 12 && newPassword === newPasswordConfirm);
   const changed =
     displayName !== data.user.displayName
     || email !== data.user.email
     || role !== originalRole
+    || newPassword !== ''
     || publicBio !== data.publicProfile.bio
     || publicRole !== data.publicProfile.role
     || website !== data.publicProfile.website
@@ -6760,6 +6767,7 @@ function UserEditorView({
   async function saveUser() {
     if (!profileCanSave || !changed || saveState === 'saving') return;
     if (role !== originalRole && !roleCanSave) return;
+    if (!passwordChangeValid) return;
 
     setSaveState('saving');
 
@@ -6778,6 +6786,7 @@ function UserEditorView({
           displayName,
           email,
           role,
+          password: newPassword,
           publicBio,
           publicRole,
           website,
@@ -6803,6 +6812,9 @@ function UserEditorView({
       setDisplayName(payload.data.user.displayName);
       setEmail(payload.data.user.email);
       setRole(payload.data.user.roles[0] ?? role);
+      setNewPassword('');
+      setNewPasswordConfirm('');
+      setShowNewPassword(false);
       setPublicBio(payload.data.publicProfile.bio);
       setPublicRole(payload.data.publicProfile.role);
       setWebsite(payload.data.publicProfile.website);
@@ -6838,7 +6850,13 @@ function UserEditorView({
           <button
             type="button"
             className="admin-button--primary"
-            disabled={!profileCanSave || !changed || saveState === 'saving' || (role !== originalRole && !roleCanSave)}
+            disabled={
+              !profileCanSave
+              || !changed
+              || !passwordChangeValid
+              || saveState === 'saving'
+              || (role !== originalRole && !roleCanSave)
+            }
             onClick={() => void saveUser()}
           >
             {saveState === 'saving' ? 'Salvando…' : 'Salvar'}
@@ -6914,6 +6932,80 @@ function UserEditorView({
                 ))}
               </select>
             </label>
+          </div>
+        </section>
+
+        <section className="admin-editor-card">
+          <div className="admin-editor-card__head">
+            <span>Segurança</span>
+            <strong>Redefinir senha</strong>
+          </div>
+
+          <div className="admin-editor-card__body admin-editor-card__body--fields">
+            <label className="admin-editor-field">
+              <span>Nova senha</span>
+              <div className="admin-password-field">
+                <input
+                  type={showNewPassword ? 'text' : 'password'}
+                  value={newPassword}
+                  readOnly={!profileCanSave}
+                  minLength={12}
+                  autoComplete="new-password"
+                  placeholder="Deixe vazio para manter a senha atual"
+                  aria-invalid={newPassword !== '' && newPassword.length < 12}
+                  onChange={(event) => {
+                    setNewPassword(event.target.value);
+                    setSaveState('idle');
+                  }}
+                />
+                <button
+                  type="button"
+                  disabled={!profileCanSave}
+                  onClick={() => setShowNewPassword((current) => !current)}
+                >
+                  {showNewPassword ? 'Ocultar' : 'Mostrar'}
+                </button>
+              </div>
+            </label>
+
+            <label className="admin-editor-field">
+              <span>Confirmar nova senha</span>
+              <input
+                type={showNewPassword ? 'text' : 'password'}
+                value={newPasswordConfirm}
+                readOnly={!profileCanSave}
+                minLength={12}
+                autoComplete="new-password"
+                aria-invalid={newPasswordConfirm !== '' && newPassword !== newPasswordConfirm}
+                onChange={(event) => {
+                  setNewPasswordConfirm(event.target.value);
+                  setSaveState('idle');
+                }}
+              />
+              {newPassword !== '' && newPassword.length < 12 && (
+                <small className="admin-field-error">Use pelo menos 12 caracteres.</small>
+              )}
+              {newPasswordConfirm !== '' && newPassword !== newPasswordConfirm && (
+                <small className="admin-field-error">As senhas ainda não são iguais.</small>
+              )}
+            </label>
+
+            <div className="admin-password-tools">
+              <button
+                type="button"
+                disabled={!profileCanSave}
+                onClick={() => {
+                  const next = generateAdminPassword();
+                  setNewPassword(next);
+                  setNewPasswordConfirm(next);
+                  setShowNewPassword(true);
+                  setSaveState('idle');
+                }}
+              >
+                Gerar senha forte
+              </button>
+              <span>Salvar o usuário aplica a nova senha. Nenhum hash é exibido pela API.</span>
+            </div>
           </div>
         </section>
 
