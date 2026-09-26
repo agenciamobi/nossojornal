@@ -15,13 +15,43 @@ nj_admin_run(['GET'], static function (): array {
     $perPage = min(60, max(12, (int) ($_GET['per_page'] ?? 36)));
     $offset = ($page - 1) * $perPage;
 
-    $total = (int) $pdo->query(<<<SQL
-SELECT COUNT(*)
-FROM {$posts}
-WHERE post_type = 'attachment'
-SQL)->fetchColumn();
+    $search = trim((string) ($_GET['q'] ?? ''));
+    if (function_exists('mb_substr')) {
+        $search = mb_substr($search, 0, 120, 'UTF-8');
+    } else {
+        $search = substr($search, 0, 120);
+    }
 
-    $statement = $pdo->query(<<<SQL
+    $where = ["p.post_type = 'attachment'"];
+    $params = [];
+
+    if ($search !== '') {
+        $where[] = "(
+            p.post_title LIKE :search_title
+            OR p.guid LIKE :search_guid
+            OR EXISTS (
+                SELECT 1
+                FROM {$postmeta} alt_search
+                WHERE
+                    alt_search.post_id = p.ID
+                    AND alt_search.meta_key = '_wp_attachment_image_alt'
+                    AND alt_search.meta_value LIKE :search_alt
+            )
+        )";
+
+        $needle = '%' . $search . '%';
+        $params['search_title'] = $needle;
+        $params['search_guid'] = $needle;
+        $params['search_alt'] = $needle;
+    }
+
+    $whereSql = implode(' AND ', $where);
+
+    $count = $pdo->prepare("SELECT COUNT(*) FROM {$posts} p WHERE {$whereSql}");
+    $count->execute($params);
+    $total = (int) $count->fetchColumn();
+
+    $statement = $pdo->prepare(<<<SQL
 SELECT
     p.ID AS id,
     p.post_title AS title,
@@ -38,10 +68,11 @@ SELECT
         LIMIT 1
     ), '') AS alt_text
 FROM {$posts} p
-WHERE p.post_type = 'attachment'
+WHERE {$whereSql}
 ORDER BY p.post_date DESC, p.ID DESC
 LIMIT {$perPage} OFFSET {$offset}
 SQL);
+    $statement->execute($params);
 
     $items = [];
 
@@ -65,6 +96,7 @@ SQL);
 
     return [
         'items' => $items,
+        'query' => $search,
         'pagination' => [
             'page' => $page,
             'perPage' => $perPage,
