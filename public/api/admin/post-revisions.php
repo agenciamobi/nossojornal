@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require __DIR__ . '/_admin.php';
+require_once __DIR__ . '/_redirects.php';
 
 function nj_revision_decode(string $content): array
 {
@@ -458,6 +459,10 @@ SQL);
         ))));
         $seo = is_array($snapshot['seo'] ?? null) ? $snapshot['seo'] : [];
 
+        $redirectResult = null;
+        $currentSlug = trim((string) ($post['post_name'] ?? ''));
+        $currentStatus = (string) ($post['post_status'] ?? '');
+
         try {
             $pdo->beginTransaction();
 
@@ -545,12 +550,33 @@ SQL);
                     : ''
             );
 
+            if (
+                $currentStatus === 'publish'
+                && $currentSlug !== ''
+                && $slug !== ''
+                && $currentSlug !== $slug
+            ) {
+                $redirectResult = nj_redirect_ensure_slug_change(
+                    $pdo,
+                    (int) $user['id'],
+                    '/noticia/' . rawurlencode($currentSlug),
+                    '/noticia/' . rawurlencode($slug),
+                    'post',
+                    $postId
+                );
+            }
+
             nj_admin_log_post_activity(
                 $pdo,
                 $postId,
                 (int) $user['id'],
                 'revision_restored',
-                ['revisionId' => $revisionId]
+                [
+                    'revisionId' => $revisionId,
+                    'redirectState' => is_array($redirectResult)
+                        ? (string) ($redirectResult['state'] ?? '')
+                        : '',
+                ]
             );
 
             $pdo->commit();
@@ -563,6 +589,7 @@ SQL);
 
         return [
             'snapshot' => nj_admin_post_snapshot($pdo, $postId),
+            'redirect' => $redirectResult,
         ];
     }
 
