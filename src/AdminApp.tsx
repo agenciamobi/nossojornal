@@ -5686,10 +5686,12 @@ function CategoryEditorView({ csrfToken }: { csrfToken: string }) {
   const [data, setData] = useState<CategoryDetailPayload['data']>();
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
+  const [slugUnlocked, setSlugUnlocked] = useState(false);
   const [description, setDescription] = useState('');
   const [parentId, setParentId] = useState<number | null>(null);
   const [color, setColor] = useState('');
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [errorMessage, setErrorMessage] = useState('');
   const [error, setError] = useState(false);
 
   useEffect(() => {
@@ -5706,6 +5708,7 @@ function CategoryEditorView({ csrfToken }: { csrfToken: string }) {
         setData(payload.data);
         setName(category.name);
         setSlug(category.slug);
+        setSlugUnlocked(false);
         setDescription(category.description);
         setParentId(category.parentId);
         setColor(category.color);
@@ -5718,18 +5721,37 @@ function CategoryEditorView({ csrfToken }: { csrfToken: string }) {
 
   const category = data.category;
   const canEdit = true;
+  const normalizedSlug = slugifyAdminValue(slug);
+  const slugChanged = normalizedSlug !== category.slug;
 
   const changed =
     name !== category.name
-    || slug !== category.slug
+    || slugChanged
     || description !== category.description
     || parentId !== category.parentId
     || color.toUpperCase() !== category.color.toUpperCase();
 
+  const canSave =
+    canEdit
+    && changed
+    && name.trim() !== ''
+    && normalizedSlug !== ''
+    && saveState !== 'saving';
+
   async function saveCategory() {
-    if (!canEdit || !changed || saveState === 'saving') return;
+    if (!canSave) return;
+
+    if (
+      slugChanged
+      && !window.confirm(
+        'Alterar o slug muda a URL pública desta editoria. Confirma a alteração de endereço?'
+      )
+    ) {
+      return;
+    }
 
     setSaveState('saving');
+    setErrorMessage('');
 
     try {
       const payload = await adminFetch<{
@@ -5751,9 +5773,9 @@ function CategoryEditorView({ csrfToken }: { csrfToken: string }) {
         headers: { 'X-CSRF-Token': csrfToken },
         body: JSON.stringify({
           categoryId: category.id,
-          name,
-          slug,
-          description,
+          name: name.trim(),
+          slug: normalizedSlug,
+          description: description.trim(),
           parentId,
           color,
         }),
@@ -5776,11 +5798,25 @@ function CategoryEditorView({ csrfToken }: { csrfToken: string }) {
       );
       setName(saved.name);
       setSlug(saved.slug);
+      setSlugUnlocked(false);
       setDescription(saved.description);
       setParentId(saved.parentId);
       setColor(saved.color);
       setSaveState('saved');
-    } catch {
+    } catch (cause) {
+      const code = cause instanceof Error ? cause.message : '';
+      const messages: Record<string, string> = {
+        category_slug_exists: 'Este endereço já está sendo usado por outra categoria.',
+        invalid_category_name: 'Informe um nome válido para a categoria.',
+        invalid_category_slug: 'O endereço precisa gerar um slug válido.',
+        invalid_category_color: 'Escolha uma cor editorial válida.',
+        invalid_category_parent: 'A categoria superior escolhida não é válida.',
+        category_parent_cycle: 'A hierarquia escolhida criaria um ciclo entre categorias.',
+        category_description_too_large: 'A descrição ultrapassou o limite permitido.',
+        database_write_unavailable: 'O banco está temporariamente sem escrita para este recurso.',
+      };
+
+      setErrorMessage(messages[code] ?? 'Não foi possível salvar a categoria. Verifique os campos e tente novamente.');
       setSaveState('error');
     }
   }
@@ -5814,7 +5850,7 @@ function CategoryEditorView({ csrfToken }: { csrfToken: string }) {
           <button
             type="button"
             className="admin-button--primary"
-            disabled={!canEdit || !changed || saveState === 'saving'}
+            disabled={!canSave}
             onClick={() => void saveCategory()}
           >
             {saveState === 'saving' ? 'Salvando…' : 'Salvar'}
@@ -5830,7 +5866,7 @@ function CategoryEditorView({ csrfToken }: { csrfToken: string }) {
 
       {saveState === 'error' && (
         <div className="admin-save-feedback admin-save-feedback--error" role="alert">
-          Não foi possível salvar a categoria. Verifique os campos e tente novamente.
+          {errorMessage || 'Não foi possível salvar a categoria. Verifique os campos e tente novamente.'}
         </div>
       )}
 
@@ -5855,15 +5891,40 @@ function CategoryEditorView({ csrfToken }: { csrfToken: string }) {
             </label>
 
             <label className="admin-editor-field">
-              <span>Slug</span>
-              <input
-                value={slug}
-                readOnly={!canEdit}
-                onChange={(event) => {
-                  setSlug(event.target.value);
-                  setSaveState('idle');
-                }}
-              />
+              <span>Endereço da editoria</span>
+              <div className="admin-slug-editor">
+                <input
+                  value={slug}
+                  readOnly={!canEdit || !slugUnlocked}
+                  spellCheck={false}
+                  aria-invalid={slugUnlocked && normalizedSlug === ''}
+                  onChange={(event) => {
+                    setSlug(slugifyAdminValue(event.target.value));
+                    setSaveState('idle');
+                  }}
+                />
+                <button
+                  type="button"
+                  disabled={!canEdit || saveState === 'saving'}
+                  onClick={() => {
+                    if (slugUnlocked && slugChanged) {
+                      setSlug(category.slug);
+                    }
+                    setSlugUnlocked((current) => !current);
+                    setSaveState('idle');
+                  }}
+                >
+                  {slugUnlocked ? (slugChanged ? 'Cancelar alteração' : 'Bloquear') : 'Alterar endereço'}
+                </button>
+              </div>
+              <small className="admin-field-help">
+                /categoria/{normalizedSlug || category.slug}
+              </small>
+              {slugChanged && (
+                <small className="admin-field-warning">
+                  A URL pública será alterada. Categorias ainda não possuem redirect automático de slug.
+                </small>
+              )}
             </label>
 
             <label className="admin-editor-field">
@@ -5872,11 +5933,15 @@ function CategoryEditorView({ csrfToken }: { csrfToken: string }) {
                 value={description}
                 readOnly={!canEdit}
                 rows={6}
+                maxLength={20000}
                 onChange={(event) => {
                   setDescription(event.target.value);
                   setSaveState('idle');
                 }}
               />
+              <small className="admin-field-help">
+                {description.length.toLocaleString('pt-BR')} / 20.000 caracteres
+              </small>
             </label>
 
             <label className="admin-editor-field">
