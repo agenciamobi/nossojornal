@@ -104,3 +104,9 @@ function nj_category_color_for(
 ): string {
     return $overrides[$termId] ?? nj_category_default_color($slug);
 }
+
+
+function nj_category_color_source_for(int $termId, array $overrides): string
+{
+    return isset($overrides[$termId]) ? 'termmeta' : 'palette';
+}
