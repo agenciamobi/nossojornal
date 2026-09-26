@@ -25,7 +25,7 @@ function nj_admin_probe_sql(PDO $pdo, string $sql): array
 
 nj_admin_run(['GET'], static function (): array {
     $user = nj_admin_current_user(true);
-    nj_admin_require_capability($user, 'manage_categories');
+    nj_admin_require_capability($user, 'edit_posts');
 
     $pdo = nj_db();
     $termmeta = nj_table('termmeta');
