@@ -2043,3 +2043,5 @@ php -l public/api/**/*.php
 ```
 
 O frontend usa Node 22, conforme `package.json`, e a API é validada com PHP 8.4. O workflow possui concorrência cancelável para evitar gastar execução com commits antigos do mesmo PR.
+
+Também foi adicionado `.github/dependabot.yml`, com atualizações semanais agrupadas para dependências npm e GitHub Actions. Isso permite tratar alertas de segurança e versões defasadas por PR, sem aplicar atualizações forçadas diretamente na aplicação.
