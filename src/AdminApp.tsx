@@ -389,7 +389,7 @@ function AdminLogin({
 
         <span className="admin-login__eyebrow">Painel editorial</span>
         <h1 id="admin-login-title">Acessar o sistema</h1>
-        <p>Use o mesmo usuário e senha cadastrados no antigo WordPress.</p>
+        <p>Use seu usuário e senha do Nosso Jornal.</p>
 
         <form onSubmit={submit}>
           <label>
@@ -658,15 +658,6 @@ function AdminTopbar({
   );
 }
 
-function ReadOnlyNotice() {
-  return (
-    <div className="admin-readonly" role="status">
-      <strong>MVP em modo leitura.</strong>
-      <span>Os dados vêm diretamente do WordPress legado. Edição será liberada quando o write MySQL estiver homologado.</span>
-    </div>
-  );
-}
-
 function AdminPageHeader({
   eyebrow,
   title,
@@ -699,7 +690,7 @@ function AdminError() {
   return (
     <div className="admin-error" role="alert">
       <strong>Não foi possível carregar esta área.</strong>
-      <p>Atualize a página. Se o problema persistir, o endpoint administrativo deve ser verificado.</p>
+      <p>Atualize a página e tente novamente.</p>
     </div>
   );
 }
@@ -748,15 +739,6 @@ function DashboardView({ user }: { user: AdminUser }) {
         title="Painel"
         description="Resumo editorial e atividade recente do Nosso Jornal."
       />
-
-      {writeReadiness?.database.runtimeWriteReady ? (
-        <div className="admin-write-ready" role="status">
-          <strong>Runtime de escrita disponível.</strong>
-          <span>Podemos começar pelas mutations canárias de categoria e rascunho.</span>
-        </div>
-      ) : (
-        <ReadOnlyNotice />
-      )}
 
       <section className="admin-stats" aria-label="Resumo">
         {stats.map((stat) => (
@@ -821,38 +803,6 @@ function DashboardView({ user }: { user: AdminUser }) {
             <div><dt>Comentários pendentes</dt><dd>{data.summary.comments.pending}</dd></div>
           </dl>
 
-          {writeReadiness && (
-            <div className="admin-capability-box">
-              <div className="admin-capability-box__head">
-                <span>Runtime MySQL</span>
-                <strong>
-                  {writeReadiness.database.runtimeWriteReady ? 'Escrita disponível' : 'Somente leitura'}
-                </strong>
-              </div>
-
-              <div className="admin-capability-list">
-                {(['select', 'insert', 'update', 'delete'] as const).map((capability) => (
-                  <div key={capability}>
-                    <span>{capability.toUpperCase()}</span>
-                    <strong
-                      className={
-                        writeReadiness.database[capability].available
-                          ? 'admin-capability--ok'
-                          : 'admin-capability--blocked'
-                      }
-                    >
-                      {writeReadiness.database[capability].available ? 'Disponível' : 'Bloqueado'}
-                    </strong>
-                  </div>
-                ))}
-              </div>
-
-              <small>
-                Probe seguro: 0 linhas alteradas
-                {writeReadiness.probe.transactionRolledBack ? ' • rollback confirmado' : ''}
-              </small>
-            </div>
-          )}
         </aside>
       </div>
     </>
@@ -941,32 +891,23 @@ function PostsView({ csrfToken }: { csrfToken: string }) {
         <AdminPageHeader
           eyebrow="Conteúdo"
           title="Notícias"
-          description="Posts importados do WordPress legado."
+          description="Gerencie notícias, rascunhos e publicações do site."
         />
 
         <button
           type="button"
           className="admin-create-button"
           disabled={!canCreateDraft || creating}
-          title={canCreateDraft ? 'Criar novo rascunho' : 'Aguardando INSERT + UPDATE no runtime MySQL'}
+          title={canCreateDraft ? 'Criar nova notícia' : 'Criação de notícias temporariamente indisponível'}
           onClick={() => void createDraft()}
         >
           {creating ? 'Criando…' : '+ Nova notícia'}
         </button>
       </div>
 
-      {canCreateDraft ? (
-        <div className="admin-write-ready" role="status">
-          <strong>Criação de rascunho disponível.</strong>
-          <span>Novas notícias serão criadas como draft antes de qualquer publicação.</span>
-        </div>
-      ) : (
-        <ReadOnlyNotice />
-      )}
-
       {createError && (
         <div className="admin-save-feedback admin-save-feedback--error" role="alert">
-          Não foi possível criar o rascunho. O runtime pode continuar sem INSERT/UPDATE.
+          Não foi possível criar a notícia. Tente novamente.
         </div>
       )}
 
@@ -1192,44 +1133,35 @@ function PostEditorView({ csrfToken }: { csrfToken: string }) {
             disabled={!canSaveDraft || !draftChanged || saveState === 'saving'}
             title={
               post.status !== 'draft'
-                ? 'Primeiro write restrito a rascunhos'
+                ? 'Esta publicação ainda não pode ser alterada nesta tela'
                 : canSaveDraft
-                  ? 'Salvar rascunho'
-                  : 'Aguardando UPDATE no runtime MySQL'
+                  ? 'Salvar alterações'
+                  : 'Edição temporariamente indisponível'
             }
             onClick={() => void saveDraft()}
           >
-            {saveState === 'saving' ? 'Salvando…' : 'Salvar rascunho'}
+            {saveState === 'saving' ? 'Salvando…' : 'Salvar'}
           </button>
           <button
             type="button"
             className="admin-button--primary"
             disabled
-            title="Publicação será liberada no próximo gate"
+            title="Publicação indisponível no momento"
           >
             Publicar
           </button>
         </div>
       </header>
 
-      {canSaveDraft ? (
-        <div className="admin-write-ready" role="status">
-          <strong>Edição de rascunho disponível.</strong>
-          <span>Este post pode ser salvo sem tocar conteúdo publicado.</span>
-        </div>
-      ) : (
-        <ReadOnlyNotice />
-      )}
-
       {saveState === 'saved' && (
         <div className="admin-save-feedback admin-save-feedback--success" role="status">
-          Rascunho salvo e confirmado por read-back.
+          Alterações salvas.
         </div>
       )}
 
       {saveState === 'error' && (
         <div className="admin-save-feedback admin-save-feedback--error" role="alert">
-          Não foi possível salvar o rascunho. O runtime pode continuar sem UPDATE.
+          Não foi possível salvar as alterações. Tente novamente.
         </div>
       )}
 
@@ -1369,25 +1301,6 @@ function PostEditorView({ csrfToken }: { csrfToken: string }) {
             )}
           </section>
 
-          <section className="admin-editor-card">
-            <div className="admin-editor-card__head">
-              <span>Sequência de write</span>
-              <strong>Próximos gates</strong>
-            </div>
-
-            <div className="admin-editor-next">
-              <ul>
-                <li className={post.status === 'draft' ? 'admin-editor-next--current' : ''}>
-                  Salvar rascunho existente
-                </li>
-                <li>Alterar categorias e SEO</li>
-                <li>Criar nova notícia</li>
-                <li>Publicar e despublicar</li>
-                <li>Agendar publicação</li>
-                <li>Trocar imagem destacada</li>
-              </ul>
-            </div>
-          </section>
         </aside>
       </div>
     </>
@@ -1420,7 +1333,6 @@ function CategoriesView() {
         description="Editorias e municípios usados na organização das notícias."
       />
 
-      <ReadOnlyNotice />
 
       <div className="admin-table-wrap">
         <table className="admin-table">
@@ -1456,7 +1368,7 @@ function CategoriesView() {
                   <span className="admin-color">
                     <i style={{ background: category.color }} />
                     <span>{category.color}</span>
-                    <small>{category.colorSource === 'termmeta' ? 'Banco' : 'Fallback'}</small>
+                    <small>{category.colorSource === 'termmeta' ? 'Personalizada' : 'Padrão'}</small>
                   </span>
                 </td>
                 <td>{category.count}</td>
@@ -1589,32 +1501,23 @@ function CategoryEditorView({ csrfToken }: { csrfToken: string }) {
             type="button"
             className="admin-button--primary"
             disabled={!canWriteColor || !colorChanged || saveState === 'saving'}
-            title={canWriteColor ? 'Salvar cor editorial' : 'Aguardando write MySQL'}
+            title={canWriteColor ? 'Salvar alterações' : 'Edição temporariamente indisponível'}
             onClick={() => void saveColor()}
           >
-            {saveState === 'saving' ? 'Salvando…' : 'Salvar cor'}
+            {saveState === 'saving' ? 'Salvando…' : 'Salvar'}
           </button>
         </div>
       </header>
 
-      {canWriteColor ? (
-        <div className="admin-write-ready" role="status">
-          <strong>Write canário disponível.</strong>
-          <span>A cor editorial já pode ser persistida em termmeta com read-back.</span>
-        </div>
-      ) : (
-        <ReadOnlyNotice />
-      )}
-
       {saveState === 'saved' && (
         <div className="admin-save-feedback admin-save-feedback--success" role="status">
-          Cor editorial salva e confirmada no banco.
+          Cor editorial salva.
         </div>
       )}
 
       {saveState === 'error' && (
         <div className="admin-save-feedback admin-save-feedback--error" role="alert">
-          Não foi possível salvar a cor. O runtime pode continuar sem permissão de escrita.
+          Não foi possível salvar a cor. Tente novamente.
         </div>
       )}
 
@@ -1664,7 +1567,7 @@ function CategoryEditorView({ csrfToken }: { csrfToken: string }) {
               <div className="admin-category-color-editor__swatch" style={{ background: color || category.color }} />
               <div>
                 <strong>{color || category.color}</strong>
-                <span>{category.colorSource === 'termmeta' ? 'Persistida no banco' : 'Fallback do código'}</span>
+                <span>{category.colorSource === 'termmeta' ? 'Cor personalizada' : 'Cor padrão da editoria'}</span>
               </div>
               <input
                 type="color"
@@ -1679,22 +1582,6 @@ function CategoryEditorView({ csrfToken }: { csrfToken: string }) {
             </div>
           </section>
 
-          <section className="admin-editor-card">
-            <div className="admin-editor-card__head">
-              <span>Persistência</span>
-              <strong>Próximo write canário</strong>
-            </div>
-
-            <div className="admin-editor-next">
-              <p>Esta tela será a primeira mutation do sistema quando o banco liberar escrita.</p>
-              <ul>
-                <li>Nome e slug em {data.plannedMutation.termTable}</li>
-                <li>Parent e descrição em {data.plannedMutation.taxonomyTable}</li>
-                <li>Cor em {data.plannedMutation.colorMetaTable}</li>
-                <li>Meta key: {data.plannedMutation.colorMetaKey}</li>
-              </ul>
-            </div>
-          </section>
         </aside>
       </div>
     </>
@@ -1722,12 +1609,9 @@ function UsersView() {
       <AdminPageHeader
         eyebrow="Acesso"
         title="Usuários"
-        description="Contas e permissões reaproveitadas diretamente do WordPress."
+        description="Gerencie as contas com acesso ao painel."
       />
-
-      <ReadOnlyNotice />
-
-      <div className="admin-table-wrap">
+<div className="admin-table-wrap">
         <table className="admin-table">
           <thead>
             <tr>
@@ -1786,12 +1670,9 @@ function MediaView() {
       <AdminPageHeader
         eyebrow="Acervo"
         title="Mídia"
-        description="Biblioteca de imagens e arquivos reaproveitada do WordPress."
+        description="Imagens e arquivos usados nas publicações do site."
       />
-
-      <ReadOnlyNotice />
-
-      <section className="admin-media-grid" aria-label="Biblioteca de mídia">
+<section className="admin-media-grid" aria-label="Biblioteca de mídia">
         {data.items.map((item) => (
           <article className="admin-media-card" key={item.id}>
             <div className="admin-media-card__preview">
@@ -1840,13 +1721,13 @@ function SettingsView() {
     blogname: 'Nome do site',
     blogdescription: 'Descrição',
     home: 'URL pública',
-    siteurl: 'URL do WordPress legado',
+    siteurl: 'Endereço técnico do site',
     admin_email: 'E-mail administrativo',
     posts_per_page: 'Posts por página',
     date_format: 'Formato de data',
     time_format: 'Formato de hora',
     timezone_string: 'Fuso horário',
-    permalink_structure: 'Estrutura histórica de links',
+    permalink_structure: 'Estrutura dos links',
   };
 
   return (
@@ -1854,12 +1735,9 @@ function SettingsView() {
       <AdminPageHeader
         eyebrow="Site"
         title="Configurações"
-        description="Configurações gerais herdadas do WordPress."
+        description="Informações gerais e preferências do site."
       />
-
-      <ReadOnlyNotice />
-
-      <section className="admin-settings">
+<section className="admin-settings">
         {Object.entries(data.options).map(([key, value]) => (
           <label key={key}>
             <span>{labels[key] ?? key}</span>
@@ -1900,23 +1778,23 @@ function PautasView() {
   return (
     <>
       <AdminPageHeader
-        eyebrow="Exclusivo • agenciamobi"
+        eyebrow="Planejamento editorial"
         title="Mesa de Pautas"
         description="Radar editorial para Pelotas, tecnologia, inteligência artificial, universo, ciência e temas correlatos."
       />
 
       <section className="admin-pautas-summary" aria-label="Estado da Mesa de Pautas">
         <div>
-          <span>Fontes iniciais</span>
+          <span>Fontes</span>
           <strong>{data.sources.length}</strong>
         </div>
         <div>
-          <span>Editorias monitoradas</span>
+          <span>Temas</span>
           <strong>{categories.length}</strong>
         </div>
         <div>
           <span>Fila</span>
-          <strong>Preparada</strong>
+          <strong>Ativa</strong>
         </div>
       </section>
 
@@ -1944,7 +1822,7 @@ function PautasView() {
             <span>RSS</span>
             <h2>Catálogo inicial de fontes</h2>
           </div>
-          <small>{data.storage.status === 'pending_database_write' ? 'Aguardando persistência no banco' : ''}</small>
+
         </div>
 
         <div className="admin-pautas-sources">
@@ -1969,13 +1847,6 @@ function PautasView() {
         </div>
       </section>
 
-      <div className="admin-readonly" role="status">
-        <strong>Próximo estágio:</strong>
-        <span>
-          persistir {data.storage.feedSourcesTable} e {data.storage.queueTable}, capturar os feeds
-          e habilitar Ignorar, Salvar e Produzir matéria.
-        </span>
-      </div>
     </>
   );
 }
