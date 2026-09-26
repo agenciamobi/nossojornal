@@ -1620,3 +1620,76 @@ Todas as mutations novas preservam:
 ### Homologação
 
 As capacidades de escrita estão implementadas na `main`, mas só devem ser tratadas como validadas após deploy e testes controlados no ambiente real.
+
+
+## 25. Moderação, páginas e gestão de acervo
+
+O `/sistema` recebe uma nova camada de funções administrativas.
+
+### Comentários
+
+Nova rota:
+
+```text
+/sistema/comentarios
+```
+
+Com suporte a:
+
+- busca;
+- pendentes;
+- aprovados;
+- spam;
+- lixeira;
+- aprovação;
+- retorno para pendente;
+- classificação como spam;
+- restauração.
+
+A área é controlada pela capability `moderate_comments`.
+
+### Notícias
+
+A aba `Todas` deixa de misturar conteúdo da lixeira.
+
+É adicionada uma aba própria:
+
+```text
+Lixeira
+```
+
+com ações reversíveis de mover e restaurar.
+
+### Mídia
+
+A Biblioteca passa a ter busca e editor individual:
+
+```text
+/sistema/midia/:id
+```
+
+Campos gerenciáveis:
+
+- título;
+- alt;
+- legenda;
+- descrição.
+
+O editor também mostra em quais notícias a imagem é usada como destaque.
+
+### Páginas
+
+Nova área:
+
+```text
+/sistema/paginas
+/sistema/paginas/:id
+```
+
+Ela utiliza os registros `post_type=page` existentes e permite editar as páginas institucionais no novo painel.
+
+As rotas estruturais de `/sobre` e `/contato` têm slug protegido para evitar quebra acidental do portal.
+
+### Estado
+
+Todas essas capacidades estão implementadas na `main` e devem ser consideradas pendentes de homologação até passarem pelo fluxo de deploy e testes controlados no ambiente real.
