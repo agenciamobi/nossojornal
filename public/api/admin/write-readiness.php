@@ -92,27 +92,12 @@ nj_admin_run(['GET'], static function (): array {
         }
     }
 
-    $writeReady = $probes['insert']['available']
-        && $probes['update']['available']
-        && $probes['delete']['available'];
-
     return [
         'database' => [
             'select' => $probes['select'],
             'insert' => $probes['insert'],
             'update' => $probes['update'],
             'delete' => $probes['delete'],
-            'runtimeWriteReady' => $writeReady,
-        ],
-        'nextCapabilities' => [
-            'categoryColorWrite' => $writeReady,
-            'draftPostWrite' => $writeReady,
-            'publishPostWrite' => $writeReady,
-            'mediaUploadWrite' => false,
-        ],
-        'probe' => [
-            'mutatedRows' => 0,
-            'transactionRolledBack' => true,
         ],
     ];
 });
