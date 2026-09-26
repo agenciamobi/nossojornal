@@ -143,7 +143,15 @@ function setCanonical(path: string) {
   element.href = new URL(path, window.location.origin).toString();
 }
 
-function usePageMeta(title: string, description: string, canonicalPath: string) {
+function usePageMeta(
+  title: string,
+  description: string,
+  canonicalPath: string,
+  options?: { type?: 'website' | 'article'; image?: string },
+) {
+  const type = options?.type ?? 'website';
+  const image = options?.image ?? '';
+
   useEffect(() => {
     if (!title) return;
 
@@ -153,9 +161,14 @@ function usePageMeta(title: string, description: string, canonicalPath: string) 
     ensurePropertyMeta('og:title', fullTitle);
     ensurePropertyMeta('og:description', description);
     ensurePropertyMeta('og:url', new URL(canonicalPath, window.location.origin).toString());
-    ensurePropertyMeta('og:type', 'website');
+    ensurePropertyMeta('og:type', type);
+
+    if (image) {
+      ensurePropertyMeta('og:image', new URL(image, window.location.origin).toString());
+    }
+
     setCanonical(canonicalPath);
-  }, [title, description, canonicalPath]);
+  }, [title, description, canonicalPath, image, type]);
 }
 
 function formatDate(value: string, includeTime = true) {
@@ -315,6 +328,10 @@ function ArticlePage({ slug }: { slug: string }) {
     payload?.seo.title ?? '',
     payload?.seo.description ?? '',
     payload?.seo.canonical ?? `/noticia/${slug}`,
+    {
+      type: 'article',
+      image: article?.featuredImage?.url,
+    },
   );
 
   const jsonLd = useMemo(() => {
@@ -337,6 +354,10 @@ function ArticlePage({ slug }: { slug: string }) {
         '@type': 'Organization',
         name: 'Nosso Jornal',
         url: window.location.origin,
+        logo: {
+          '@type': 'ImageObject',
+          url: new URL('/nosso-jornal-hulha-negra-bage.png', window.location.origin).toString(),
+        },
       },
       articleSection: article.primaryCategory?.name,
       description: article.excerpt,
