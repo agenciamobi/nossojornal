@@ -355,7 +355,7 @@ function nj_admin_login(string $identity, string $password): array
     $pdo = nj_db();
     $user = nj_admin_user_payload($pdo, $row);
 
-    if (!in_array('read', $user['capabilities'], true)) {
+    if (!in_array('edit_posts', $user['capabilities'], true)) {
         throw new NjApiHttpException(403, 'admin_access_denied');
     }
 
