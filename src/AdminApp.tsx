@@ -193,6 +193,7 @@ type MediaPayload = {
   ok: boolean;
   data?: {
     items: MediaItem[];
+    query?: string;
     pagination: {
       page: number;
       perPage: number;
@@ -2899,6 +2900,7 @@ function UserEditorView({ csrfToken }: { csrfToken: string }) {
 function MediaView({ csrfToken }: { csrfToken: string }) {
   const params = useMemo(() => new URLSearchParams(window.location.search), []);
   const page = Math.max(1, Number.parseInt(params.get('page') ?? '1', 10) || 1);
+  const query = params.get('q') ?? '';
 
   const [data, setData] = useState<MediaPayload['data']>();
   const [writeReadiness, setWriteReadiness] = useState<WriteReadinessPayload['data']>();
@@ -2906,7 +2908,13 @@ function MediaView({ csrfToken }: { csrfToken: string }) {
   const [error, setError] = useState(false);
 
   useEffect(() => {
-    void adminFetch<MediaPayload>('/api/admin/media.php?page=' + page + '&per_page=36')
+    const search = new URLSearchParams({
+      page: String(page),
+      per_page: '36',
+    });
+    if (query) search.set('q', query);
+
+    void adminFetch<MediaPayload>('/api/admin/media.php?' + search.toString())
       .then((payload) => {
         if (!payload.ok || !payload.data) throw new Error('media_invalid');
         setData(payload.data);
@@ -2920,7 +2928,7 @@ function MediaView({ csrfToken }: { csrfToken: string }) {
       .catch(() => {
         // Upload permanece indisponível quando a verificação não responder.
       });
-  }, [page]);
+  }, [page, query]);
 
   if (error) return <AdminError />;
   if (!data) return <AdminLoading />;
@@ -3014,6 +3022,19 @@ function MediaView({ csrfToken }: { csrfToken: string }) {
         </div>
       )}
 
+      <form className="admin-toolbar admin-toolbar--media" method="get" action="/sistema/midia">
+        <div className="admin-search">
+          <input
+            type="search"
+            name="q"
+            defaultValue={query}
+            placeholder="Buscar por título, arquivo ou texto alternativo"
+            aria-label="Buscar mídia"
+          />
+          <button type="submit">Buscar</button>
+        </div>
+      </form>
+
       <section className="admin-media-grid" aria-label="Biblioteca de mídia">
         {data.items.map((item) => (
           <article className="admin-media-card" key={item.id}>
@@ -3037,7 +3058,7 @@ function MediaView({ csrfToken }: { csrfToken: string }) {
         page={data.pagination.page}
         totalPages={data.pagination.totalPages}
         base="/sistema/midia"
-        params={{}}
+        params={{ q: query }}
       />
     </>
   );
