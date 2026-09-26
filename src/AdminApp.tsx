@@ -2138,10 +2138,13 @@ function UserEditorView({ csrfToken }: { csrfToken: string }) {
   );
 }
 
-function MediaView() {
+function MediaView({ csrfToken }: { csrfToken: string }) {
   const params = useMemo(() => new URLSearchParams(window.location.search), []);
   const page = Math.max(1, Number.parseInt(params.get('page') ?? '1', 10) || 1);
+
   const [data, setData] = useState<MediaPayload['data']>();
+  const [writeReadiness, setWriteReadiness] = useState<WriteReadinessPayload['data']>();
+  const [uploadState, setUploadState] = useState<'idle' | 'uploading' | 'saved' | 'error'>('idle');
   const [error, setError] = useState(false);
 
   useEffect(() => {
@@ -2151,19 +2154,109 @@ function MediaView() {
         setData(payload.data);
       })
       .catch(() => setError(true));
+
+    void adminFetch<WriteReadinessPayload>('/api/admin/write-readiness.php')
+      .then((payload) => {
+        if (payload.ok && payload.data) setWriteReadiness(payload.data);
+      })
+      .catch(() => {
+        // Upload permanece indisponível quando a verificação não responder.
+      });
   }, [page]);
 
   if (error) return <AdminError />;
   if (!data) return <AdminLoading />;
 
+  const canUpload = Boolean(writeReadiness?.database.insert.available);
+
+  async function uploadFile(file: File) {
+    if (!canUpload || uploadState === 'uploading') return;
+
+    setUploadState('uploading');
+
+    try {
+      const body = new FormData();
+      body.append('file', file);
+
+      const response = await fetch('/api/admin/media-upload.php', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          Accept: 'application/json',
+          'X-CSRF-Token': csrfToken,
+        },
+        body,
+      });
+
+      const payload = (await response.json()) as {
+        ok: boolean;
+        data?: {
+          media: MediaPayload['data'] extends { items: Array<infer T> } ? T : never;
+        };
+      };
+
+      if (!response.ok || !payload.ok || !payload.data) {
+        throw new Error('media_upload_failed');
+      }
+
+      setData((current) => current
+        ? {
+            ...current,
+            items: [payload.data!.media, ...current.items].slice(0, current.pagination.perPage),
+            pagination: {
+              ...current.pagination,
+              total: current.pagination.total + 1,
+              totalPages: Math.max(
+                1,
+                Math.ceil((current.pagination.total + 1) / current.pagination.perPage),
+              ),
+            },
+          }
+        : current
+      );
+      setUploadState('saved');
+    } catch {
+      setUploadState('error');
+    }
+  }
+
   return (
     <>
-      <AdminPageHeader
-        eyebrow="Acervo"
-        title="Mídia"
-        description="Imagens e arquivos usados nas publicações do site."
-      />
-<section className="admin-media-grid" aria-label="Biblioteca de mídia">
+      <div className="admin-page-heading-row">
+        <AdminPageHeader
+          eyebrow="Acervo"
+          title="Mídia"
+          description="Imagens e arquivos usados nas publicações do site."
+        />
+
+        <label className={canUpload ? 'admin-create-button' : 'admin-create-button admin-create-button--disabled'}>
+          {uploadState === 'uploading' ? 'Enviando…' : '+ Enviar imagem'}
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/gif"
+            disabled={!canUpload || uploadState === 'uploading'}
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) void uploadFile(file);
+              event.currentTarget.value = '';
+            }}
+          />
+        </label>
+      </div>
+
+      {uploadState === 'saved' && (
+        <div className="admin-save-feedback admin-save-feedback--success" role="status">
+          Imagem adicionada à biblioteca.
+        </div>
+      )}
+
+      {uploadState === 'error' && (
+        <div className="admin-save-feedback admin-save-feedback--error" role="alert">
+          Não foi possível enviar a imagem. Use JPG, PNG, WebP ou GIF com até 12 MB.
+        </div>
+      )}
+
+      <section className="admin-media-grid" aria-label="Biblioteca de mídia">
         {data.items.map((item) => (
           <article className="admin-media-card" key={item.id}>
             <div className="admin-media-card__preview">
@@ -2192,8 +2285,11 @@ function MediaView() {
   );
 }
 
-function SettingsView() {
+function SettingsView({ csrfToken }: { csrfToken: string }) {
   const [data, setData] = useState<SettingsPayload['data']>();
+  const [writeReadiness, setWriteReadiness] = useState<WriteReadinessPayload['data']>();
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [error, setError] = useState(false);
 
   useEffect(() => {
@@ -2201,40 +2297,199 @@ function SettingsView() {
       .then((payload) => {
         if (!payload.ok || !payload.data) throw new Error('settings_invalid');
         setData(payload.data);
+        setValues(payload.data.options);
       })
       .catch(() => setError(true));
+
+    void adminFetch<WriteReadinessPayload>('/api/admin/write-readiness.php')
+      .then((payload) => {
+        if (payload.ok && payload.data) setWriteReadiness(payload.data);
+      })
+      .catch(() => {
+        // A edição permanece indisponível quando a verificação não responder.
+      });
   }, []);
 
   if (error) return <AdminError />;
   if (!data) return <AdminLoading />;
 
-  const labels: Record<string, string> = {
-    blogname: 'Nome do site',
-    blogdescription: 'Descrição',
-    home: 'URL pública',
-    siteurl: 'Endereço técnico do site',
-    admin_email: 'E-mail administrativo',
-    posts_per_page: 'Posts por página',
-    date_format: 'Formato de data',
-    time_format: 'Formato de hora',
-    timezone_string: 'Fuso horário',
-    permalink_structure: 'Estrutura dos links',
-  };
+  const canEdit = Boolean(
+    writeReadiness?.database.insert.available
+      && writeReadiness?.database.update.available,
+  );
+
+  const editableKeys = [
+    'blogname',
+    'blogdescription',
+    'admin_email',
+    'posts_per_page',
+    'timezone_string',
+    'date_format',
+    'time_format',
+  ];
+
+  const changed = editableKeys.some(
+    (key) => (values[key] ?? '') !== (data.options[key] ?? ''),
+  );
+
+  function setOption(key: string, value: string) {
+    setValues((current) => ({ ...current, [key]: value }));
+    setSaveState('idle');
+  }
+
+  async function saveSettings() {
+    if (!canEdit || !changed || saveState === 'saving') return;
+
+    setSaveState('saving');
+
+    try {
+      const payload = await adminFetch<{
+        ok: boolean;
+        data?: { options: Record<string, string> };
+      }>('/api/admin/settings-save.php', {
+        method: 'POST',
+        headers: { 'X-CSRF-Token': csrfToken },
+        body: JSON.stringify({
+          options: Object.fromEntries(
+            editableKeys.map((key) => [key, values[key] ?? '']),
+          ),
+        }),
+      });
+
+      if (!payload.ok || !payload.data) {
+        throw new Error('settings_save_invalid_response');
+      }
+
+      setData((current) => current
+        ? {
+            ...current,
+            options: {
+              ...current.options,
+              ...payload.data!.options,
+            },
+          }
+        : current
+      );
+      setValues((current) => ({
+        ...current,
+        ...payload.data!.options,
+      }));
+      setSaveState('saved');
+    } catch {
+      setSaveState('error');
+    }
+  }
 
   return (
     <>
-      <AdminPageHeader
-        eyebrow="Site"
-        title="Configurações"
-        description="Informações gerais e preferências do site."
-      />
-<section className="admin-settings">
-        {Object.entries(data.options).map(([key, value]) => (
-          <label key={key}>
-            <span>{labels[key] ?? key}</span>
-            <input value={value} readOnly />
-          </label>
-        ))}
+      <div className="admin-page-heading-row">
+        <AdminPageHeader
+          eyebrow="Site"
+          title="Configurações"
+          description="Informações gerais e preferências do site."
+        />
+
+        <button
+          type="button"
+          className="admin-create-button"
+          disabled={!canEdit || !changed || saveState === 'saving'}
+          onClick={() => void saveSettings()}
+        >
+          {saveState === 'saving' ? 'Salvando…' : 'Salvar alterações'}
+        </button>
+      </div>
+
+      {saveState === 'saved' && (
+        <div className="admin-save-feedback admin-save-feedback--success" role="status">
+          Configurações salvas.
+        </div>
+      )}
+
+      {saveState === 'error' && (
+        <div className="admin-save-feedback admin-save-feedback--error" role="alert">
+          Não foi possível salvar as configurações. Verifique os campos e tente novamente.
+        </div>
+      )}
+
+      <section className="admin-settings admin-settings--form">
+        <label>
+          <span>Nome do site</span>
+          <input
+            value={values.blogname ?? ''}
+            readOnly={!canEdit}
+            onChange={(event) => setOption('blogname', event.target.value)}
+          />
+        </label>
+
+        <label className="admin-settings__wide">
+          <span>Descrição</span>
+          <textarea
+            value={values.blogdescription ?? ''}
+            readOnly={!canEdit}
+            rows={3}
+            onChange={(event) => setOption('blogdescription', event.target.value)}
+          />
+        </label>
+
+        <label>
+          <span>E-mail administrativo</span>
+          <input
+            type="email"
+            value={values.admin_email ?? ''}
+            readOnly={!canEdit}
+            onChange={(event) => setOption('admin_email', event.target.value)}
+          />
+        </label>
+
+        <label>
+          <span>Notícias por página</span>
+          <input
+            type="number"
+            min="1"
+            max="100"
+            value={values.posts_per_page ?? '10'}
+            readOnly={!canEdit}
+            onChange={(event) => setOption('posts_per_page', event.target.value)}
+          />
+        </label>
+
+        <label>
+          <span>Fuso horário</span>
+          <select
+            value={values.timezone_string || 'America/Sao_Paulo'}
+            disabled={!canEdit}
+            onChange={(event) => setOption('timezone_string', event.target.value)}
+          >
+            <option value="America/Sao_Paulo">Brasília / Rio Grande do Sul</option>
+            <option value="America/Fortaleza">Fortaleza</option>
+            <option value="America/Manaus">Manaus</option>
+            <option value="America/Rio_Branco">Rio Branco</option>
+            <option value="America/Noronha">Fernando de Noronha</option>
+          </select>
+        </label>
+
+        <label>
+          <span>Formato de data</span>
+          <input
+            value={values.date_format ?? 'd/m/Y'}
+            readOnly={!canEdit}
+            onChange={(event) => setOption('date_format', event.target.value)}
+          />
+        </label>
+
+        <label>
+          <span>Formato de hora</span>
+          <input
+            value={values.time_format ?? 'H:i'}
+            readOnly={!canEdit}
+            onChange={(event) => setOption('time_format', event.target.value)}
+          />
+        </label>
+
+        <div className="admin-settings__wide admin-settings__info">
+          <span>Endereço público</span>
+          <strong>{data.options.home || 'https://nossojornal.com.br'}</strong>
+        </div>
       </section>
     </>
   );
