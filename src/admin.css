@@ -3311,3 +3311,240 @@
     justify-self: start;
   }
 }
+
+
+/* Editorial workflow ----------------------------------------------------- */
+
+.admin-editorial-notebook {
+  margin-top: 18px;
+}
+
+.admin-editorial-workflow {
+  display: grid;
+  gap: 10px;
+  padding: 12px 13px 14px;
+}
+
+.admin-editorial-workflow label {
+  display: grid;
+  gap: 5px;
+}
+
+.admin-editorial-workflow label > span {
+  color: #50575e;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+}
+
+.admin-editorial-workflow select,
+.admin-editorial-workflow input {
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid #8c8f94;
+  border-radius: 3px;
+  padding: 5px 8px;
+  background: #fff;
+  color: #1d2327;
+  font-size: 9px;
+}
+
+.admin-editorial-workflow select:focus,
+.admin-editorial-workflow input:focus {
+  border-color: #2271b1;
+  outline: 1px solid #2271b1;
+}
+
+.admin-editorial-home-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  color: #2271b1;
+  font-size: 9px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.admin-editorial-sources {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-editorial-sources__head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  padding-top: 6px;
+}
+
+.admin-editorial-sources__head > div {
+  display: grid;
+  gap: 3px;
+}
+
+.admin-editorial-sources__head span {
+  color: #1d2327;
+  font-size: 10px;
+  font-weight: 750;
+}
+
+.admin-editorial-sources__head small {
+  color: #787c82;
+  font-size: 8px;
+}
+
+.admin-editorial-sources__head button {
+  min-height: 31px;
+  border: 1px solid #2271b1;
+  border-radius: 3px;
+  padding: 0 10px;
+  background: #fff;
+  color: #2271b1;
+  font-size: 9px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.admin-editorial-sources__empty {
+  margin: 0;
+  padding: 18px;
+  border: 1px dashed #c3c4c7;
+  color: #787c82;
+  font-size: 9px;
+  text-align: center;
+}
+
+.admin-editorial-source {
+  position: relative;
+  display: grid;
+  gap: 9px;
+  border: 1px solid #dcdcde;
+  padding: 12px;
+  background: #f9f9f9;
+}
+
+.admin-editorial-source__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.admin-editorial-source label {
+  display: grid;
+  gap: 4px;
+}
+
+.admin-editorial-source label > span {
+  color: #646970;
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.admin-editorial-source input,
+.admin-editorial-source textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #8c8f94;
+  border-radius: 3px;
+  padding: 7px 8px;
+  background: #fff;
+  color: #1d2327;
+  font: inherit;
+  font-size: 9px;
+}
+
+.admin-editorial-source__note {
+  margin-right: 100px;
+}
+
+.admin-editorial-source__remove {
+  position: absolute;
+  right: 12px;
+  bottom: 14px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: #b32d2e;
+  font-size: 8px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.admin-editorial-checks {
+  display: grid;
+  padding: 6px 12px 12px;
+}
+
+.admin-editorial-checks label,
+.admin-editorial-checks > div {
+  min-height: 31px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid #f0f0f1;
+  color: #2c3338;
+  font-size: 9px;
+}
+
+.admin-editorial-checks label:last-child,
+.admin-editorial-checks > div:last-child {
+  border-bottom: 0;
+}
+
+.admin-editorial-checks input {
+  width: 15px;
+  height: 15px;
+  accent-color: #2271b1;
+}
+
+.admin-editorial-checks--automatic {
+  padding-bottom: 4px;
+  border-bottom: 1px solid #dcdcde;
+  background: #f9f9f9;
+}
+
+.admin-editorial-checks--automatic > div {
+  color: #8c8f94;
+}
+
+.admin-editorial-checks--automatic > div > span {
+  width: 16px;
+  color: #a7aaad;
+  font-size: 11px;
+  text-align: center;
+}
+
+.admin-editorial-checks--automatic > div.done {
+  color: #1d2327;
+}
+
+.admin-editorial-checks--automatic > div.done > span {
+  color: #00a32a;
+}
+
+.admin-editorial-checks--automatic strong {
+  font-weight: 600;
+}
+
+@media (max-width: 720px) {
+  .admin-editorial-source__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-editorial-source__note {
+    margin-right: 0;
+    padding-bottom: 28px;
+  }
+
+  .admin-editorial-source__remove {
+    left: 12px;
+    right: auto;
+  }
+
+  .admin-editorial-sources__head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
