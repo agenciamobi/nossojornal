@@ -2357,3 +2357,73 @@ Após salvar:
 - conflito com regra manual gera aviso sem sobrescrever a decisão humana.
 
 Próxima frente de maior valor: perfis públicos de autor e arquivo por autor usando `users/usermeta` com allowlist.
+
+## 43. Perfis públicos de autor e coautoria
+
+A camada pública passa a tratar autoria como entidade editorial navegável.
+
+### Fonte de verdade
+
+Os perfis reutilizam:
+
+```text
+users.ID
+users.user_nicename
+users.display_name
+users.user_url
+usermeta
+posts.post_author
+postmeta._nj_coauthors
+```
+
+Não foi criada tabela paralela de autores.
+
+### Contrato público
+
+Foi adicionado:
+
+```text
+GET /api/v1/author.php
+/autor/:slug
+```
+
+O endpoint só retorna usuários com participação em conteúdo publicado.
+
+Participação inclui autoria principal e coautoria registrada em `_nj_coauthors`.
+
+### Privacidade e segurança
+
+A API pública usa allowlist explícita.
+
+E-mail, login, capabilities, roles e usermeta arbitrário permanecem internos. Redes sociais precisam corresponder ao host esperado, e site externo só aceita HTTP/HTTPS.
+
+### Experiência editorial
+
+Bylines da capa, cards e matérias passam a apontar para o perfil quando há `user_nicename`.
+
+A página de autor oferece:
+
+- nome;
+- função editorial opcional;
+- bio;
+- avatar opcional baseado em attachment;
+- links públicos;
+- contagem de publicações;
+- data da publicação mais recente;
+- arquivo paginado de matérias.
+
+Coautores também passam a receber link individual na assinatura da matéria.
+
+### SEO
+
+A rota de autor possui canonical e `Person` em JSON-LD. O schema inclui `worksFor` para o Nosso Jornal e `sameAs` somente para redes declaradas.
+
+O schema de matéria passa a associar o autor principal à sua URL pública.
+
+### Administração
+
+A edição de usuários ganha um bloco de Perfil público. Ele grava somente metadados `_nj_public_*` controlados e `users.user_url`.
+
+A biografia WordPress legada em `description` funciona como fallback, sem ser apagada.
+
+Próximo ponto de maior valor: comentários públicos e moderação de discussão, mas somente se houver decisão editorial explícita para abrir participação dos leitores. Antes disso, proveniência/importação de conteúdo externo pode gerar mais valor operacional sem aumentar superfície de moderação.
