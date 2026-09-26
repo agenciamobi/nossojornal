@@ -1027,3 +1027,51 @@ O JSON-LD server-side é marcado com `data-nj-server-jsonld`; o React só injeta
 6. abrir `view-source:` de uma matéria e confirmar metadados antes do JavaScript;
 7. validar uma URL inválida retornando HTTP 404;
 8. validar Header e cards sem resíduos de shortcode.
+
+
+## 19. Sistema cromático por editoria
+
+As categorias passam a carregar identidade cromática própria.
+
+### Autoridade
+
+A cor persistida usa a tabela padrão WordPress `termmeta`:
+
+```text
+meta_key = nj_editorial_color
+```
+
+A API consulta o valor persistido primeiro e usa a paleta canônica do código como fallback.
+
+Cada categoria expõe:
+
+```json
+{
+  "color": "#6D28D9",
+  "colorSource": "termmeta"
+}
+```
+
+`colorSource=palette` indica que o banco ainda não possui override.
+
+### Aplicação visual
+
+- Header: underline cromático e estado ativo da editoria;
+- cobertura regional: marcador colorido por município;
+- homepage: badges, hovers e filete superior de cada seção;
+- cards: interação respeita a editoria da própria matéria;
+- página de categoria: filete e regra editorial assumem a cor;
+- matéria: kicker, marcador superior, drop cap, links, blockquotes, sumário e relacionadas usam o contexto da editoria.
+
+A cor funciona como código de navegação. Fundo branco, navy e tipografia permanecem como identidade principal do Nosso Jornal.
+
+### Persistência preparada
+
+```text
+database/category-editorial-colors.sql
+docs/EDITORIAL_COLORS.md
+```
+
+O SQL é reexecutável e altera somente a chave `nj_editorial_color` nos termos conhecidos.
+
+Enquanto o MOBI Core ainda expuser MySQL como read-only, a paleta funciona integralmente via fallback em código. Assim que SQL write estiver disponível, persistir os valores em `termmeta` não exige mudança no frontend.
