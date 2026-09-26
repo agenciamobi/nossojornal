@@ -1483,7 +1483,7 @@ function HomeLayoutView({ csrfToken }: { csrfToken: string }) {
     setDrafts((current) => ({
       ...current,
       [postId]: {
-        ...(current[postId] ?? { slot: 'automatic', rank: 0, until: '' }),
+        ...(current[postId] ?? { slot: 'automatic', rank: 0, until: '', active: false }),
         ...patch,
       },
     }));
