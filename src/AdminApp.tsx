@@ -988,10 +988,15 @@ function PostsView() {
   );
 }
 
-function PostEditorView() {
+function PostEditorView({ csrfToken }: { csrfToken: string }) {
   const match = window.location.pathname.match(/^\/sistema\/noticias\/(\d+)\/?$/);
   const postId = match ? Number.parseInt(match[1], 10) : 0;
   const [data, setData] = useState<PostDetailPayload['data']>();
+  const [writeReadiness, setWriteReadiness] = useState<WriteReadinessPayload['data']>();
+  const [title, setTitle] = useState('');
+  const [excerpt, setExcerpt] = useState('');
+  const [content, setContent] = useState('');
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [error, setError] = useState(false);
 
   useEffect(() => {
@@ -1004,8 +1009,19 @@ function PostEditorView() {
       .then((payload) => {
         if (!payload.ok || !payload.data) throw new Error('post_invalid');
         setData(payload.data);
+        setTitle(payload.data.post.title);
+        setExcerpt(payload.data.post.excerpt);
+        setContent(payload.data.post.content);
       })
       .catch(() => setError(true));
+
+    void adminFetch<WriteReadinessPayload>('/api/admin/write-readiness.php')
+      .then((payload) => {
+        if (payload.ok && payload.data) setWriteReadiness(payload.data);
+      })
+      .catch(() => {
+        // O editor permanece somente leitura se o probe não estiver disponível.
+      });
   }, [postId]);
 
   if (error) return <AdminError />;
@@ -1013,6 +1029,66 @@ function PostEditorView() {
 
   const post = data.post;
   const selectedCategoryIds = new Set(post.categories.map((category) => category.id));
+  const canSaveDraft = post.status === 'draft' && Boolean(writeReadiness?.database.update.available);
+  const draftChanged = title !== post.title || excerpt !== post.excerpt || content !== post.content;
+
+  async function saveDraft() {
+    if (!canSaveDraft || !draftChanged || saveState === 'saving') return;
+
+    setSaveState('saving');
+
+    try {
+      const payload = await adminFetch<{
+        ok: boolean;
+        data?: {
+          post: {
+            id: number;
+            title: string;
+            excerpt: string;
+            content: string;
+            status: 'draft';
+            modifiedAt: string;
+          };
+          mutation: {
+            verifiedByReadBack: boolean;
+            publishedContentTouched: boolean;
+          };
+        };
+      }>('/api/admin/post-draft.php', {
+        method: 'POST',
+        headers: {
+          'X-CSRF-Token': csrfToken,
+        },
+        body: JSON.stringify({
+          postId: post.id,
+          title,
+          excerpt,
+          content,
+        }),
+      });
+
+      if (!payload.ok || !payload.data) {
+        throw new Error('draft_invalid_response');
+      }
+
+      setData((current) => current
+        ? {
+            ...current,
+            post: {
+              ...current.post,
+              title: payload.data!.post.title,
+              excerpt: payload.data!.post.excerpt,
+              content: payload.data!.post.content,
+              modifiedAt: payload.data!.post.modifiedAt,
+            },
+          }
+        : current
+      );
+      setSaveState('saved');
+    } catch {
+      setSaveState('error');
+    }
+  }
 
   return (
     <>
@@ -1034,22 +1110,64 @@ function PostEditorView() {
               Ver no site ↗
             </a>
           )}
-          <button type="button" disabled title="Aguardando write MySQL">
-            Salvar rascunho
+          <button
+            type="button"
+            disabled={!canSaveDraft || !draftChanged || saveState === 'saving'}
+            title={
+              post.status !== 'draft'
+                ? 'Primeiro write restrito a rascunhos'
+                : canSaveDraft
+                  ? 'Salvar rascunho'
+                  : 'Aguardando UPDATE no runtime MySQL'
+            }
+            onClick={() => void saveDraft()}
+          >
+            {saveState === 'saving' ? 'Salvando…' : 'Salvar rascunho'}
           </button>
-          <button type="button" className="admin-button--primary" disabled title="Aguardando write MySQL">
+          <button
+            type="button"
+            className="admin-button--primary"
+            disabled
+            title="Publicação será liberada no próximo gate"
+          >
             Publicar
           </button>
         </div>
       </header>
 
-      <ReadOnlyNotice />
+      {canSaveDraft ? (
+        <div className="admin-write-ready" role="status">
+          <strong>Edição de rascunho disponível.</strong>
+          <span>Este post pode ser salvo sem tocar conteúdo publicado.</span>
+        </div>
+      ) : (
+        <ReadOnlyNotice />
+      )}
+
+      {saveState === 'saved' && (
+        <div className="admin-save-feedback admin-save-feedback--success" role="status">
+          Rascunho salvo e confirmado por read-back.
+        </div>
+      )}
+
+      {saveState === 'error' && (
+        <div className="admin-save-feedback admin-save-feedback--error" role="alert">
+          Não foi possível salvar o rascunho. O runtime pode continuar sem UPDATE.
+        </div>
+      )}
 
       <div className="admin-editor-layout">
         <section className="admin-editor-main">
           <label className="admin-editor-field admin-editor-field--title">
             <span>Título</span>
-            <input value={post.title} readOnly />
+            <input
+              value={title}
+              readOnly={!canSaveDraft}
+              onChange={(event) => {
+                setTitle(event.target.value);
+                setSaveState('idle');
+              }}
+            />
           </label>
 
           <label className="admin-editor-field">
@@ -1059,16 +1177,28 @@ function PostEditorView() {
 
           <label className="admin-editor-field">
             <span>Resumo</span>
-            <textarea value={post.excerpt} readOnly rows={5} />
+            <textarea
+              value={excerpt}
+              readOnly={!canSaveDraft}
+              rows={5}
+              onChange={(event) => {
+                setExcerpt(event.target.value);
+                setSaveState('idle');
+              }}
+            />
           </label>
 
           <label className="admin-editor-field">
             <span>Conteúdo</span>
             <textarea
               className="admin-editor-content"
-              value={post.content}
-              readOnly
+              value={content}
+              readOnly={!canSaveDraft}
               rows={28}
+              onChange={(event) => {
+                setContent(event.target.value);
+                setSaveState('idle');
+              }}
             />
           </label>
 
@@ -1164,19 +1294,20 @@ function PostEditorView() {
 
           <section className="admin-editor-card">
             <div className="admin-editor-card__head">
-              <span>Próxima capacidade</span>
-              <strong>Write</strong>
+              <span>Sequência de write</span>
+              <strong>Próximos gates</strong>
             </div>
 
             <div className="admin-editor-next">
-              <p>Assim que o runtime MySQL permitir escrita, este editor será ligado a:</p>
               <ul>
-                <li>Salvar rascunho</li>
+                <li className={post.status === 'draft' ? 'admin-editor-next--current' : ''}>
+                  Salvar rascunho existente
+                </li>
+                <li>Alterar categorias e SEO</li>
+                <li>Criar nova notícia</li>
                 <li>Publicar e despublicar</li>
                 <li>Agendar publicação</li>
-                <li>Alterar categorias</li>
                 <li>Trocar imagem destacada</li>
-                <li>Atualizar SEO</li>
               </ul>
             </div>
           </section>
@@ -1893,7 +2024,7 @@ export function AdminApp() {
         <main className="admin-content">
           {view === 'dashboard' && <DashboardView user={user} />}
           {view === 'posts' && <PostsView />}
-          {view === 'post' && <PostEditorView />}
+          {view === 'post' && <PostEditorView csrfToken={csrfToken} />}
           {view === 'categories' && <CategoriesView />}
           {view === 'category' && <CategoryEditorView csrfToken={csrfToken} />}
           {view === 'media' && <MediaView />}
