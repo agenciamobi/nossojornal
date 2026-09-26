@@ -17,6 +17,7 @@ type AdminUser = {
     listUsers: boolean;
     editUsers: boolean;
     manageOptions: boolean;
+    managePautas: boolean;
   };
 };
 
@@ -141,7 +142,31 @@ type SettingsPayload = {
   };
 };
 
-type AdminView = 'dashboard' | 'posts' | 'categories' | 'media' | 'users' | 'settings';
+type PautasPayload = {
+  ok: boolean;
+  data?: {
+    owner: {
+      login: string;
+      userId: number;
+    };
+    pipeline: string[];
+    sources: Array<{
+      name: string;
+      category: string;
+      feedUrl: string;
+      kind: string;
+      priority: number;
+    }>;
+    storage: {
+      status: 'pending_database_write';
+      feedSourcesTable: string;
+      queueTable: string;
+    };
+    mode: 'foundation';
+  };
+};
+
+type AdminView = 'dashboard' | 'posts' | 'categories' | 'media' | 'users' | 'settings' | 'pautas';
 
 function resolveAdminView(pathname: string): AdminView {
   const clean = pathname.replace(/\/+$/, '');
@@ -151,6 +176,7 @@ function resolveAdminView(pathname: string): AdminView {
   if (clean === '/sistema/midia') return 'media';
   if (clean === '/sistema/usuarios') return 'users';
   if (clean === '/sistema/configuracoes') return 'settings';
+  if (clean === '/sistema/pautas') return 'pautas';
 
   return 'dashboard';
 }
@@ -328,6 +354,9 @@ function AdminNav({ user, view }: { user: AdminUser; view: AdminView }) {
       : []),
     ...(user.permissions.listUsers
       ? [{ key: 'users' as const, label: 'Usuários', href: '/sistema/usuarios', glyph: 'U' }]
+      : []),
+    ...(user.login === 'agenciamobi' && user.permissions.managePautas
+      ? [{ key: 'pautas' as const, label: 'Mesa de Pautas', href: '/sistema/pautas', glyph: 'P+' }]
       : []),
     ...(user.permissions.manageOptions
       ? [{ key: 'settings' as const, label: 'Configurações', href: '/sistema/configuracoes', glyph: 'G' }]
@@ -923,6 +952,115 @@ function SettingsView() {
   );
 }
 
+function PautasView() {
+  const [data, setData] = useState<PautasPayload['data']>();
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    void adminFetch<PautasPayload>('/api/admin/pautas.php')
+      .then((payload) => {
+        if (!payload.ok || !payload.data) throw new Error('pautas_invalid');
+        setData(payload.data);
+      })
+      .catch(() => setError(true));
+  }, []);
+
+  if (error) {
+    return (
+      <div className="admin-error" role="alert">
+        <strong>Acesso restrito.</strong>
+        <p>A Mesa de Pautas está disponível somente para o usuário agenciamobi.</p>
+      </div>
+    );
+  }
+
+  if (!data) return <AdminLoading />;
+
+  const categories = Array.from(new Set(data.sources.map((source) => source.category)));
+
+  return (
+    <>
+      <AdminPageHeader
+        eyebrow="Exclusivo • agenciamobi"
+        title="Mesa de Pautas"
+        description="Radar editorial para Pelotas, tecnologia, inteligência artificial, universo, ciência e temas correlatos."
+      />
+
+      <section className="admin-pautas-summary" aria-label="Estado da Mesa de Pautas">
+        <div>
+          <span>Fontes iniciais</span>
+          <strong>{data.sources.length}</strong>
+        </div>
+        <div>
+          <span>Editorias monitoradas</span>
+          <strong>{categories.length}</strong>
+        </div>
+        <div>
+          <span>Fila</span>
+          <strong>Preparada</strong>
+        </div>
+      </section>
+
+      <section className="admin-widget admin-pautas-pipeline">
+        <div className="admin-widget__head">
+          <div>
+            <span>Fluxo editorial</span>
+            <h2>Da captura à publicação</h2>
+          </div>
+        </div>
+
+        <ol>
+          {data.pipeline.map((step, index) => (
+            <li key={step}>
+              <span>{String(index + 1).padStart(2, '0')}</span>
+              <strong>{step}</strong>
+            </li>
+          ))}
+        </ol>
+      </section>
+
+      <section className="admin-widget">
+        <div className="admin-widget__head">
+          <div>
+            <span>RSS</span>
+            <h2>Catálogo inicial de fontes</h2>
+          </div>
+          <small>{data.storage.status === 'pending_database_write' ? 'Aguardando persistência no banco' : ''}</small>
+        </div>
+
+        <div className="admin-pautas-sources">
+          {data.sources.map((source) => (
+            <article key={source.feedUrl}>
+              <div>
+                <span className="admin-pautas-source__category">{source.category}</span>
+                <h3>{source.name}</h3>
+                <p>{source.kind} • prioridade {source.priority}</p>
+              </div>
+
+              <a
+                href={source.feedUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={'Abrir feed RSS de ' + source.name + ' em nova aba'}
+              >
+                RSS ↗
+              </a>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <div className="admin-readonly" role="status">
+        <strong>Próximo estágio:</strong>
+        <span>
+          persistir {data.storage.feedSourcesTable} e {data.storage.queueTable}, capturar os feeds
+          e habilitar Ignorar, Salvar e Produzir matéria.
+        </span>
+      </div>
+    </>
+  );
+}
+
 function AdminPagination({
   page,
   totalPages,
@@ -1048,6 +1186,16 @@ export function AdminApp() {
           {view === 'media' && <MediaView />}
           {view === 'users' && <UsersView />}
           {view === 'settings' && <SettingsView />}
+          {view === 'pautas' && (
+            user.login === 'agenciamobi' && user.permissions.managePautas
+              ? <PautasView />
+              : (
+                <div className="admin-error" role="alert">
+                  <strong>Acesso restrito.</strong>
+                  <p>A Mesa de Pautas está disponível somente para o usuário agenciamobi.</p>
+                </div>
+              )
+          )}
         </main>
       </div>
     </div>
