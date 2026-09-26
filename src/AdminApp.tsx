@@ -355,6 +355,8 @@ type PautasPayload = {
       id: number;
       adminUrl: string;
     } | null;
+    captured?: number;
+    captureFailures?: number;
   };
 };
 
@@ -4934,6 +4936,8 @@ function PautasView({ csrfToken }: { csrfToken: string }) {
   const [deadline, setDeadline] = useState('');
   const [assigneeId, setAssigneeId] = useState(0);
   const [saving, setSaving] = useState(false);
+  const [capturing, setCapturing] = useState('');
+  const [captureResult, setCaptureResult] = useState('');
   const [message, setMessage] = useState<'idle' | 'saved' | 'error'>('idle');
   const [error, setError] = useState(false);
 
@@ -5059,6 +5063,53 @@ function PautasView({ csrfToken }: { csrfToken: string }) {
       setMessage('error');
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function captureFeed(feedUrl = '') {
+    if (capturing) return;
+
+    setCapturing(feedUrl || 'all');
+    setCaptureResult('');
+    setMessage('idle');
+
+    try {
+      const payload = await adminFetch<PautasPayload>('/api/admin/pautas.php', {
+        method: 'POST',
+        headers: { 'X-CSRF-Token': csrfToken },
+        body: JSON.stringify({
+          action: 'capture',
+          feedUrl,
+        }),
+      });
+
+      if (!payload.ok || !payload.data) throw new Error('pauta_capture_invalid');
+
+      setData((current) => current
+        ? {
+            ...current,
+            ...payload.data,
+            owner: payload.data.owner ?? current.owner,
+            pipeline: payload.data.pipeline ?? current.pipeline,
+            sources: payload.data.sources ?? current.sources,
+            assignees: payload.data.assignees ?? current.assignees,
+          }
+        : payload.data
+      );
+
+      const captured = payload.data.captured ?? 0;
+      const failures = payload.data.captureFailures ?? 0;
+      setCaptureResult(
+        captured > 0
+          ? captured + ' pauta' + (captured === 1 ? '' : 's') + ' nova' + (captured === 1 ? '' : 's') + ' adicionada' + (captured === 1 ? '' : 's') + '.'
+          : failures > 0
+            ? 'Nenhuma pauta nova. Alguns feeds não responderam.'
+            : 'Nenhuma pauta nova encontrada.',
+      );
+    } catch {
+      setMessage('error');
+    } finally {
+      setCapturing('');
     }
   }
 
@@ -5288,7 +5339,19 @@ function PautasView({ csrfToken }: { csrfToken: string }) {
             <span>Radar</span>
             <h2>Fontes monitoradas</h2>
           </div>
+          <button
+            type="button"
+            className="admin-radar-capture"
+            disabled={Boolean(capturing)}
+            onClick={() => void captureFeed()}
+          >
+            {capturing === 'all' ? 'Capturando…' : 'Capturar agora'}
+          </button>
         </div>
+
+        {captureResult && (
+          <div className="admin-radar-result" role="status">{captureResult}</div>
+        )}
 
         <div className="admin-pautas-sources">
           {(data.sources ?? []).map((source) => (
@@ -5299,9 +5362,18 @@ function PautasView({ csrfToken }: { csrfToken: string }) {
                 <p>{source.kind} • prioridade editorial {source.priority}</p>
               </div>
 
-              <a href={source.feedUrl} target="_blank" rel="noopener noreferrer">
-                RSS ↗
-              </a>
+              <div className="admin-pautas-source__actions">
+                <button
+                  type="button"
+                  disabled={Boolean(capturing)}
+                  onClick={() => void captureFeed(source.feedUrl)}
+                >
+                  {capturing === source.feedUrl ? 'Capturando…' : 'Capturar'}
+                </button>
+                <a href={source.feedUrl} target="_blank" rel="noopener noreferrer">
+                  RSS ↗
+                </a>
+              </div>
             </article>
           ))}
         </div>
