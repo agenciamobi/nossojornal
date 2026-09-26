@@ -92,7 +92,34 @@ SELECT
             AND pm_primary.meta_key = '_yoast_wpseo_primary_category'
         ORDER BY pm_primary.meta_id DESC
         LIMIT 1
-    ), 0) AS primary_category_id
+    ), 0) AS primary_category_id,
+    COALESCE((
+        SELECT pm_home_slot.meta_value
+        FROM {$postmeta} pm_home_slot
+        WHERE
+            pm_home_slot.post_id = p.ID
+            AND pm_home_slot.meta_key = '_nj_home_slot'
+        ORDER BY pm_home_slot.meta_id DESC
+        LIMIT 1
+    ), 'automatic') AS home_slot,
+    COALESCE((
+        SELECT CAST(pm_home_rank.meta_value AS UNSIGNED)
+        FROM {$postmeta} pm_home_rank
+        WHERE
+            pm_home_rank.post_id = p.ID
+            AND pm_home_rank.meta_key = '_nj_home_rank'
+        ORDER BY pm_home_rank.meta_id DESC
+        LIMIT 1
+    ), 0) AS home_rank,
+    COALESCE((
+        SELECT pm_home_until.meta_value
+        FROM {$postmeta} pm_home_until
+        WHERE
+            pm_home_until.post_id = p.ID
+            AND pm_home_until.meta_key = '_nj_home_until'
+        ORDER BY pm_home_until.meta_id DESC
+        LIMIT 1
+    ), '') AS home_until
 FROM {$posts} p
 LEFT JOIN {$users} u
     ON u.ID = p.post_author
@@ -246,34 +273,115 @@ SQL;
             'views' => (int) $row['views'],
             'primaryCategory' => $primaryCategory,
             'categories' => $categories,
+            'homePlacement' => [
+                'slot' => in_array((string) $row['home_slot'], ['automatic', 'hero', 'featured'], true)
+                    ? (string) $row['home_slot']
+                    : 'automatic',
+                'rank' => max(0, min(99, (int) $row['home_rank'])),
+                'until' => trim((string) $row['home_until']),
+            ],
         ];
     }
 
-    $hero = null;
-    foreach ($articles as $article) {
-        foreach ($article['categories'] as $category) {
-            if ($category['slug'] === 'capa') {
-                $hero = $article;
-                break 2;
+    $timezone = new DateTimeZone('America/Sao_Paulo');
+    $now = new DateTimeImmutable('now', $timezone);
+
+    $placementIsActive = static function (array $article) use ($now, $timezone): bool {
+        $placement = $article['homePlacement'] ?? [];
+        $slot = (string) ($placement['slot'] ?? 'automatic');
+
+        if ($slot === 'automatic') {
+            return false;
+        }
+
+        $until = trim((string) ($placement['until'] ?? ''));
+        if ($until === '') {
+            return true;
+        }
+
+        try {
+            return new DateTimeImmutable($until, $timezone) > $now;
+        } catch (Throwable) {
+            return false;
+        }
+    };
+
+    $manualHeroCandidates = array_values(array_filter(
+        $articles,
+        static fn (array $article): bool =>
+            ($article['homePlacement']['slot'] ?? 'automatic') === 'hero'
+            && $placementIsActive($article)
+    ));
+
+    usort($manualHeroCandidates, static function (array $a, array $b): int {
+        $rank = ($a['homePlacement']['rank'] ?? 0) <=> ($b['homePlacement']['rank'] ?? 0);
+        if ($rank !== 0) {
+            return $rank;
+        }
+
+        return strcmp($b['publishedAt'], $a['publishedAt']);
+    });
+
+    $hero = $manualHeroCandidates[0] ?? null;
+    $heroSelection = $hero !== null ? 'manual_hero' : 'capa_category';
+
+    if ($hero === null) {
+        foreach ($articles as $article) {
+            foreach ($article['categories'] as $category) {
+                if ($category['slug'] === 'capa') {
+                    $hero = $article;
+                    break 2;
+                }
             }
         }
     }
 
-    $heroSelection = 'capa_category';
     if ($hero === null) {
         $hero = $articles[0];
         $heroSelection = 'latest_fallback';
     }
 
-    $latest = [];
-    foreach ($articles as $article) {
-        if ($article['id'] === $hero['id']) {
-            continue;
+    $featured = array_values(array_filter(
+        $articles,
+        static fn (array $article): bool =>
+            ($article['homePlacement']['slot'] ?? 'automatic') === 'featured'
+            && $placementIsActive($article)
+            && $article['id'] !== $hero['id']
+    ));
+
+    usort($featured, static function (array $a, array $b): int {
+        $rank = ($a['homePlacement']['rank'] ?? 0) <=> ($b['homePlacement']['rank'] ?? 0);
+        if ($rank !== 0) {
+            return $rank;
         }
 
+        return strcmp($b['publishedAt'], $a['publishedAt']);
+    });
+
+    $latest = [];
+    $latestIds = [(int) $hero['id'] => true];
+
+    foreach ($featured as $article) {
         $latest[] = $article;
+        $latestIds[(int) $article['id']] = true;
+
         if (count($latest) >= 8) {
             break;
+        }
+    }
+
+    if (count($latest) < 8) {
+        foreach ($articles as $article) {
+            if (isset($latestIds[(int) $article['id']])) {
+                continue;
+            }
+
+            $latest[] = $article;
+            $latestIds[(int) $article['id']] = true;
+
+            if (count($latest) >= 8) {
+                break;
+            }
         }
     }
 
