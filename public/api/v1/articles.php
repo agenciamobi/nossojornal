@@ -133,4 +133,4 @@ SQL;
             'hasNext' => $page < $totalPages,
         ],
     ];
-}, 'public, max-age=30, stale-while-revalidate=120');
+}, 'public, max-age=10, stale-while-revalidate=30');
