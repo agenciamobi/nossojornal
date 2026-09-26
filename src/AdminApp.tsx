@@ -330,11 +330,120 @@ type PautasPayload = {
   };
 };
 
-type AdminView = 'dashboard' | 'posts' | 'post' | 'pages' | 'page' | 'categories' | 'category' | 'categoryNew' | 'media' | 'mediaItem' | 'comments' | 'users' | 'user' | 'settings' | 'pautas';
+type EditorialSource = {
+  name: string;
+  organization: string;
+  contact: string;
+  url: string;
+  note: string;
+};
+
+type EditorialChecklist = {
+  headline: boolean;
+  facts: boolean;
+  names: boolean;
+  dates: boolean;
+  sources: boolean;
+  imageRights: boolean;
+  altText: boolean;
+  links: boolean;
+  category: boolean;
+  seo: boolean;
+  review: boolean;
+};
+
+type EditorialWorkflow = {
+  stage: 'idea' | 'reporting' | 'writing' | 'review' | 'ready' | 'scheduled' | 'published';
+  priority: 'low' | 'normal' | 'high' | 'urgent';
+  deadline: string;
+  assigneeId: number;
+  notes: string;
+  sources: EditorialSource[];
+  checklist: EditorialChecklist;
+  automaticChecks: {
+    title: boolean;
+    excerpt: boolean;
+    featuredImage: boolean;
+    category: boolean;
+    seo: boolean;
+  };
+  home: {
+    slot: 'automatic' | 'hero' | 'featured';
+    rank: number;
+    until: string;
+  };
+};
+
+type EditorialWorkflowPayload = {
+  ok: boolean;
+  data?: {
+    editorial: EditorialWorkflow;
+    assignees: Array<{
+      id: number;
+      login: string;
+      name: string;
+      email: string;
+    }>;
+  };
+};
+
+type HomeLayoutItem = {
+  id: number;
+  title: string;
+  slug: string;
+  status: string;
+  publishedAt: string;
+  modifiedAt: string;
+  author: string;
+  imageUrl: string | null;
+  publicUrl: string;
+  home: {
+    slot: 'automatic' | 'hero' | 'featured';
+    rank: number;
+    until: string;
+  };
+};
+
+type HomeLayoutPayload = {
+  ok: boolean;
+  data?: {
+    items: HomeLayoutItem[];
+  };
+};
+
+type AgendaItem = {
+  id: string;
+  kind: 'deadline' | 'publication' | 'event';
+  eventId?: number;
+  eventKind?: 'coverage' | 'interview' | 'meeting' | 'deadline' | 'event';
+  postId?: number;
+  title: string;
+  note?: string;
+  start: string;
+  end: string | null;
+  location: string | null;
+  priority: string;
+  stage: string;
+  status: string;
+  assignee: string;
+  adminUrl: string | null;
+  publicUrl: string | null;
+};
+
+type AgendaPayload = {
+  ok: boolean;
+  data?: {
+    items: AgendaItem[];
+  };
+};
+
+type AdminView = 'dashboard' | 'homeLayout' | 'agenda' | 'posts' | 'post' | 'pages' | 'page' | 'categories' | 'category' | 'categoryNew' | 'media' | 'mediaItem' | 'comments' | 'users' | 'user' | 'settings' | 'pautas';
 
 function resolveAdminView(pathname: string): AdminView {
   const clean = pathname.replace(/\/+$/, '');
 
+  if (clean === '/sistema/capa') return 'homeLayout';
+  if (clean === '/sistema/agenda') return 'agenda';
   if (clean === '/sistema/noticias') return 'posts';
   if (/^\/sistema\/noticias\/\d+$/.test(clean)) return 'post';
   if (clean === '/sistema/paginas') return 'pages';
@@ -551,6 +660,8 @@ function AdminLogin({
 
 type AdminIconName =
   | 'dashboard'
+  | 'home'
+  | 'agenda'
   | 'news'
   | 'pages'
   | 'categories'
@@ -580,6 +691,26 @@ function AdminIcon({ name }: { name: AdminIconName }) {
         <rect x="14" y="3" width="7" height="7" rx="1.4" />
         <rect x="3" y="14" width="7" height="7" rx="1.4" />
         <rect x="14" y="14" width="7" height="7" rx="1.4" />
+      </svg>
+    );
+  }
+
+  if (name === 'home') {
+    return (
+      <svg {...common}>
+        <path d="M3 10.5 12 3l9 7.5" />
+        <path d="M5.5 9.5V21h13V9.5" />
+        <path d="M9 21v-7h6v7" />
+      </svg>
+    );
+  }
+
+  if (name === 'agenda') {
+    return (
+      <svg {...common}>
+        <rect x="3" y="5" width="18" height="16" rx="2" />
+        <path d="M7 3v4M17 3v4M3 10h18" />
+        <path d="M7 14h3M14 14h3M7 17h3" />
       </svg>
     );
   }
@@ -668,6 +799,12 @@ function AdminNav({ user, view }: { user: AdminUser; view: AdminView }) {
     group: 'content' | 'management' | 'system';
   }> = [
     { key: 'dashboard', label: 'Painel', href: '/sistema', icon: 'dashboard', group: 'content' },
+    ...(user.permissions.publishPosts
+      ? [{ key: 'homeLayout' as const, label: 'Capa do site', href: '/sistema/capa', icon: 'home' as const, group: 'content' as const }]
+      : []),
+    ...(user.permissions.editPosts
+      ? [{ key: 'agenda' as const, label: 'Agenda', href: '/sistema/agenda', icon: 'agenda' as const, group: 'content' as const }]
+      : []),
     ...(user.permissions.editPosts
       ? [{ key: 'posts' as const, label: 'Notícias', href: '/sistema/noticias', icon: 'news' as const, group: 'content' as const }]
       : []),
