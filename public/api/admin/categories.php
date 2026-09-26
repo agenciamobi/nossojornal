@@ -27,12 +27,14 @@ nj_admin_run(['GET'], static function (): array {
             t.name LIKE :search_name
             OR t.slug LIKE :search_slug
             OR tt.description LIKE :search_description
+            OR parent_t.name LIKE :search_parent
         )";
         $needle = '%' . $query . '%';
         $params = [
             'search_name' => $needle,
             'search_slug' => $needle,
             'search_description' => $needle,
+            'search_parent' => $needle,
         ];
     }
 
@@ -43,11 +45,14 @@ SELECT
     t.name,
     t.slug,
     tt.parent AS parent_id,
+    COALESCE(parent_t.name, '') AS parent_name,
     tt.count AS legacy_count
 FROM {$terms} t
 INNER JOIN {$taxonomy} tt
     ON tt.term_id = t.term_id
     AND tt.taxonomy = 'category'
+LEFT JOIN {$terms} parent_t
+    ON parent_t.term_id = tt.parent
 {$where}
 ORDER BY
     CASE WHEN tt.parent = 0 THEN 0 ELSE 1 END,
@@ -78,6 +83,7 @@ SQL);
             'name' => (string) $row['name'],
             'slug' => $slug,
             'parentId' => (int) $row['parent_id'] > 0 ? (int) $row['parent_id'] : null,
+            'parentName' => (string) $row['parent_name'],
             'count' => (int) $row['legacy_count'],
             'color' => nj_category_color_for($id, $slug, $overrides),
             'colorSource' => nj_category_color_source_for($id, $overrides),
