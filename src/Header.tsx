@@ -93,7 +93,7 @@ function formatEditionDate() {
     timeZone,
   }).formatToParts(now);
 
-  const part = (type: Intl.DateTimeFormatPartTypes) =>
+  const part = (type: 'year' | 'month' | 'day') =>
     isoParts.find((item) => item.type === type)?.value ?? '';
 
   return {
