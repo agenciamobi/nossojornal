@@ -315,12 +315,23 @@ type UserDetailPayload = {
 };
 
 
+type MediaVariant = {
+  name: string;
+  url: string;
+  width: number;
+  height: number;
+};
+
 type MediaItem = {
   id: number;
   title: string;
   mimeType: string;
   url: string;
   alt: string;
+  width: number | null;
+  height: number | null;
+  srcSet: string;
+  variants: MediaVariant[];
   createdAt: string;
   modifiedAt: string;
   parentId: number;
@@ -352,6 +363,10 @@ type MediaDetailPayload = {
       mimeType: string;
       url: string;
       alt: string;
+      width: number | null;
+      height: number | null;
+      srcSet: string;
+      variants: MediaVariant[];
       attachedFile: string;
       createdAt: string;
       modifiedAt: string;
@@ -4343,7 +4358,15 @@ function PostEditorView({
                   disabled={imageState === 'working'}
                   onClick={() => void setFeaturedImage(item)}
                 >
-                  <img src={item.url} alt={item.alt || item.title} loading="lazy" />
+                  <img
+                  src={item.url}
+                  srcSet={item.srcSet || undefined}
+                  sizes="(max-width: 720px) 50vw, 240px"
+                  width={item.width ?? undefined}
+                  height={item.height ?? undefined}
+                  alt={item.alt || item.title}
+                  loading="lazy"
+                />
                   <span>{item.title}</span>
                 </button>
               ))}
@@ -6392,7 +6415,14 @@ function MediaItemView({ csrfToken }: { csrfToken: string }) {
         <section className="admin-editor-main">
           <figure className="admin-media-editor__preview">
             {media.mimeType.startsWith('image/') ? (
-              <img src={media.url} alt={alt || title} />
+              <img
+                src={media.url}
+                srcSet={media.srcSet || undefined}
+                sizes="(max-width: 980px) 100vw, 760px"
+                width={media.width ?? undefined}
+                height={media.height ?? undefined}
+                alt={alt || title}
+              />
             ) : (
               <div>{media.mimeType || 'Arquivo'}</div>
             )}
@@ -6468,11 +6498,47 @@ function MediaItemView({ csrfToken }: { csrfToken: string }) {
 
             <dl className="admin-editor-meta">
               <div><dt>Tipo</dt><dd>{media.mimeType || '—'}</dd></div>
+              <div>
+                <dt>Dimensões</dt>
+                <dd>
+                  {media.width && media.height
+                    ? media.width.toLocaleString('pt-BR') + ' × ' + media.height.toLocaleString('pt-BR') + ' px'
+                    : '—'}
+                </dd>
+              </div>
+              <div><dt>Derivados</dt><dd>{media.variants.length.toLocaleString('pt-BR')}</dd></div>
               <div><dt>Atualizado</dt><dd>{formatAdminDate(media.modifiedAt)}</dd></div>
               <div><dt>ID</dt><dd>#{media.id}</dd></div>
               <div><dt>Arquivo</dt><dd>{media.attachedFile || '—'}</dd></div>
             </dl>
           </section>
+
+          {media.variants.length > 0 && (
+            <section className="admin-editor-card">
+              <div className="admin-editor-card__head">
+                <span>Responsivo</span>
+                <strong>Tamanhos disponíveis</strong>
+              </div>
+
+              <div className="admin-media-variants">
+                {media.variants.map((variant) => (
+                  <a
+                    key={variant.name + '-' + variant.width + '-' + variant.url}
+                    href={variant.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <strong>{variant.name === 'original' ? 'Original' : variant.name}</strong>
+                    <span>
+                      {variant.width.toLocaleString('pt-BR')}
+                      {variant.height > 0 ? ' × ' + variant.height.toLocaleString('pt-BR') : ''}
+                      {' px'}
+                    </span>
+                  </a>
+                ))}
+              </div>
+            </section>
+          )}
 
           <section className="admin-editor-card">
             <div className="admin-editor-card__head">
