@@ -1298,3 +1298,158 @@ nj_news_queue
 ```
 
 A persistência e as ações `Ignorar | Salvar | Produzir matéria` permanecem aguardando write homologado no banco.
+
+
+## 22. Sidebar refinada e primeiras mutations do admin
+
+A sidebar do `/sistema` deixa de usar letras dentro de caixas e passa a usar ícones SVG vetoriais próprios para:
+
+- Painel;
+- Notícias;
+- Categorias;
+- Mídia;
+- Usuários;
+- Mesa de Pautas;
+- Configurações.
+
+A navegação também passa a ter agrupamentos semânticos:
+
+```text
+Conteúdo
+Gestão
+Sistema
+```
+
+As telas filhas de Notícias e Categorias mantêm o item-pai ativo na sidebar.
+
+### Editor individual de notícia
+
+Nova rota:
+
+```text
+/sistema/noticias/:id
+```
+
+Novo endpoint:
+
+```text
+GET /api/admin/post.php?id=:id
+```
+
+O editor carrega:
+
+- título;
+- slug;
+- resumo;
+- conteúdo bruto;
+- status;
+- autor;
+- datas;
+- categorias;
+- imagem destacada;
+- metadados Yoast disponíveis.
+
+### Editor individual de categoria
+
+Nova rota:
+
+```text
+/sistema/categorias/:id
+```
+
+Novo endpoint:
+
+```text
+GET /api/admin/category.php?id=:id
+```
+
+A tela prepara edição de:
+
+- nome;
+- slug;
+- descrição;
+- categoria superior;
+- cor editorial.
+
+### Write readiness
+
+Novo endpoint:
+
+```text
+GET /api/admin/write-readiness.php
+```
+
+O probe testa `SELECT / INSERT / UPDATE / DELETE` sem alterar dados. As probes de mutation usam instruções que afetam zero linhas e são executadas dentro de transação com rollback.
+
+O Dashboard passa a mostrar o estado do runtime MySQL.
+
+### Primeira mutation canária: cor editorial
+
+Novo endpoint:
+
+```text
+POST /api/admin/category-color.php
+```
+
+Proteções:
+
+- autenticação;
+- `manage_categories`;
+- CSRF;
+- validação `#RRGGBB`;
+- transaction;
+- insert/update em `termmeta`;
+- read-back obrigatório;
+- rollback em falha.
+
+O color picker só é habilitado quando o runtime reporta `INSERT + UPDATE`.
+
+### Segunda mutation canária: salvar rascunho existente
+
+Novo endpoint:
+
+```text
+POST /api/admin/post-draft.php
+```
+
+Nesta fase, somente posts com `post_status=draft` podem ser alterados.
+
+Campos graváveis:
+
+- título;
+- resumo;
+- conteúdo.
+
+O endpoint valida tamanho, mantém o status `draft`, atualiza `post_modified`, faz read-back e nunca toca uma matéria publicada.
+
+### Terceira mutation canária: criar nova notícia
+
+Novo endpoint:
+
+```text
+POST /api/admin/post-create-draft.php
+```
+
+O botão `+ Nova notícia` só é habilitado quando o runtime possui `INSERT + UPDATE`.
+
+A criação:
+
+- usa o usuário autenticado como autor;
+- cria exclusivamente `post_status=draft`;
+- não publica;
+- não cria slug público;
+- valida o ID gerado por read-back;
+- redireciona ao editor individual.
+
+### Próximos gates
+
+Depois da validação dessas mutations:
+
+1. categorias e SEO do rascunho;
+2. imagem destacada;
+3. upload de mídia;
+4. geração de slug;
+5. publicação/despublicação;
+6. agendamento;
+7. criação e edição de usuários;
+8. persistência completa da Mesa de Pautas.
