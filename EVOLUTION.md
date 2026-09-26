@@ -1708,3 +1708,42 @@ A interface agora é governada pelas capabilities reais do usuário, enquanto ca
 Isso evita que um probe técnico bloqueie Notícias, Páginas, Categorias, Mídia, Usuários e Configurações ao mesmo tempo.
 
 O endpoint de readiness permanece apenas como diagnóstico técnico e não participa mais da UX do CMS.
+
+
+## 27. Editor de redação rico
+
+Foi criado o componente:
+
+```text
+src/AdminRichEditor.tsx
+```
+
+Ele substitui o `textarea` bruto de conteúdo em Notícias e Páginas.
+
+Recursos principais:
+
+- toolbar em estilo processador de texto;
+- headings;
+- citação;
+- negrito, itálico, sublinhado e tachado;
+- cor e marca-texto;
+- alinhamentos;
+- listas;
+- recuo;
+- links;
+- Biblioteca de Mídia inline;
+- tabelas;
+- separadores;
+- undo/redo;
+- limpar formatação;
+- modo Visual;
+- modo HTML;
+- tela cheia;
+- contador de palavras/caracteres;
+- Ctrl/Cmd+S;
+- limpeza de conteúdo colado;
+- preservação da seleção do cursor.
+
+O sanitizador público passou a permitir apenas propriedades CSS editoriais seguras, e `pages.css` recebeu suporte para tabelas, separadores e alinhamentos.
+
+O editor foi implementado sem biblioteca externa adicional, mantendo a stack React/Vite enxuta e preservando compatibilidade direta com o HTML legado já armazenado em `post_content`.
