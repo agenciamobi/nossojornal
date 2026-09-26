@@ -2624,3 +2624,74 @@ No Nosso Jornal, “revisado” não significa “descartado” nem “lido” n
 ### Próximo ponto
 
 A próxima evolução de maior valor é remover o catálogo de feeds hardcoded de `pautas.php` e transformá-lo em configuração editorial administrável, reaproveitando o mesmo health/provenance sem permitir URL arbitrária na captura.
+
+## 47. Catálogo administrável de feeds
+
+O Radar da Mesa de Pautas deixa de depender de uma lista hardcoded como autoridade permanente.
+
+### Fonte de verdade
+
+O catálogo editado pela redação é persistido em uma option privada:
+
+```text
+nj_pautas_feed_catalog
+```
+
+Enquanto essa option não existir, o Sistema usa o catálogo padrão embutido como bootstrap. Na primeira alteração, o catálogo completo passa a ser persistido.
+
+Cada fonte possui:
+
+```text
+id
+name
+category
+feedUrl
+kind
+priority
+enabled
+```
+
+O health continua separado em `nj_pautas_feed_state`, portanto editar nome ou prioridade não apaga telemetria enquanto a URL permanecer a mesma.
+
+### Administração
+
+A própria seção Radar permite:
+
+- adicionar fonte RSS/Atom;
+- editar nome, tema, tipo e prioridade;
+- pausar captura sem remover a fonte;
+- trocar a URL;
+- remover a fonte do catálogo.
+
+Remover uma fonte nunca apaga pautas já capturadas nem provenance já copiada para matérias.
+
+### Segurança SSRF
+
+URLs de feed são tratadas como entrada administrativa não confiável.
+
+O backend exige:
+
+- HTTPS;
+- porta 443;
+- ausência de user/password na URL;
+- host resolvível;
+- IPv4 público;
+- rejeição de loopback, private ranges e reserved ranges;
+- redirects HTTP desativados;
+- protocolo cURL limitado a HTTPS quando suportado;
+- resolução cURL fixada ao IP previamente validado quando `CURLOPT_RESOLVE` estiver disponível;
+- resposta XML limitada a 2 MiB.
+
+A captura continua aceitando apenas URLs presentes no catálogo. Não existe endpoint genérico para pedir ao servidor que faça fetch de uma URL arbitrária.
+
+### Operação
+
+Fontes pausadas permanecem visíveis com seu health histórico, mas ficam fora de “Capturar agora” e não podem ser capturadas individualmente.
+
+A troca de URL limpa o health da URL anterior. Exclusão também remove apenas a telemetria operacional correspondente.
+
+### Referências
+
+FreshRSS e Miniflux continuam sendo referências para gestão e estado de feeds, mas o Nosso Jornal mantém um catálogo editorial pequeno, explícito e owner-only em vez de importar a arquitetura de um leitor RSS completo.
+
+Próximo ponto de maior valor: separar o Radar em grupos editoriais e permitir políticas de captura por fonte, como frequência desejada e limite de itens, preparando o contrato para jobs do MOBI Core sem acoplar scheduler ao frontend.
