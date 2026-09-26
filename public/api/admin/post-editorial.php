@@ -25,6 +25,10 @@ const NJ_EDITORIAL_META_ORIGINAL_SOURCE_URL = '_nj_original_source_url';
 const NJ_EDITORIAL_META_CANONICAL_URL = '_nj_canonical_url';
 const NJ_EDITORIAL_META_SOCIAL_TITLE = '_nj_social_title';
 const NJ_EDITORIAL_META_SOCIAL_DESCRIPTION = '_nj_social_description';
+const NJ_EDITORIAL_META_RELATED_POSTS = '_nj_related_post_ids';
+const NJ_EDITORIAL_META_SERIES_NAME = '_nj_series_name';
+const NJ_EDITORIAL_META_SERIES_SLUG = '_nj_series_slug';
+const NJ_EDITORIAL_META_SERIES_ORDER = '_nj_series_order';
 
 function nj_editorial_meta_map(PDO $pdo, int $postId): array
 {
@@ -52,6 +56,10 @@ function nj_editorial_meta_map(PDO $pdo, int $postId): array
         NJ_EDITORIAL_META_CANONICAL_URL,
         NJ_EDITORIAL_META_SOCIAL_TITLE,
         NJ_EDITORIAL_META_SOCIAL_DESCRIPTION,
+        NJ_EDITORIAL_META_RELATED_POSTS,
+        NJ_EDITORIAL_META_SERIES_NAME,
+        NJ_EDITORIAL_META_SERIES_SLUG,
+        NJ_EDITORIAL_META_SERIES_ORDER,
     ];
     $placeholders = implode(',', array_fill(0, count($keys), '?'));
 
@@ -273,6 +281,36 @@ function nj_editorial_payload(PDO $pdo, array $post, array $meta): array
         nj_editorial_json_array((string) ($meta[NJ_EDITORIAL_META_COAUTHORS] ?? ''))
     ), static fn (int $id): bool => $id > 0)));
 
+    $relatedIds = array_values(array_unique(array_filter(array_map(
+        'intval',
+        nj_editorial_json_array((string) ($meta[NJ_EDITORIAL_META_RELATED_POSTS] ?? ''))
+    ), static fn (int $id): bool => $id > 0 && $id !== (int) $post['ID'])));
+
+    $related = [];
+    if ($relatedIds !== []) {
+        $posts = nj_table('posts');
+        $placeholders = implode(',', array_fill(0, count($relatedIds), '?'));
+        $relatedStatement = $pdo->prepare(
+            "SELECT ID, post_title, post_name, post_status, post_modified
+             FROM {$posts}
+             WHERE ID IN ({$placeholders}) AND post_type = 'post'
+             ORDER BY FIELD(ID, {$placeholders})"
+        );
+        $relatedStatement->execute(array_merge($relatedIds, $relatedIds));
+
+        foreach ($relatedStatement->fetchAll() as $row) {
+            $related[] = [
+                'id' => (int) $row['ID'],
+                'title' => nj_content_clean_text_source((string) $row['post_title']),
+                'status' => (string) $row['post_status'],
+                'modifiedAt' => nj_content_iso8601((string) $row['post_modified']),
+                'publicUrl' => (string) $row['post_status'] === 'publish' && trim((string) $row['post_name']) !== ''
+                    ? '/noticia/' . rawurlencode((string) $row['post_name'])
+                    : null,
+            ];
+        }
+    }
+
     return [
         'stage' => $stage,
         'priority' => $priority,
@@ -308,6 +346,14 @@ function nj_editorial_payload(PDO $pdo, array $post, array $meta): array
             'canonicalUrl' => (string) ($meta[NJ_EDITORIAL_META_CANONICAL_URL] ?? ''),
             'socialTitle' => (string) ($meta[NJ_EDITORIAL_META_SOCIAL_TITLE] ?? ''),
             'socialDescription' => (string) ($meta[NJ_EDITORIAL_META_SOCIAL_DESCRIPTION] ?? ''),
+        ],
+        'connections' => [
+            'related' => $related,
+            'series' => [
+                'name' => (string) ($meta[NJ_EDITORIAL_META_SERIES_NAME] ?? ''),
+                'slug' => (string) ($meta[NJ_EDITORIAL_META_SERIES_SLUG] ?? ''),
+                'order' => max(0, min(999, (int) ($meta[NJ_EDITORIAL_META_SERIES_ORDER] ?? 0))),
+            ],
         ],
     ];
 }
@@ -506,6 +552,50 @@ nj_admin_run(['GET', 'POST'], static function (string $method): array {
         }
     }
 
+    $relatedInput = is_array($body['relatedPostIds'] ?? null) ? $body['relatedPostIds'] : [];
+    $relatedPostIds = array_values(array_unique(array_filter(
+        array_map('intval', $relatedInput),
+        static fn (int $id): bool => $id > 0 && $id !== $postId
+    )));
+
+    if (count($relatedPostIds) > 8) {
+        throw new NjApiHttpException(422, 'too_many_related_posts');
+    }
+
+    if ($relatedPostIds !== []) {
+        $postsTable = nj_table('posts');
+        $placeholders = implode(',', array_fill(0, count($relatedPostIds), '?'));
+        $relatedValidation = $pdo->prepare(
+            "SELECT ID
+             FROM {$postsTable}
+             WHERE ID IN ({$placeholders})
+               AND post_type = 'post'
+               AND post_status <> 'trash'"
+        );
+        $relatedValidation->execute($relatedPostIds);
+        $validRelatedIds = array_map('intval', $relatedValidation->fetchAll(PDO::FETCH_COLUMN));
+
+        foreach ($relatedPostIds as $relatedPostId) {
+            if (!in_array($relatedPostId, $validRelatedIds, true)) {
+                throw new NjApiHttpException(422, 'invalid_related_post');
+            }
+        }
+    }
+
+    $seriesName = trim((string) ($body['seriesName'] ?? ''));
+    $seriesSlugInput = trim((string) ($body['seriesSlug'] ?? ''));
+    $seriesSlug = $seriesSlugInput !== '' ? nj_admin_slugify($seriesSlugInput) : nj_admin_slugify($seriesName);
+    $seriesOrder = max(0, min(999, (int) ($body['seriesOrder'] ?? 0)));
+
+    if ((function_exists('mb_strlen') ? mb_strlen($seriesName, 'UTF-8') : strlen($seriesName)) > 180) {
+        throw new NjApiHttpException(422, 'series_name_too_large');
+    }
+
+    if ($seriesName === '') {
+        $seriesSlug = '';
+        $seriesOrder = 0;
+    }
+
     if ((function_exists('mb_strlen') ? mb_strlen($homeHeadline, 'UTF-8') : strlen($homeHeadline)) > 280) {
         throw new NjApiHttpException(422, 'home_headline_too_large');
     }
@@ -566,6 +656,16 @@ nj_admin_run(['GET', 'POST'], static function (string $method): array {
         nj_admin_upsert_postmeta($pdo, $postId, NJ_EDITORIAL_META_SOCIAL_TITLE, $socialTitle);
         nj_admin_upsert_postmeta($pdo, $postId, NJ_EDITORIAL_META_SOCIAL_DESCRIPTION, $socialDescription);
 
+        nj_admin_upsert_postmeta(
+            $pdo,
+            $postId,
+            NJ_EDITORIAL_META_RELATED_POSTS,
+            json_encode($relatedPostIds, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]'
+        );
+        nj_admin_upsert_postmeta($pdo, $postId, NJ_EDITORIAL_META_SERIES_NAME, $seriesName);
+        nj_admin_upsert_postmeta($pdo, $postId, NJ_EDITORIAL_META_SERIES_SLUG, $seriesSlug);
+        nj_admin_upsert_postmeta($pdo, $postId, NJ_EDITORIAL_META_SERIES_ORDER, (string) $seriesOrder);
+
         nj_admin_log_post_activity(
             $pdo,
             $postId,
@@ -576,6 +676,8 @@ nj_admin_run(['GET', 'POST'], static function (string $method): array {
                 'coauthorCount' => count($coauthorIds),
                 'hasCanonical' => $canonicalUrl !== '',
                 'hasOriginalSource' => $originalSourceUrl !== '',
+                'relatedCount' => count($relatedPostIds),
+                'seriesSlug' => $seriesSlug,
             ]
         );
 
