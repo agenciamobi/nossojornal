@@ -53,6 +53,7 @@ SELECT
     p.post_date AS published_at,
     p.post_modified AS modified_at,
     COALESCE(u.display_name, '') AS author_name,
+    COALESCE(u.user_nicename, '') AS author_slug,
     COALESCE((
         SELECT a.guid
         FROM {$postmeta} thumb
@@ -295,6 +296,10 @@ SQL;
             'author' => [
                 'id' => (int) $row['author_id'],
                 'name' => trim((string) $row['author_name']),
+                'slug' => trim((string) $row['author_slug']),
+                'url' => trim((string) $row['author_slug']) !== ''
+                    ? '/autor/' . rawurlencode((string) $row['author_slug'])
+                    : null,
             ],
             'featuredImage' => $featuredImage,
             'views' => (int) $row['views'],
