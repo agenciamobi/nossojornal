@@ -428,9 +428,15 @@ function PublicSite() {
                 <div className="home-category-grid">
                   {section.stories.map((article, index) => (
                     <article
-                      className={index === 0 ? 'home-category-card home-category-card--lead' : 'home-category-card'}
+                      className={`home-category-card ${
+                        index === 0
+                          ? 'home-category-card--lead'
+                          : index <= 2
+                            ? 'home-category-card--secondary'
+                            : 'home-category-card--latest'
+                      }`}
                       key={article.id}
-                      style={editorialStyle(article.primaryCategory?.color)}
+                      style={editorialStyle(section.category.color)}
                     >
                       <a href={article.url} aria-label={homeTitle(article)}>
                         <StoryMedia
@@ -438,8 +444,10 @@ function PublicSite() {
                           className="home-category-card__media"
                           sizes={
                             index === 0
-                              ? '(max-width: 720px) 100vw, (max-width: 1100px) 55vw, 620px'
-                              : '(max-width: 720px) 100vw, 320px'
+                              ? '(max-width: 720px) 100vw, (max-width: 1100px) 58vw, 640px'
+                              : index <= 2
+                                ? '(max-width: 720px) 132px, (max-width: 1100px) 50vw, 300px'
+                                : '(max-width: 720px) 96px, (max-width: 1100px) 220px, 260px'
                           }
                         />
                       </a>
