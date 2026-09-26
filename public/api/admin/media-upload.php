@@ -222,13 +222,25 @@ SQL);
         throw $error;
     }
 
+    $image = nj_media_descriptor(
+        $publicUrl,
+        $relativeFile,
+        $metadata,
+        '',
+        $title
+    );
+
     return [
         'media' => [
             'id' => $attachmentId,
             'title' => $title,
             'mimeType' => $mime,
-            'url' => $publicPath,
-            'alt' => '',
+            'url' => is_array($image) ? (string) $image['url'] : $publicPath,
+            'alt' => is_array($image) ? (string) $image['alt'] : '',
+            'width' => is_array($image) ? $image['width'] : (int) $imageSize[0],
+            'height' => is_array($image) ? $image['height'] : (int) $imageSize[1],
+            'srcSet' => is_array($image) ? (string) $image['srcSet'] : '',
+            'variants' => is_array($image) ? $image['variants'] : [],
             'createdAt' => $now->format(DATE_ATOM),
             'modifiedAt' => $now->format(DATE_ATOM),
             'parentId' => 0,
