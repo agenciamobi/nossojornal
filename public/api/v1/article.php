@@ -87,12 +87,16 @@ SQL;
         $related = nj_content_hydrate_articles($pdo, $relatedStatement->fetchAll());
     }
 
+    $seoDescription = $seo['description'] !== ''
+        ? nj_content_excerpt($seo['description'], '', 240)
+        : $article['excerpt'];
+
     return [
         'article' => $article,
         'related' => $related,
         'seo' => [
-            'title' => $seo['title'] !== '' ? $seo['title'] : $article['title'],
-            'description' => $seo['description'] !== '' ? $seo['description'] : $article['excerpt'],
+            'title' => $seo['title'] !== '' ? nj_content_clean_text_source($seo['title']) : $article['title'],
+            'description' => $seoDescription,
             'canonical' => $article['url'],
         ],
     ];
