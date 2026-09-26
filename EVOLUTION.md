@@ -3043,3 +3043,52 @@ A tela passa a mostrar:
 - assuntos excedentes resumidos como `+N`.
 
 Próximo ponto de maior valor: polir a Biblioteca de Mídia com busca/seleção mais rápida, qualidade de metadados e ações em lote seguras.
+
+## 54. Cabeçalhos cromáticos das editorias na homepage
+
+As seções editoriais da homepage passam a usar a cor da própria categoria como parte estrutural do cabeçalho.
+
+### Composição
+
+O título da editoria deixa de ficar apenas acima de um filete.
+
+Agora a composição segue:
+
+```text
+EDITORIA
+[Título da editoria]────────────────────[Ver editoria →]
+```
+
+O bloco do título fica encaixado na régua horizontal da seção e usa `category.color` como fundo.
+
+O CTA `Ver editoria` usa a mesma cor, com estado de hover preenchido.
+
+### Cards
+
+Dentro da seção, a cor editorial continua sendo herdada pelos badges e hovers de headline.
+
+Foi acrescentado um acento inferior discreto nos cards durante hover/focus, mantendo o branco como superfície dominante.
+
+### Contraste
+
+O frontend calcula uma cor de contraste para texto sobre o bloco cromático.
+
+O contrato passa a disponibilizar via CSS variables:
+
+```text
+--editorial-color
+--editorial-contrast
+```
+
+Isso evita depender da suposição de que toda cor cadastrada no painel será escura.
+
+### Responsividade
+
+No mobile:
+
+- o título continua encaixado na régua;
+- o CTA desce para uma linha própria;
+- a largura do título respeita o viewport;
+- as interações mantêm `prefers-reduced-motion`.
+
+A mudança reutiliza o sistema cromático existente e não cria uma segunda fonte de cores.

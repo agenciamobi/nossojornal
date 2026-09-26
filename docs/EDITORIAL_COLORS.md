@@ -74,8 +74,10 @@ A cor editorial aparece como código de navegação, não como preenchimento dom
 - underline/estado ativo no Header;
 - marcador nas cidades da cobertura regional;
 - badge de categoria;
-- filete superior das seções da homepage;
-- hover de headlines;
+- régua horizontal das seções da homepage;
+- bloco de título encaixado na régua;
+- CTA da editoria;
+- hover e acentos dos headlines;
 - filete da página de editoria;
 - marcador da matéria;
 - drop cap;
@@ -83,3 +85,5 @@ A cor editorial aparece como código de navegação, não como preenchimento dom
 - sumário e relacionadas.
 
 O objetivo é preservar o branco e o navy do Nosso Jornal como identidade-base enquanto cada editoria ganha reconhecimento visual próprio.
+
+Na homepage, o cabeçalho de cada editoria pode usar um preenchimento concentrado no título da seção. O restante da superfície permanece claro. O texto sobre a cor editorial usa contraste calculado no frontend para continuar legível mesmo quando o operador cadastrar uma cor clara em `termmeta`.
