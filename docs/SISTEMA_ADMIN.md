@@ -115,8 +115,10 @@ Implementado:
 
 - Painel
 - Notícias
+- Páginas
 - Categorias
 - Mídia
+- Comentários
 
 ### Gestão
 
@@ -135,10 +137,14 @@ A sidebar utiliza ícones SVG próprios e mantém o item-pai ativo nas rotas int
 /sistema
 /sistema/noticias
 /sistema/noticias/:id
+/sistema/paginas
+/sistema/paginas/:id
 /sistema/categorias
 /sistema/categorias/nova
 /sistema/categorias/:id
 /sistema/midia
+/sistema/midia/:id
+/sistema/comentarios
 /sistema/usuarios
 /sistema/usuarios/:id
 /sistema/pautas
@@ -728,3 +734,171 @@ wp-content/uploads/
 ```
 
 Nunca limpar `public_html` de forma destrutiva para publicar o painel.
+
+
+## 23. Páginas, comentários, lixeira e mídia detalhada
+
+### Páginas
+
+Nova área:
+
+```text
+/sistema/paginas
+/sistema/paginas/:id
+```
+
+A listagem usa os registros `post_type=page` existentes no banco e permite:
+
+- busca;
+- filtros por status;
+- acesso ao editor;
+- link público quando a página possui rota no portal.
+
+O editor permite alterar:
+
+- título;
+- resumo;
+- conteúdo;
+- título SEO;
+- descrição SEO;
+- slug quando a rota não é estrutural.
+
+As páginas institucionais que alimentam:
+
+```text
+/sobre
+/contato
+```
+
+mantêm o slug protegido no painel, evitando quebrar a navegação pública.
+
+Endpoints:
+
+```text
+GET  /api/admin/pages.php
+GET  /api/admin/page-item.php?id=:id
+POST /api/admin/page-save.php
+```
+
+Permissões usadas:
+
+```text
+edit_pages
+edit_others_pages
+edit_published_pages
+publish_pages
+```
+
+### Comentários
+
+Nova área:
+
+```text
+/sistema/comentarios
+```
+
+Visível somente para usuários com:
+
+```text
+moderate_comments
+```
+
+A tela oferece:
+
+- busca por autor, e-mail, conteúdo ou notícia;
+- Todos;
+- Pendentes;
+- Aprovados;
+- Spam;
+- Lixeira;
+- Aprovar;
+- Marcar como pendente;
+- Spam;
+- Não é spam;
+- Lixeira;
+- Restaurar.
+
+Endpoints:
+
+```text
+GET  /api/admin/comments.php
+POST /api/admin/comment-status.php
+```
+
+### Lixeira de notícias
+
+A listagem de Notícias passa a separar a Lixeira da aba `Todas`.
+
+Ações disponíveis conforme as capabilities do usuário:
+
+```text
+Mover para lixeira
+Restaurar
+```
+
+Endpoint:
+
+```text
+POST /api/admin/post-trash.php
+```
+
+A operação utiliza os metadados compatíveis com a lixeira do WordPress:
+
+```text
+_wp_trash_meta_status
+_wp_trash_meta_time
+```
+
+Ao restaurar, o sistema tenta recuperar o status anterior. Quando a conta não possui permissão para restaurar diretamente um conteúdo publicado, o item volta como rascunho.
+
+### Mídia individual
+
+A Biblioteca de Mídia passa a ter:
+
+```text
+/sistema/midia/:id
+```
+
+O editor individual permite alterar:
+
+- título;
+- texto alternativo;
+- legenda;
+- descrição.
+
+Também mostra:
+
+- tipo MIME;
+- arquivo físico relativo;
+- datas;
+- ID;
+- notícias que utilizam a imagem como destaque.
+
+Endpoints:
+
+```text
+GET  /api/admin/media-item.php?id=:id
+POST /api/admin/media-save.php
+```
+
+A Biblioteca também passa a aceitar busca por:
+
+- título;
+- nome/URL do arquivo;
+- texto alternativo.
+
+O objetivo é tornar um acervo grande utilizável sem depender do Media Library do WordPress.
+
+## 24. Estado desta camada
+
+Implementado na `main`, ainda dependente de deploy e homologação controlada:
+
+- moderação de comentários;
+- lixeira/restauração de notícias;
+- busca de mídia;
+- editor individual de mídia;
+- edição de metadados de imagem;
+- listagem de páginas;
+- edição de páginas institucionais.
+
+A primeira validação deve continuar usando conteúdo descartável ou de teste para qualquer mutation.
