@@ -139,6 +139,37 @@ type CategoriesPayload = {
   };
 };
 
+type CategoryDetailPayload = {
+  ok: boolean;
+  data?: {
+    category: {
+      id: number;
+      taxonomyId: number;
+      name: string;
+      slug: string;
+      description: string;
+      parentId: number | null;
+      count: number;
+      color: string;
+      colorSource: 'palette' | 'termmeta';
+      publicUrl: string;
+    };
+    parents: Array<{
+      id: number;
+      name: string;
+      slug: string;
+      parentId: number | null;
+    }>;
+    mode: 'read_only';
+    plannedMutation: {
+      termTable: string;
+      taxonomyTable: string;
+      colorMetaTable: string;
+      colorMetaKey: string;
+    };
+  };
+};
+
 type UsersPayload = {
   ok: boolean;
   data?: {
@@ -204,7 +235,7 @@ type PautasPayload = {
   };
 };
 
-type AdminView = 'dashboard' | 'posts' | 'post' | 'categories' | 'media' | 'users' | 'settings' | 'pautas';
+type AdminView = 'dashboard' | 'posts' | 'post' | 'categories' | 'category' | 'media' | 'users' | 'settings' | 'pautas';
 
 function resolveAdminView(pathname: string): AdminView {
   const clean = pathname.replace(/\/+$/, '');
@@ -212,6 +243,7 @@ function resolveAdminView(pathname: string): AdminView {
   if (clean === '/sistema/noticias') return 'posts';
   if (/^\/sistema\/noticias\/\d+$/.test(clean)) return 'post';
   if (clean === '/sistema/categorias') return 'categories';
+  if (/^\/sistema\/categorias\/\d+$/.test(clean)) return 'category';
   if (clean === '/sistema/midia') return 'media';
   if (clean === '/sistema/usuarios') return 'users';
   if (clean === '/sistema/configuracoes') return 'settings';
@@ -525,12 +557,16 @@ function AdminNav({ user, view }: { user: AdminUser; view: AdminView }) {
                   key={entry.key}
                   href={entry.href}
                   className={
-                    view === entry.key || (view === 'post' && entry.key === 'posts')
+                    view === entry.key
+                      || (view === 'post' && entry.key === 'posts')
+                      || (view === 'category' && entry.key === 'categories')
                       ? 'admin-nav__item admin-nav__item--active'
                       : 'admin-nav__item'
                   }
                   aria-current={
-                    view === entry.key || (view === 'post' && entry.key === 'posts')
+                    view === entry.key
+                      || (view === 'post' && entry.key === 'posts')
+                      || (view === 'category' && entry.key === 'categories')
                       ? 'page'
                       : undefined
                   }
@@ -1119,8 +1155,11 @@ function CategoriesView() {
             {data.items.map((category) => (
               <tr key={category.id}>
                 <td className="admin-table__primary">
-                  <strong>{category.name}</strong>
+                  <strong>
+                    <a href={'/sistema/categorias/' + category.id}>{category.name}</a>
+                  </strong>
                   <div className="admin-row-actions">
+                    <a href={'/sistema/categorias/' + category.id}>Abrir</a>
                     <span>#{category.id}</span>
                     <a href={category.publicUrl} target="_blank" rel="noopener noreferrer">Ver ↗</a>
                   </div>
@@ -1143,6 +1182,133 @@ function CategoriesView() {
             ))}
           </tbody>
         </table>
+      </div>
+    </>
+  );
+}
+
+function CategoryEditorView() {
+  const match = window.location.pathname.match(/^\/sistema\/categorias\/(\d+)\/?$/);
+  const categoryId = match ? Number.parseInt(match[1], 10) : 0;
+  const [data, setData] = useState<CategoryDetailPayload['data']>();
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    if (!categoryId) {
+      setError(true);
+      return;
+    }
+
+    void adminFetch<CategoryDetailPayload>('/api/admin/category.php?id=' + categoryId)
+      .then((payload) => {
+        if (!payload.ok || !payload.data) throw new Error('category_invalid');
+        setData(payload.data);
+      })
+      .catch(() => setError(true));
+  }, [categoryId]);
+
+  if (error) return <AdminError />;
+  if (!data) return <AdminLoading />;
+
+  const category = data.category;
+
+  return (
+    <>
+      <header className="admin-editor-header">
+        <div>
+          <a href="/sistema/categorias" className="admin-editor-header__back">← Categorias</a>
+          <div className="admin-editor-header__title">
+            <span
+              className="admin-category-dot"
+              style={{ background: category.color }}
+              aria-hidden="true"
+            />
+            <h1>Editar categoria</h1>
+          </div>
+          <p>#{category.id} • {category.count} posts associados</p>
+        </div>
+
+        <div className="admin-editor-header__actions">
+          <a href={category.publicUrl} target="_blank" rel="noopener noreferrer">
+            Ver editoria ↗
+          </a>
+          <button type="button" className="admin-button--primary" disabled title="Aguardando write MySQL">
+            Salvar alterações
+          </button>
+        </div>
+      </header>
+
+      <ReadOnlyNotice />
+
+      <div className="admin-category-editor">
+        <section className="admin-editor-card">
+          <div className="admin-editor-card__head">
+            <span>Taxonomia</span>
+            <strong>Dados da categoria</strong>
+          </div>
+
+          <div className="admin-editor-card__body admin-editor-card__body--fields">
+            <label className="admin-editor-field">
+              <span>Nome</span>
+              <input value={category.name} readOnly />
+            </label>
+
+            <label className="admin-editor-field">
+              <span>Slug</span>
+              <input value={category.slug} readOnly />
+            </label>
+
+            <label className="admin-editor-field">
+              <span>Descrição</span>
+              <textarea value={category.description} readOnly rows={6} />
+            </label>
+
+            <label className="admin-editor-field">
+              <span>Categoria superior</span>
+              <select value={category.parentId ?? ''} disabled>
+                <option value="">Nenhuma</option>
+                {data.parents.map((parent) => (
+                  <option value={parent.id} key={parent.id}>{parent.name}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+        </section>
+
+        <aside className="admin-editor-sidebar">
+          <section className="admin-editor-card">
+            <div className="admin-editor-card__head">
+              <span>Identidade</span>
+              <strong>Cor editorial</strong>
+            </div>
+
+            <div className="admin-category-color-editor">
+              <div className="admin-category-color-editor__swatch" style={{ background: category.color }} />
+              <div>
+                <strong>{category.color}</strong>
+                <span>{category.colorSource === 'termmeta' ? 'Persistida no banco' : 'Fallback do código'}</span>
+              </div>
+              <input type="color" value={category.color} disabled aria-label="Cor editorial" />
+            </div>
+          </section>
+
+          <section className="admin-editor-card">
+            <div className="admin-editor-card__head">
+              <span>Persistência</span>
+              <strong>Próximo write canário</strong>
+            </div>
+
+            <div className="admin-editor-next">
+              <p>Esta tela será a primeira mutation do sistema quando o banco liberar escrita.</p>
+              <ul>
+                <li>Nome e slug em {data.plannedMutation.termTable}</li>
+                <li>Parent e descrição em {data.plannedMutation.taxonomyTable}</li>
+                <li>Cor em {data.plannedMutation.colorMetaTable}</li>
+                <li>Meta key: {data.plannedMutation.colorMetaKey}</li>
+              </ul>
+            </div>
+          </section>
+        </aside>
       </div>
     </>
   );
@@ -1550,6 +1716,7 @@ export function AdminApp() {
           {view === 'posts' && <PostsView />}
           {view === 'post' && <PostEditorView />}
           {view === 'categories' && <CategoriesView />}
+          {view === 'category' && <CategoryEditorView />}
           {view === 'media' && <MediaView />}
           {view === 'users' && <UsersView />}
           {view === 'settings' && <SettingsView />}
