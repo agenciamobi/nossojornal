@@ -1503,3 +1503,177 @@ Mesa de Pautas
 ```
 
 O painel deixa de ser apenas inventário do banco e passa a funcionar como entrada da operação diária.
+
+
+## 35. Revisões, autosave e colaboração editorial
+
+O editor de notícia passa a manter histórico editorial próprio, independente das revisões nativas do WordPress.
+
+Entidades privadas:
+
+```text
+post_type = nj_revision
+post_type = nj_editorial_comment
+post_type = nj_correction
+post_type = nj_activity
+```
+
+Todas são vinculadas à matéria pelo `post_parent`.
+
+### 35.1 Autosave
+
+Enquanto houver alterações não salvas, o editor cria um autosave privado após aproximadamente 30 segundos de inatividade.
+
+O autosave:
+
+- não altera a matéria publicada;
+- não muda status;
+- não publica;
+- não altera a URL pública;
+- guarda título, slug, resumo, conteúdo, categorias e SEO;
+- reaproveita um único registro de autosave por usuário/matéria, evitando crescimento infinito.
+
+A barra do editor mostra:
+
+```text
+Autosave pronto
+Salvando rascunho automático…
+Rascunho automático salvo
+Autosave indisponível
+```
+
+Endpoint:
+
+```text
+GET  /api/admin/post-revisions.php?id=:postId
+POST /api/admin/post-revisions.php
+```
+
+### 35.2 Revisões por salvamento
+
+Antes de cada `Salvar`, o sistema registra uma cópia da versão anterior.
+
+A revisão guarda:
+
+- título;
+- slug;
+- resumo;
+- conteúdo;
+- status;
+- categorias;
+- título SEO;
+- descrição SEO;
+- categoria principal;
+- data;
+- autor da revisão.
+
+O histórico mostra as versões mais recentes diretamente no editor.
+
+A ação:
+
+```text
+Restaurar
+```
+
+recoloca o conteúdo da revisão na matéria.
+
+Antes da restauração, a versão atual é preservada em uma nova revisão.
+
+### 35.3 Comentários internos
+
+Cada matéria possui uma área:
+
+```text
+Comentários internos
+```
+
+Esses comentários:
+
+- são privados;
+- nunca aparecem no artigo público;
+- registram autor e data;
+- podem ser resolvidos;
+- podem ser reabertos.
+
+A intenção é substituir observações espalhadas em WhatsApp, Docs ou mensagens externas durante a edição.
+
+Endpoint:
+
+```text
+GET  /api/admin/post-collaboration.php?id=:postId
+POST /api/admin/post-collaboration.php
+```
+
+### 35.4 Correções e atualizações
+
+A redação pode registrar:
+
+```text
+Atualização
+Correção
+```
+
+Cada registro possui:
+
+- texto;
+- autor;
+- data;
+- tipo;
+- flag de visibilidade pública.
+
+Quando `Exibir ao leitor` está ativo, o registro é devolvido pela API pública da matéria.
+
+O artigo mostra uma seção:
+
+```text
+Transparência editorial
+Correções e atualizações
+```
+
+Comentários internos e revisões nunca são enviados ao frontend público.
+
+### 35.5 Timeline humana
+
+A matéria possui uma timeline de ações editoriais.
+
+Eventos já registrados:
+
+```text
+post_saved
+status_changed
+comment_added
+comment_resolved
+comment_reopened
+correction_added
+correction_visibility_changed
+revision_restored
+```
+
+A UI converte os códigos internos para frases humanas, como:
+
+```text
+Pablo salvou a matéria
+Pablo alterou a publicação
+Pablo adicionou um comentário interno
+Pablo registrou uma correção/atualização
+```
+
+Endpoint:
+
+```text
+GET /api/admin/post-activity.php?id=:postId
+```
+
+### 35.6 Transparência pública
+
+A API:
+
+```text
+GET /api/v1/article.php
+```
+
+passa a retornar somente correções marcadas como públicas.
+
+A seção de correções aparece abaixo do corpo da matéria e antes das notícias relacionadas.
+
+Esse recurso permite corrigir conteúdo sem apagar o histórico editorial relevante para o leitor.
