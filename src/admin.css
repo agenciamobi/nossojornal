@@ -35,7 +35,23 @@
 }
 
 .admin-sidebar nav {
-  padding: 10px 0;
+  padding: 10px 0 14px;
+}
+
+.admin-nav__group + .admin-nav__group {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255,255,255,.06);
+}
+
+.admin-nav__group-label {
+  display: block;
+  padding: 0 18px 6px;
+  color: #8c959d;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: .12em;
+  text-transform: uppercase;
 }
 
 .admin-nav__item {
@@ -68,23 +84,46 @@
   color: #fff;
 }
 
-.admin-nav__glyph {
+.admin-nav__icon {
   width: 26px;
   height: 26px;
   display: inline-grid;
   place-items: center;
-  border: 1px solid currentColor;
-  border-radius: 5px;
-  font-size: 10px;
-  font-weight: 900;
-  opacity: .82;
+  flex: 0 0 26px;
+  color: #a7aaad;
+  transition: color .16s ease, transform .16s ease;
+}
+
+.admin-nav__icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.admin-nav__item:hover .admin-nav__icon,
+.admin-nav__item:focus-visible .admin-nav__icon,
+.admin-nav__item--active .admin-nav__icon {
+  color: currentColor;
+}
+
+.admin-nav__item:hover .admin-nav__icon,
+.admin-nav__item:focus-visible .admin-nav__icon {
+  transform: translateX(1px);
 }
 
 .admin-sidebar__bottom {
   margin-top: auto;
-  padding: 16px 18px 22px;
+  padding: 14px 16px 18px;
   border-top: 1px solid #30363b;
-  font-size: 12px;
+  font-size: 11px;
+}
+
+.admin-sidebar__bottom a {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 34px;
+  color: #c3c4c7;
 }
 
 .admin-sidebar__bottom a:hover,
@@ -866,8 +905,14 @@
 
   .admin-sidebar__brand span,
   .admin-nav__item > span:last-child,
-  .admin-sidebar__bottom {
+  .admin-sidebar__bottom,
+  .admin-nav__group-label {
     display: none;
+  }
+
+  .admin-nav__group + .admin-nav__group {
+    margin-top: 4px;
+    padding-top: 4px;
   }
 
   .admin-nav__item {
@@ -917,6 +962,14 @@
     display: flex;
     overflow-x: auto;
     padding: 4px;
+  }
+
+  .admin-nav__group {
+    display: contents;
+  }
+
+  .admin-nav__group + .admin-nav__group {
+    border-top: 0;
   }
 
   .admin-nav__item {
