@@ -823,6 +823,17 @@ function ArticlePage({ slug }: { slug: string }) {
                 dangerouslySetInnerHTML={{ __html: article.contentHtml ?? '' }}
               />
 
+              {article.tags.length > 0 && (
+                <nav className="article-tags" aria-label="Assuntos desta matéria">
+                  <span>Assuntos</span>
+                  <div>
+                    {article.tags.map((tag) => (
+                      <a href={tag.url} key={tag.id}>#{tag.name}</a>
+                    ))}
+                  </div>
+                </nav>
+              )}
+
               {(payload?.corrections ?? []).length > 0 && (
                 <section className="article-corrections" aria-labelledby="article-corrections-title">
                   <div className="article-corrections__heading">
@@ -867,6 +878,32 @@ function ArticlePage({ slug }: { slug: string }) {
                   ))}
                 </div>
               </div>
+
+              {payload?.editorial.series.url && (
+                <a
+                  className="article-series-card"
+                  href={payload.editorial.series.url}
+                >
+                  <span>Dossiê</span>
+                  <strong>{payload.editorial.series.name}</strong>
+                  <small>
+                    {payload.editorial.series.order > 0
+                      ? 'Parte ' + payload.editorial.series.order + ' da série'
+                      : 'Ver sequência completa'}
+                  </small>
+                </a>
+              )}
+
+              {article.tags.length > 0 && (
+                <div className="article-detail__aside-section">
+                  <span className="internal-kicker">Assuntos</span>
+                  <div className="article-detail__tags">
+                    {article.tags.map((tag) => (
+                      <a href={tag.url} key={tag.id}>{tag.name}</a>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {payload?.editorial.originalSourceUrl && (
                 <div className="article-detail__aside-section">
