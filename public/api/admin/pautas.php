@@ -18,6 +18,7 @@ const NJ_PAUTA_META_DEADLINE = '_nj_pauta_deadline';
 const NJ_PAUTA_META_ASSIGNEE = '_nj_pauta_assignee';
 const NJ_PAUTA_META_DRAFT_ID = '_nj_pauta_draft_post_id';
 const NJ_PAUTA_FEED_STATE_OPTION = 'nj_pautas_feed_state';
+const NJ_PAUTA_LAST_REVIEW_OPTION = 'nj_pautas_last_review_at';
 
 function nj_pautas_feed_state(PDO $pdo): array
 {
@@ -62,6 +63,49 @@ SQL);
         'name' => NJ_PAUTA_FEED_STATE_OPTION,
         'value' => $encoded,
     ]);
+}
+
+function nj_pautas_last_review_at(PDO $pdo): string
+{
+    $options = nj_table('options');
+    $statement = $pdo->prepare(
+        "SELECT option_value
+         FROM {$options}
+         WHERE option_name = :name
+         LIMIT 1"
+    );
+    $statement->execute(['name' => NJ_PAUTA_LAST_REVIEW_OPTION]);
+    $raw = $statement->fetchColumn();
+
+    if (!is_string($raw) || trim($raw) === '') {
+        return '';
+    }
+
+    try {
+        return (new DateTimeImmutable($raw))->format(DATE_ATOM);
+    } catch (Throwable) {
+        return '';
+    }
+}
+
+function nj_pautas_mark_reviewed(PDO $pdo): string
+{
+    $reviewedAt = gmdate('c');
+    $options = nj_table('options');
+
+    $statement = $pdo->prepare(<<<SQL
+INSERT INTO {$options} (option_name, option_value, autoload)
+VALUES (:name, :value, 'no')
+ON DUPLICATE KEY UPDATE
+    option_value = VALUES(option_value),
+    autoload = 'no'
+SQL);
+    $statement->execute([
+        'name' => NJ_PAUTA_LAST_REVIEW_OPTION,
+        'value' => $reviewedAt,
+    ]);
+
+    return $reviewedAt;
 }
 
 function nj_pautas_feed_state_key(string $feedUrl): string
@@ -497,6 +541,21 @@ SELECT
     ), '') AS source_url,
     COALESCE((
         SELECT pm.meta_value FROM {$postmeta} pm
+        WHERE pm.post_id = p.ID AND pm.meta_key = '_nj_pauta_feed_url'
+        ORDER BY pm.meta_id DESC LIMIT 1
+    ), '') AS feed_url,
+    COALESCE((
+        SELECT pm.meta_value FROM {$postmeta} pm
+        WHERE pm.post_id = p.ID AND pm.meta_key = '_nj_pauta_source_published_at'
+        ORDER BY pm.meta_id DESC LIMIT 1
+    ), '') AS source_published_at,
+    COALESCE((
+        SELECT pm.meta_value FROM {$postmeta} pm
+        WHERE pm.post_id = p.ID AND pm.meta_key = '_nj_pauta_captured_at'
+        ORDER BY pm.meta_id DESC LIMIT 1
+    ), '') AS captured_at,
+    COALESCE((
+        SELECT pm.meta_value FROM {$postmeta} pm
         WHERE pm.post_id = p.ID AND pm.meta_key = '_nj_pauta_deadline'
         ORDER BY pm.meta_id DESC LIMIT 1
     ), '') AS deadline,
@@ -545,8 +604,20 @@ SQL)->fetchAll();
         }
     }
 
+    $lastReviewAt = nj_pautas_last_review_at($pdo);
+    $lastReviewTimestamp = $lastReviewAt !== '' ? strtotime($lastReviewAt) : false;
+
     $items = [];
     foreach ($rows as $row) {
+        $capturedAt = trim((string) $row['captured_at']);
+        $effectiveArrival = $capturedAt !== ''
+            ? $capturedAt
+            : (string) $row['created_at'];
+        $arrivalTimestamp = strtotime($effectiveArrival);
+        $isNew = $lastReviewTimestamp === false
+            ? true
+            : ($arrivalTimestamp !== false && $arrivalTimestamp > $lastReviewTimestamp);
+
         $items[] = [
             'id' => (int) $row['id'],
             'title' => (string) $row['title'],
@@ -556,6 +627,10 @@ SQL)->fetchAll();
             'topic' => (string) $row['topic'],
             'sourceName' => (string) $row['source_name'],
             'sourceUrl' => (string) $row['source_url'],
+            'feedUrl' => (string) $row['feed_url'],
+            'sourcePublishedAt' => (string) $row['source_published_at'],
+            'capturedAt' => $capturedAt,
+            'isNew' => $isNew,
             'deadline' => (string) $row['deadline'],
             'assigneeId' => (int) $row['assignee_id'],
             'assignee' => $assignees[(int) $row['assignee_id']] ?? (string) $row['author_name'],
@@ -583,6 +658,7 @@ nj_admin_run(['GET', 'POST'], static function (string $method): array {
             'pipeline' => ['Entrada', 'Selecionada', 'Apuração', 'Pronta', 'Em redação'],
             'sources' => nj_pautas_sources_with_health($pdo),
             'items' => nj_pautas_items($pdo),
+            'lastReviewAt' => nj_pautas_last_review_at($pdo),
             'assignees' => nj_pautas_assignees($pdo),
         ];
     }
@@ -592,11 +668,21 @@ nj_admin_run(['GET', 'POST'], static function (string $method): array {
     $action = trim((string) ($body['action'] ?? 'save'));
     $posts = nj_table('posts');
 
-    if (!in_array($action, ['save', 'trash', 'to_draft', 'capture'], true)) {
+    if (!in_array($action, ['save', 'trash', 'to_draft', 'capture', 'mark_reviewed'], true)) {
         throw new NjApiHttpException(422, 'invalid_pauta_action');
     }
 
     $pautaId = max(0, (int) ($body['pautaId'] ?? 0));
+
+    if ($action === 'mark_reviewed') {
+        $lastReviewAt = nj_pautas_mark_reviewed($pdo);
+
+        return [
+            'items' => nj_pautas_items($pdo),
+            'lastReviewAt' => $lastReviewAt,
+            'draft' => null,
+        ];
+    }
 
     if ($action === 'capture') {
         $feedUrl = trim((string) ($body['feedUrl'] ?? ''));
@@ -656,6 +742,7 @@ nj_admin_run(['GET', 'POST'], static function (string $method): array {
         return [
             'items' => nj_pautas_items($pdo),
             'sources' => nj_pautas_sources_with_health($pdo),
+            'lastReviewAt' => nj_pautas_last_review_at($pdo),
             'captured' => $captured,
             'captureFailures' => 0,
             'draft' => null,
