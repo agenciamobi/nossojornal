@@ -768,7 +768,7 @@ function DashboardView({ user }: { user: AdminUser }) {
                   <span className={'admin-status admin-status--' + post.status}>
                     {statusLabel(post.status)}
                   </span>
-                  <h3>{post.title}</h3>
+                  <h3><a href={'/sistema/noticias/' + post.id}>{post.title}</a></h3>
                   <p>
                     {typeof post.author === 'string' ? post.author : post.author.name}
                     {' • '}
@@ -799,7 +799,7 @@ function DashboardView({ user }: { user: AdminUser }) {
           </div>
 
           <dl className="admin-system-list">
-            <div><dt>Posts totais</dt><dd>{data.summary.posts.total}</dd></div>
+            <div><dt>Notícias</dt><dd>{data.summary.posts.total}</dd></div>
             <div><dt>Pendentes</dt><dd>{data.summary.posts.pending}</dd></div>
             <div><dt>Agendados</dt><dd>{data.summary.posts.future}</dd></div>
             <div><dt>Comentários pendentes</dt><dd>{data.summary.comments.pending}</dd></div>
@@ -2529,7 +2529,7 @@ function PautasView() {
         description="Radar editorial para Pelotas, tecnologia, inteligência artificial, universo, ciência e temas correlatos."
       />
 
-      <section className="admin-pautas-summary" aria-label="Estado da Mesa de Pautas">
+      <section className="admin-pautas-summary" aria-label="Resumo da Mesa de Pautas">
         <div>
           <span>Fontes</span>
           <strong>{data.sources.length}</strong>
@@ -2539,8 +2539,8 @@ function PautasView() {
           <strong>{categories.length}</strong>
         </div>
         <div>
-          <span>Fila</span>
-          <strong>Ativa</strong>
+          <span>Fluxo</span>
+          <strong>{data.pipeline.length} etapas</strong>
         </div>
       </section>
 
@@ -2566,7 +2566,7 @@ function PautasView() {
         <div className="admin-widget__head">
           <div>
             <span>RSS</span>
-            <h2>Catálogo inicial de fontes</h2>
+            <h2>Fontes monitoradas</h2>
           </div>
 
         </div>
@@ -2577,7 +2577,7 @@ function PautasView() {
               <div>
                 <span className="admin-pautas-source__category">{source.category}</span>
                 <h3>{source.name}</h3>
-                <p>{source.kind} • prioridade {source.priority}</p>
+                <p>{source.kind} • prioridade editorial {source.priority}</p>
               </div>
 
               <a
@@ -2718,12 +2718,13 @@ export function AdminApp() {
         <main className="admin-content">
           {view === 'dashboard' && <DashboardView user={user} />}
           {view === 'posts' && <PostsView csrfToken={csrfToken} />}
-          {view === 'post' && <PostEditorView csrfToken={csrfToken} />}
+          {view === 'post' && <PostEditorView user={user} csrfToken={csrfToken} />}
           {view === 'categories' && <CategoriesView />}
           {view === 'category' && <CategoryEditorView csrfToken={csrfToken} />}
-          {view === 'media' && <MediaView />}
+          {view === 'media' && <MediaView csrfToken={csrfToken} />}
           {view === 'users' && <UsersView />}
-          {view === 'settings' && <SettingsView />}
+          {view === 'user' && <UserEditorView csrfToken={csrfToken} />}
+          {view === 'settings' && <SettingsView csrfToken={csrfToken} />}
           {view === 'pautas' && (
             user.login === 'agenciamobi' && user.permissions.managePautas
               ? <PautasView />
