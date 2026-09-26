@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { CSSProperties } from 'react';
 import { SiteHeader } from './Header';
 import { InternalPage, resolvePublicRoute } from './InternalPages';
 import { SiteFooter } from './SiteFooter';
@@ -12,6 +13,7 @@ type Category = {
   slug: string;
   parentId: number | null;
   url: string;
+  color: string;
 };
 
 type FeaturedImage = {
@@ -117,13 +119,23 @@ function StoryMeta({ article, showViews = false }: { article: Article; showViews
   );
 }
 
+function editorialStyle(color?: string) {
+  return color
+    ? ({ '--editorial-color': color } as CSSProperties)
+    : undefined;
+}
+
 function CategoryBadge({ category }: { category: Category | null }) {
   if (!category) {
     return <span className="home-eyebrow">Nosso Jornal</span>;
   }
 
   return (
-    <a className="home-eyebrow" href={category.url}>
+    <a
+      className="home-eyebrow"
+      href={category.url}
+      style={editorialStyle(category.color)}
+    >
       {category.name}
     </a>
   );
@@ -223,7 +235,10 @@ export function App() {
       {state === 'ready' && hero && (
         <main className="home-main">
           <section className="container home-cover" aria-labelledby="home-cover-title">
-            <article className="home-hero">
+            <article
+              className="home-hero"
+              style={editorialStyle(hero.primaryCategory?.color)}
+            >
               <a href={hero.url} className="home-hero__media-link" aria-label={hero.title}>
                 <StoryMedia article={hero} className="home-hero__media" />
               </a>
@@ -330,6 +345,7 @@ export function App() {
               className="home-category-section"
               key={section.category.id}
               aria-labelledby={`section-${section.category.slug}`}
+              style={editorialStyle(section.category.color)}
             >
               <div className="container">
                 <div className="home-section-heading">
