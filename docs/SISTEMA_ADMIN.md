@@ -1686,3 +1686,23 @@ Notícias e Páginas exibem um diagnóstico em tempo real durante a edição.
 A camada informa tempo estimado de leitura, palavras, tamanho de título e resumo, estrutura por subtítulos, quantidade de links e imagens, ausência de texto alternativo e referências externas. Também apresenta prévia de busca e contadores dos campos SEO.
 
 Ações rápidas permitem gerar o slug pelo título e copiar título/resumo para os metadados SEO. Nenhuma dessas ações publica ou reescreve conteúdo automaticamente.
+
+
+## Metadados editoriais de magazine
+
+A tela de Notícias possui uma camada adicional de apresentação e distribuição editorial persistida em `_nj_*` no mesmo `postmeta` do banco existente.
+
+Campos disponíveis:
+
+- tipo editorial;
+- chapéu;
+- linha fina;
+- local/dateline;
+- coautores;
+- crédito e legenda da imagem destacada;
+- fonte original;
+- canonical personalizado;
+- título social;
+- descrição social.
+
+Esses dados são validados pela API administrativa e expostos pela API pública de artigos. O portal usa os valores quando presentes e mantém fallback para título, resumo, categoria e URL padrão quando estiverem vazios.
