@@ -237,11 +237,6 @@ try {
         $meta['title'] = 'Contato';
         $meta['description'] = 'Fale com a redação e com o setor comercial do Nosso Jornal.';
         $meta['canonical'] = '/contato';
-    } elseif ($path === '/sistema' || str_starts_with($path, '/sistema/')) {
-        $meta['title'] = 'Sistema';
-        $meta['description'] = 'Painel administrativo do Nosso Jornal.';
-        $meta['canonical'] = '/sistema';
-        $meta['robots'] = 'noindex,nofollow';
     } elseif ($path === '/busca') {
         $meta['title'] = 'Buscar no Nosso Jornal';
         $meta['description'] = 'Pesquisa no acervo de notícias do Nosso Jornal.';
