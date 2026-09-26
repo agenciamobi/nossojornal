@@ -46,7 +46,15 @@ SELECT
           AND file.meta_key = '_wp_attached_file'
         ORDER BY file.meta_id DESC
         LIMIT 1
-    ), '') AS attached_file
+    ), '') AS attached_file,
+    COALESCE((
+        SELECT metadata.meta_value
+        FROM {$postmeta} metadata
+        WHERE metadata.post_id = p.ID
+          AND metadata.meta_key = '_wp_attachment_metadata'
+        ORDER BY metadata.meta_id DESC
+        LIMIT 1
+    ), '') AS attachment_metadata
 FROM {$posts} p
 WHERE
     p.ID = :id
@@ -60,11 +68,16 @@ SQL);
         throw new NjApiHttpException(404, 'media_not_found');
     }
 
-    $url = (string) $row['guid'];
-    $path = parse_url($url, PHP_URL_PATH);
-    $publicUrl = is_string($path) && str_starts_with($path, '/wp-content/uploads/')
-        ? $path
-        : $url;
+    $image = nj_media_descriptor(
+        (string) $row['guid'],
+        (string) $row['attached_file'],
+        (string) $row['attachment_metadata'],
+        (string) $row['alt_text'],
+        (string) $row['title']
+    );
+    $publicUrl = is_array($image)
+        ? (string) $image['url']
+        : nj_media_local_url((string) $row['guid']);
 
     $usageStatement = $pdo->prepare(<<<SQL
 SELECT
@@ -109,7 +122,13 @@ SQL);
             'description' => (string) $row['description'],
             'mimeType' => (string) $row['mime_type'],
             'url' => $publicUrl,
-            'alt' => (string) $row['alt_text'],
+            'alt' => is_array($image)
+                ? (string) $image['alt']
+                : (string) $row['alt_text'],
+            'width' => is_array($image) ? $image['width'] : null,
+            'height' => is_array($image) ? $image['height'] : null,
+            'srcSet' => is_array($image) ? (string) $image['srcSet'] : '',
+            'variants' => is_array($image) ? $image['variants'] : [],
             'attachedFile' => (string) $row['attached_file'],
             'createdAt' => nj_content_iso8601((string) $row['created_at']),
             'modifiedAt' => nj_content_iso8601((string) $row['modified_at']),
