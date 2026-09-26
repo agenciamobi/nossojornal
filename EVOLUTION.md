@@ -3092,3 +3092,54 @@ No mobile:
 - as interações mantêm `prefers-reduced-motion`.
 
 A mudança reutiliza o sistema cromático existente e não cria uma segunda fonte de cores.
+
+## 55. Sistema visual das editorias em arquivos e matérias
+
+A identidade cromática deixa de terminar na homepage e passa a acompanhar o leitor pela página da editoria e pela matéria.
+
+### Página da editoria
+
+O arquivo de categoria passa a usar a mesma gramática adotada na home:
+
+```text
+EDITORIA
+[Título da editoria]────────────────────────────
+descrição                         [N publicações]
+```
+
+O título usa a cor real da categoria como fundo e a régua horizontal compartilha a mesma cor.
+
+O texto do título usa `--editorial-contrast`, calculado a partir da luminância da cor cadastrada.
+
+### Navegação e arquivo
+
+O contexto cromático também alcança:
+
+- hover do breadcrumb;
+- contador de publicações;
+- filete superior do grid;
+- kicker dos cards;
+- hover/focus das manchetes;
+- acento inferior dos cards;
+- paginação.
+
+Os cards continuam usando a cor de sua própria categoria primária quando ela divergir da editoria filtrada.
+
+### Matéria
+
+A matéria já possuía `--editorial-color` da categoria primária. Esta rodada amplia seu uso para:
+
+- links de autores;
+- botão de compartilhamento;
+- breadcrumbs;
+- títulos auxiliares de seções relacionadas.
+
+A cor continua sendo acento. Corpo, manchete e grandes superfícies permanecem neutros para preservar legibilidade e identidade-base do Nosso Jornal.
+
+### Responsividade e acessibilidade
+
+No mobile, o título cromático respeita a largura do viewport e o resumo/contador empilham.
+
+Os novos efeitos de card respeitam `prefers-reduced-motion`.
+
+A cor nunca é o único sinal de estado: textos, hierarquia, bordas e labels continuam presentes.
