@@ -5,6 +5,8 @@ require __DIR__ . '/_admin.php';
 
 nj_admin_run(['GET'], static function (): array {
     $user = nj_admin_current_user(true);
+    nj_admin_require_capability($user, 'edit_posts');
+
     $pdo = nj_db();
 
     $posts = nj_table('posts');
