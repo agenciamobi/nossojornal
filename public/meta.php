@@ -80,24 +80,45 @@ SELECT meta_key, meta_value
 FROM {$postmeta}
 WHERE
     post_id = :post_id
-    AND meta_key IN ('_yoast_wpseo_title', '_yoast_wpseo_metadesc')
+    AND meta_key IN (
+        '_yoast_wpseo_title',
+        '_yoast_wpseo_metadesc',
+        '_nj_original_source_url',
+        '_nj_provenance_mode',
+        '_nj_provenance_source_name'
+    )
+ORDER BY meta_id DESC
 SQL);
     $metaStatement->execute(['post_id' => $article['id']]);
 
-    $yoast = [
-        'title' => '',
-        'description' => '',
-    ];
-
+    $metaValues = [];
     foreach ($metaStatement->fetchAll() as $meta) {
-        if ($meta['meta_key'] === '_yoast_wpseo_title') {
-            $yoast['title'] = nj_content_clean_text_source((string) $meta['meta_value']);
-        }
-
-        if ($meta['meta_key'] === '_yoast_wpseo_metadesc') {
-            $yoast['description'] = nj_content_excerpt((string) $meta['meta_value'], '', 240);
+        $key = (string) $meta['meta_key'];
+        if (!array_key_exists($key, $metaValues)) {
+            $metaValues[$key] = (string) $meta['meta_value'];
         }
     }
+
+    $yoast = [
+        'title' => nj_content_clean_text_source((string) ($metaValues['_yoast_wpseo_title'] ?? '')),
+        'description' => nj_content_excerpt((string) ($metaValues['_yoast_wpseo_metadesc'] ?? ''), '', 240),
+    ];
+
+    $provenanceMode = (string) ($metaValues['_nj_provenance_mode'] ?? 'original');
+    if (!in_array($provenanceMode, ['original', 'adapted', 'republished'], true)) {
+        $provenanceMode = 'original';
+    }
+
+    $article['originalSourceUrl'] = filter_var(
+        (string) ($metaValues['_nj_original_source_url'] ?? ''),
+        FILTER_VALIDATE_URL
+    )
+        ? (string) $metaValues['_nj_original_source_url']
+        : '';
+    $article['provenanceMode'] = $provenanceMode;
+    $article['provenanceSourceName'] = nj_content_clean_text_source(
+        (string) ($metaValues['_nj_provenance_source_name'] ?? '')
+    );
 
     $article['seoTitle'] = $yoast['title'] !== '' ? $yoast['title'] : $article['title'];
     $article['seoDescription'] = $yoast['description'] !== ''
