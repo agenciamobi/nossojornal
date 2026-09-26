@@ -1353,6 +1353,20 @@
   color: #646970;
 }
 
+.admin-feed-disabled {
+  display: inline-flex;
+  min-height: 20px;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0 7px;
+  background: #fff8e5;
+  color: #8a5a00;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: .03em;
+}
+
+
 .admin-feed-health__meta {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -4177,8 +4191,66 @@
     align-items: flex-start;
     flex-direction: column;
   }
+
+  .admin-pautas-radar__actions {
+    width: 100%;
+    align-items: stretch;
+  }
+
+  .admin-pautas-radar__actions button {
+    flex: 1;
+  }
+
+  .admin-feed-editor__fields {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-feed-editor__url {
+    grid-column: auto;
+  }
+
+  .admin-feed-editor > footer {
+    align-items: stretch;
+    flex-wrap: wrap;
+  }
+
+  .admin-feed-editor > footer > span {
+    display: none;
+  }
+
+  .admin-feed-editor > footer button {
+    flex: 1;
+  }
 }
 
+
+.admin-pautas-radar__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-radar-add,
+.admin-radar-capture {
+  min-height: 31px;
+  border-radius: 3px;
+  padding: 0 10px;
+  font-size: 9px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.admin-radar-add {
+  border: 1px solid #8c8f94;
+  background: #fff;
+  color: #2c3338;
+}
+
+.admin-radar-add:hover,
+.admin-radar-add:focus-visible {
+  border-color: #2271b1;
+  color: #135e96;
+}
 
 .admin-radar-capture {
   min-height: 31px;
@@ -4192,11 +4264,164 @@
   cursor: pointer;
 }
 
+.admin-radar-add:disabled,
 .admin-radar-capture:disabled {
   border-color: #c3c4c7;
   background: #dcdcde;
   color: #8c8f94;
   cursor: wait;
+}
+
+.admin-feed-editor {
+  margin: -1px 0 0;
+  border-top: 1px solid #dcdcde;
+  border-bottom: 1px solid #dcdcde;
+  background: #fbfbfc;
+}
+
+.admin-feed-editor__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 13px 16px;
+  border-bottom: 1px solid #e2e4e7;
+}
+
+.admin-feed-editor__head > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.admin-feed-editor__head span {
+  color: #787c82;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.admin-feed-editor__head strong {
+  color: #1d2327;
+  font-size: 12px;
+}
+
+.admin-feed-editor__head > button {
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 50%;
+  background: #f0f0f1;
+  color: #50575e;
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.admin-feed-editor__fields {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  padding: 14px 16px;
+}
+
+.admin-feed-editor__fields label {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+
+.admin-feed-editor__fields label > span {
+  color: #50575e;
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.admin-feed-editor__fields input,
+.admin-feed-editor__fields select {
+  width: 100%;
+  min-width: 0;
+  min-height: 34px;
+  border: 1px solid #8c8f94;
+  border-radius: 3px;
+  padding: 0 9px;
+  background: #fff;
+  color: #1d2327;
+  font: inherit;
+  font-size: 9px;
+}
+
+.admin-feed-editor__fields input:focus,
+.admin-feed-editor__fields select:focus {
+  border-color: #2271b1;
+  box-shadow: 0 0 0 1px #2271b1;
+  outline: 0;
+}
+
+.admin-feed-editor__url {
+  grid-column: span 2;
+}
+
+.admin-feed-editor__url small {
+  color: #787c82;
+  font-size: 7px;
+  line-height: 1.45;
+}
+
+.admin-feed-editor__enabled {
+  align-self: end;
+  display: flex !important;
+  align-items: center;
+  grid-auto-flow: column;
+  justify-content: start;
+}
+
+.admin-feed-editor__enabled input {
+  width: auto;
+  min-height: 0;
+  margin: 0;
+}
+
+.admin-feed-editor > footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 16px 14px;
+  border-top: 1px solid #e2e4e7;
+}
+
+.admin-feed-editor > footer > span {
+  flex: 1;
+}
+
+.admin-feed-editor > footer button {
+  min-height: 32px;
+  border: 1px solid #8c8f94;
+  border-radius: 3px;
+  padding: 0 10px;
+  background: #fff;
+  color: #2c3338;
+  font-size: 8px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.admin-feed-editor > footer .admin-button--primary {
+  border-color: #2271b1;
+  background: #2271b1;
+  color: #fff;
+}
+
+.admin-feed-editor > footer .danger {
+  border-color: #d63638;
+  color: #b32d2e;
+}
+
+.admin-feed-editor > footer button:disabled {
+  border-color: #c3c4c7;
+  background: #f0f0f1;
+  color: #8c8f94;
+  cursor: not-allowed;
 }
 
 .admin-radar-result {

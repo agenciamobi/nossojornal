@@ -18,6 +18,7 @@ const NJ_PAUTA_META_DEADLINE = '_nj_pauta_deadline';
 const NJ_PAUTA_META_ASSIGNEE = '_nj_pauta_assignee';
 const NJ_PAUTA_META_DRAFT_ID = '_nj_pauta_draft_post_id';
 const NJ_PAUTA_FEED_STATE_OPTION = 'nj_pautas_feed_state';
+const NJ_PAUTA_FEED_CATALOG_OPTION = 'nj_pautas_feed_catalog';
 const NJ_PAUTA_LAST_REVIEW_OPTION = 'nj_pautas_last_review_at';
 
 function nj_pautas_feed_state(PDO $pdo): array
@@ -137,22 +138,95 @@ function nj_pautas_feed_state_public(array $source, array $state): array
     ];
 }
 
-function nj_pautas_sources_with_health(PDO $pdo): array
+function nj_pautas_feed_url_shape(string $url): ?array
 {
-    $state = nj_pautas_feed_state($pdo);
+    $url = trim($url);
+    if ($url === '' || strlen($url) > 1000) {
+        return null;
+    }
 
-    return array_map(
-        static function (array $source) use ($state): array {
-            $source['health'] = nj_pautas_feed_state_public($source, $state);
-            return $source;
-        },
-        nj_pautas_sources()
-    );
+    $parts = parse_url($url);
+    if (!is_array($parts)) {
+        return null;
+    }
+
+    $scheme = strtolower((string) ($parts['scheme'] ?? ''));
+    $host = strtolower((string) ($parts['host'] ?? ''));
+    $port = isset($parts['port']) ? (int) $parts['port'] : 443;
+
+    if (
+        $scheme !== 'https'
+        || $host === ''
+        || $port !== 443
+        || isset($parts['user'])
+        || isset($parts['pass'])
+    ) {
+        return null;
+    }
+
+    if (
+        $host === 'localhost'
+        || str_ends_with($host, '.localhost')
+        || preg_match('/[^a-z0-9.:-]/', $host) === 1
+    ) {
+        return null;
+    }
+
+    return [
+        'url' => $url,
+        'host' => $host,
+    ];
 }
 
-function nj_pautas_sources(): array
+function nj_pautas_public_ipv4(string $ip): bool
 {
+    return filter_var(
+        $ip,
+        FILTER_VALIDATE_IP,
+        FILTER_FLAG_IPV4 | FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE
+    ) !== false;
+}
+
+function nj_pautas_validate_feed_url(string $url): array
+{
+    $shape = nj_pautas_feed_url_shape($url);
+    if (!is_array($shape)) {
+        throw new NjApiHttpException(422, 'invalid_feed_url');
+    }
+
+    $host = (string) $shape['host'];
+    $resolvedIp = '';
+
+    if (filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) !== false) {
+        if (!nj_pautas_public_ipv4($host)) {
+            throw new NjApiHttpException(422, 'feed_host_not_public');
+        }
+        $resolvedIp = $host;
+    } else {
+        $ips = gethostbynamel($host);
+        if (!is_array($ips) || $ips === []) {
+            throw new NjApiHttpException(422, 'feed_host_unresolved');
+        }
+
+        foreach ($ips as $ip) {
+            if (!nj_pautas_public_ipv4((string) $ip)) {
+                throw new NjApiHttpException(422, 'feed_host_not_public');
+            }
+        }
+
+        $resolvedIp = (string) $ips[0];
+    }
+
     return [
+        'url' => (string) $shape['url'],
+        'host' => $host,
+        'ip' => $resolvedIp,
+    ];
+}
+
+function nj_pautas_default_sources(): array
+{
+    $sources = [
         ['name' => 'Jornal Tradição', 'category' => 'Pelotas', 'feedUrl' => 'https://www.jornaltradicao.com.br/pelotas/feed/', 'kind' => 'jornalística', 'priority' => 90],
         ['name' => 'Google News: Pelotas', 'category' => 'Pelotas', 'feedUrl' => 'https://news.google.com/rss/search?q=Pelotas&hl=pt-BR&gl=BR&ceid=BR:pt-419', 'kind' => 'agregador', 'priority' => 70],
         ['name' => 'Tecnoblog', 'category' => 'Tecnologia BR', 'feedUrl' => 'https://tecnoblog.net/feed/', 'kind' => 'jornalística', 'priority' => 85],
@@ -173,6 +247,147 @@ function nj_pautas_sources(): array
         ['name' => 'ScienceDaily: Strange & Offbeat', 'category' => 'Curiosidades', 'feedUrl' => 'https://www.sciencedaily.com/rss/strange_offbeat.xml', 'kind' => 'jornalística', 'priority' => 75],
         ['name' => 'arXiv cs.AI', 'category' => 'Pesquisa IA', 'feedUrl' => 'https://rss.arxiv.org/rss/cs.AI', 'kind' => 'radar', 'priority' => 65],
     ];
+
+    return array_map(
+        static function (array $source): array {
+            $source['id'] = 'default-' . substr(hash('sha256', (string) $source['feedUrl']), 0, 16);
+            $source['enabled'] = true;
+            return $source;
+        },
+        $sources
+    );
+}
+
+function nj_pautas_catalog_source(array $source): ?array
+{
+    $id = trim((string) ($source['id'] ?? ''));
+    $name = trim((string) ($source['name'] ?? ''));
+    $category = trim((string) ($source['category'] ?? ''));
+    $feedUrl = trim((string) ($source['feedUrl'] ?? ''));
+    $kind = trim((string) ($source['kind'] ?? ''));
+    $allowedKinds = ['fonte primária', 'jornalística', 'agregador', 'radar'];
+    if (!in_array($kind, $allowedKinds, true)) {
+        $kind = 'jornalística';
+    }
+    $priority = max(0, min(100, (int) ($source['priority'] ?? 70)));
+    $enabled = ($source['enabled'] ?? true) === true;
+
+    if (
+        $id === ''
+        || preg_match('/^[a-z0-9-]{8,80}$/', $id) !== 1
+        || $name === ''
+        || strlen($name) > 250
+        || strlen($category) > 160
+        || strlen($kind) > 120
+        || !is_array(nj_pautas_feed_url_shape($feedUrl))
+    ) {
+        return null;
+    }
+
+    return [
+        'id' => $id,
+        'name' => $name,
+        'category' => $category,
+        'feedUrl' => $feedUrl,
+        'kind' => $kind !== '' ? $kind : 'jornalística',
+        'priority' => $priority,
+        'enabled' => $enabled,
+    ];
+}
+
+function nj_pautas_sources(PDO $pdo): array
+{
+    $options = nj_table('options');
+    $statement = $pdo->prepare(
+        "SELECT option_value
+         FROM {$options}
+         WHERE option_name = :name
+         LIMIT 1"
+    );
+    $statement->execute(['name' => NJ_PAUTA_FEED_CATALOG_OPTION]);
+    $raw = $statement->fetchColumn();
+
+    if (!is_string($raw) || trim($raw) === '') {
+        return nj_pautas_default_sources();
+    }
+
+    $decoded = json_decode($raw, true);
+    if (!is_array($decoded)) {
+        return nj_pautas_default_sources();
+    }
+
+    $sources = [];
+    foreach ($decoded as $source) {
+        if (!is_array($source)) {
+            continue;
+        }
+
+        $normalized = nj_pautas_catalog_source($source);
+        if (is_array($normalized)) {
+            $sources[] = $normalized;
+        }
+
+        if (count($sources) >= 100) {
+            break;
+        }
+    }
+
+    return $sources;
+}
+
+function nj_pautas_save_sources(PDO $pdo, array $sources): void
+{
+    if (count($sources) > 100) {
+        throw new NjApiHttpException(422, 'too_many_feeds');
+    }
+
+    $normalized = [];
+    foreach ($sources as $source) {
+        if (!is_array($source)) {
+            continue;
+        }
+
+        $item = nj_pautas_catalog_source($source);
+        if (!is_array($item)) {
+            throw new NjApiHttpException(422, 'invalid_feed_catalog');
+        }
+
+        $normalized[] = $item;
+    }
+
+    $encoded = json_encode(
+        $normalized,
+        JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE
+    );
+    if (!is_string($encoded)) {
+        throw new RuntimeException('feed_catalog_encode_failed');
+    }
+
+    $options = nj_table('options');
+    $statement = $pdo->prepare(<<<SQL
+INSERT INTO {$options} (option_name, option_value, autoload)
+VALUES (:name, :value, 'no')
+ON DUPLICATE KEY UPDATE
+    option_value = VALUES(option_value),
+    autoload = 'no'
+SQL);
+    $statement->execute([
+        'name' => NJ_PAUTA_FEED_CATALOG_OPTION,
+        'value' => $encoded,
+    ]);
+}
+
+function nj_pautas_sources_with_health(PDO $pdo): array
+{
+    $state = nj_pautas_feed_state($pdo);
+
+    return array_map(
+        static function (array $source) use ($state): array {
+            $source['health'] = nj_pautas_feed_state_public($source, $state);
+            return $source;
+        },
+        nj_pautas_sources($pdo)
+    );
 }
 
 function nj_pautas_datetime(mixed $value): string
@@ -224,6 +439,9 @@ function nj_pautas_assignees(PDO $pdo): array
 
 function nj_pautas_fetch_feed(string $url): array
 {
+    $target = nj_pautas_validate_feed_url($url);
+    $url = (string) $target['url'];
+
     if (function_exists('curl_init')) {
         $curl = curl_init($url);
         if ($curl === false) {
@@ -240,6 +458,18 @@ function nj_pautas_fetch_feed(string $url): array
             CURLOPT_HTTPHEADER => ['Accept: application/rss+xml, application/atom+xml, application/xml, text/xml'],
         ]);
 
+        if (defined('CURLOPT_RESOLVE')) {
+            curl_setopt(
+                $curl,
+                CURLOPT_RESOLVE,
+                [(string) $target['host'] . ':443:' . (string) $target['ip']]
+            );
+        }
+
+        if (defined('CURLOPT_PROTOCOLS') && defined('CURLPROTO_HTTPS')) {
+            curl_setopt($curl, CURLOPT_PROTOCOLS, CURLPROTO_HTTPS);
+        }
+
         $startedAt = microtime(true);
         $body = curl_exec($curl);
         $durationMs = max(0, (int) round((microtime(true) - $startedAt) * 1000));
@@ -250,6 +480,10 @@ function nj_pautas_fetch_feed(string $url): array
         if (!is_string($body) || $body === '' || $status < 200 || $status >= 400) {
             error_log('[nossojornal-pautas] feed=' . $url . ' status=' . $status . ' error=' . $error);
             throw new NjApiHttpException(502, 'feed_fetch_failed');
+        }
+
+        if (strlen($body) > 2 * 1024 * 1024) {
+            throw new NjApiHttpException(422, 'feed_too_large');
         }
 
         return [
@@ -275,6 +509,10 @@ function nj_pautas_fetch_feed(string $url): array
 
     if (!is_string($body) || $body === '') {
         throw new NjApiHttpException(502, 'feed_fetch_failed');
+    }
+
+    if (strlen($body) > 2 * 1024 * 1024) {
+        throw new NjApiHttpException(422, 'feed_too_large');
     }
 
     $status = 200;
@@ -668,11 +906,131 @@ nj_admin_run(['GET', 'POST'], static function (string $method): array {
     $action = trim((string) ($body['action'] ?? 'save'));
     $posts = nj_table('posts');
 
-    if (!in_array($action, ['save', 'trash', 'to_draft', 'capture', 'mark_reviewed'], true)) {
+    if (!in_array(
+        $action,
+        ['save', 'trash', 'to_draft', 'capture', 'mark_reviewed', 'feed_save', 'feed_delete'],
+        true
+    )) {
         throw new NjApiHttpException(422, 'invalid_pauta_action');
     }
 
     $pautaId = max(0, (int) ($body['pautaId'] ?? 0));
+
+    if ($action === 'feed_save') {
+        $input = is_array($body['feed'] ?? null) ? $body['feed'] : [];
+        $feedId = trim((string) ($input['id'] ?? ''));
+        $name = trim((string) ($input['name'] ?? ''));
+        $category = trim((string) ($input['category'] ?? ''));
+        $kind = trim((string) ($input['kind'] ?? 'jornalística'));
+        if (!in_array($kind, ['fonte primária', 'jornalística', 'agregador', 'radar'], true)) {
+            throw new NjApiHttpException(422, 'invalid_feed_kind');
+        }
+        $priority = max(0, min(100, (int) ($input['priority'] ?? 70)));
+        $enabled = ($input['enabled'] ?? true) === true;
+        $target = nj_pautas_validate_feed_url((string) ($input['feedUrl'] ?? ''));
+        $feedUrl = (string) $target['url'];
+
+        if (
+            $name === ''
+            || strlen($name) > 250
+            || strlen($category) > 160
+            || strlen($kind) > 120
+        ) {
+            throw new NjApiHttpException(422, 'invalid_feed_definition');
+        }
+
+        $sources = nj_pautas_sources($pdo);
+        $existingIndex = null;
+
+        foreach ($sources as $index => $source) {
+            if (
+                (string) $source['feedUrl'] === $feedUrl
+                && ($feedId === '' || (string) $source['id'] !== $feedId)
+            ) {
+                throw new NjApiHttpException(409, 'feed_already_exists');
+            }
+
+            if ($feedId !== '' && hash_equals((string) $source['id'], $feedId)) {
+                $existingIndex = $index;
+            }
+        }
+
+        if ($feedId !== '' && $existingIndex === null) {
+            throw new NjApiHttpException(404, 'feed_not_found');
+        }
+
+        if ($feedId === '') {
+            $feedId = 'feed-' . bin2hex(random_bytes(8));
+        }
+
+        $definition = [
+            'id' => $feedId,
+            'name' => $name,
+            'category' => $category,
+            'feedUrl' => $feedUrl,
+            'kind' => $kind !== '' ? $kind : 'jornalística',
+            'priority' => $priority,
+            'enabled' => $enabled,
+        ];
+
+        if ($existingIndex === null) {
+            $sources[] = $definition;
+        } else {
+            $oldUrl = (string) $sources[$existingIndex]['feedUrl'];
+            $sources[$existingIndex] = $definition;
+
+            if ($oldUrl !== $feedUrl) {
+                $state = nj_pautas_feed_state($pdo);
+                unset($state[nj_pautas_feed_state_key($oldUrl)]);
+                nj_pautas_save_feed_state($pdo, $state);
+            }
+        }
+
+        nj_pautas_save_sources($pdo, $sources);
+
+        return [
+            'sources' => nj_pautas_sources_with_health($pdo),
+            'items' => nj_pautas_items($pdo),
+            'lastReviewAt' => nj_pautas_last_review_at($pdo),
+            'draft' => null,
+        ];
+    }
+
+    if ($action === 'feed_delete') {
+        $feedId = trim((string) ($body['feedId'] ?? ''));
+        if ($feedId === '') {
+            throw new NjApiHttpException(422, 'feed_id_required');
+        }
+
+        $sources = nj_pautas_sources($pdo);
+        $remaining = [];
+        $deletedUrl = '';
+
+        foreach ($sources as $source) {
+            if (hash_equals((string) $source['id'], $feedId)) {
+                $deletedUrl = (string) $source['feedUrl'];
+                continue;
+            }
+            $remaining[] = $source;
+        }
+
+        if ($deletedUrl === '') {
+            throw new NjApiHttpException(404, 'feed_not_found');
+        }
+
+        nj_pautas_save_sources($pdo, $remaining);
+
+        $state = nj_pautas_feed_state($pdo);
+        unset($state[nj_pautas_feed_state_key($deletedUrl)]);
+        nj_pautas_save_feed_state($pdo, $state);
+
+        return [
+            'sources' => nj_pautas_sources_with_health($pdo),
+            'items' => nj_pautas_items($pdo),
+            'lastReviewAt' => nj_pautas_last_review_at($pdo),
+            'draft' => null,
+        ];
+    }
 
     if ($action === 'mark_reviewed') {
         $lastReviewAt = nj_pautas_mark_reviewed($pdo);
@@ -692,7 +1050,7 @@ nj_admin_run(['GET', 'POST'], static function (string $method): array {
         }
 
         $selectedSource = null;
-        foreach (nj_pautas_sources() as $source) {
+        foreach (nj_pautas_sources($pdo) as $source) {
             if (hash_equals((string) $source['feedUrl'], $feedUrl)) {
                 $selectedSource = $source;
                 break;
@@ -701,6 +1059,10 @@ nj_admin_run(['GET', 'POST'], static function (string $method): array {
 
         if (!is_array($selectedSource)) {
             throw new NjApiHttpException(422, 'feed_not_allowed');
+        }
+
+        if (($selectedSource['enabled'] ?? false) !== true) {
+            throw new NjApiHttpException(422, 'feed_disabled');
         }
 
         $feedUrl = (string) $selectedSource['feedUrl'];
