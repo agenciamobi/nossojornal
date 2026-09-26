@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
+import type { CSSProperties } from 'react';
 import { cleanLegacyText } from './contentText';
 import './pages.css';
 
@@ -9,6 +10,7 @@ type Category = {
   slug: string;
   parentId: number | null;
   url: string;
+  color: string;
 };
 
 type FeaturedImage = {
@@ -267,6 +269,12 @@ function formatWhatsappNumber(value: string) {
   return value;
 }
 
+function editorialStyle(color?: string) {
+  return color
+    ? ({ '--editorial-color': color, '--card-accent': color } as CSSProperties)
+    : undefined;
+}
+
 function LoadingState({ label = 'Carregando conteúdo' }: { label?: string }) {
   return (
     <main className="internal-main" aria-busy="true">
@@ -318,7 +326,10 @@ function Breadcrumbs({
 
 function ArticleCard({ article }: { article: Article }) {
   return (
-    <article className="archive-card">
+    <article
+      className="archive-card"
+      style={editorialStyle(article.primaryCategory?.color)}
+    >
       <a className="archive-card__media" href={article.url} aria-label={article.title}>
         {article.featuredImage ? (
           <img src={article.featuredImage.url} alt={article.featuredImage.alt} loading="lazy" />
@@ -624,7 +635,10 @@ function ArticlePage({ slug }: { slug: string }) {
   }
 
   return (
-    <main className="internal-main article-page">
+    <main
+      className="internal-main article-page"
+      style={editorialStyle(article.primaryCategory?.color)}
+    >
       {!hasServerJsonLd && (
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd }} />
       )}
@@ -847,8 +861,13 @@ function ArchivePage({
   if (state === 'not-found') return <ErrorState title="Editoria não encontrada" />;
   if (state === 'error' || !payload) return <ErrorState />;
 
+  const categoryColor = mode === 'category' ? payload.category?.color : undefined;
+
   return (
-    <main className="internal-main archive-page">
+    <main
+      className={mode === 'category' ? 'internal-main archive-page archive-page--category' : 'internal-main archive-page'}
+      style={editorialStyle(categoryColor)}
+    >
       <div className="container">
         <Breadcrumbs
           items={[
