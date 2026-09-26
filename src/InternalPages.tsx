@@ -397,9 +397,28 @@ function formatWhatsappNumber(value: string) {
   return value;
 }
 
+function editorialContrastColor(color?: string) {
+  const normalized = color?.trim().replace('#', '') ?? '';
+
+  if (!/^[0-9a-fA-F]{6}$/.test(normalized)) {
+    return '#FFFFFF';
+  }
+
+  const red = Number.parseInt(normalized.slice(0, 2), 16);
+  const green = Number.parseInt(normalized.slice(2, 4), 16);
+  const blue = Number.parseInt(normalized.slice(4, 6), 16);
+  const luminance = (red * 299 + green * 587 + blue * 114) / 1000;
+
+  return luminance > 168 ? '#111827' : '#FFFFFF';
+}
+
 function editorialStyle(color?: string) {
   return color
-    ? ({ '--editorial-color': color, '--card-accent': color } as CSSProperties)
+    ? ({
+        '--editorial-color': color,
+        '--editorial-contrast': editorialContrastColor(color),
+        '--card-accent': color,
+      } as CSSProperties)
     : undefined;
 }
 
@@ -1208,18 +1227,37 @@ function ArchivePage({
           ]}
         />
 
-        <header className="archive-header">
-          <span className="internal-kicker">
-            {mode === 'category'
-              ? 'Editoria'
-              : mode === 'tag'
-                ? 'Assunto'
-                : mode === 'search'
-                  ? 'Pesquisa'
-                  : 'Atualização'}
-          </span>
-          <h1>{title}</h1>
-          <p>{description}</p>
+        <header className={mode === 'category' ? 'archive-header archive-header--editorial' : 'archive-header'}>
+          {mode === 'category' ? (
+            <>
+              <div className="archive-header__editorial-band">
+                <div className="archive-header__editorial-identity">
+                  <span className="internal-kicker">Editoria</span>
+                  <h1><span>{title}</span></h1>
+                </div>
+              </div>
+              <div className="archive-header__editorial-summary">
+                <p>{description}</p>
+                <span className="archive-header__count">
+                  {payload.pagination.total.toLocaleString('pt-BR')}
+                  {' '}
+                  {payload.pagination.total === 1 ? 'publicação' : 'publicações'}
+                </span>
+              </div>
+            </>
+          ) : (
+            <>
+              <span className="internal-kicker">
+                {mode === 'tag'
+                  ? 'Assunto'
+                  : mode === 'search'
+                    ? 'Pesquisa'
+                    : 'Atualização'}
+              </span>
+              <h1>{title}</h1>
+              <p>{description}</p>
+            </>
+          )}
 
           {mode === 'search' && <SearchForm initialQuery={searchQuery ?? ''} />}
         </header>
