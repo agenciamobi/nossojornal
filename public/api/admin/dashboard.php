@@ -33,6 +33,12 @@ SQL)->fetchColumn();
 
     $userCount = (int) $pdo->query("SELECT COUNT(*) FROM {$users} WHERE user_status = 0")->fetchColumn();
 
+    $mediaCount = (int) $pdo->query(<<<SQL
+SELECT COUNT(*)
+FROM {$posts}
+WHERE post_type = 'attachment'
+SQL)->fetchColumn();
+
     $commentCounts = [
         'approved' => 0,
         'pending' => 0,
@@ -107,6 +113,7 @@ SQL);
             ],
             'categories' => $categoryCount,
             'users' => $userCount,
+            'media' => $mediaCount,
             'comments' => $commentCounts,
         ],
         'recentPosts' => $recent,
