@@ -508,7 +508,6 @@ type EditorialWorkflow = {
     slot: 'automatic' | 'hero' | 'featured';
     rank: number;
     until: string;
-    active: boolean;
   };
 };
 
@@ -539,6 +538,7 @@ type HomeLayoutItem = {
     slot: 'automatic' | 'hero' | 'featured';
     rank: number;
     until: string;
+    active: boolean;
   };
 };
 
