@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require __DIR__ . '/_bootstrap.php';
+require __DIR__ . '/_category_theme.php';
 
 nj_run(static function (): array {
     $pdo = nj_db();
@@ -44,6 +45,10 @@ ORDER BY
 SQL;
 
     $rows = $pdo->query($sql)->fetchAll();
+    $colorOverrides = nj_category_color_overrides(
+        $pdo,
+        array_map(static fn (array $row): int => (int) $row['id'], $rows)
+    );
     $includeEmpty = ($_GET['include_empty'] ?? '1') !== '0';
 
     $items = [];
@@ -62,6 +67,11 @@ SQL;
             'slug' => (string) $row['slug'],
             'parentId' => $parentId > 0 ? $parentId : null,
             'url' => '/categoria/' . rawurlencode((string) $row['slug']),
+            'color' => nj_category_color_for(
+                (int) $row['id'],
+                (string) $row['slug'],
+                $colorOverrides
+            ),
             'legacyCount' => (int) $row['legacy_count'],
             'publishedCount' => $publishedCount,
             'latestPublishedAt' => $row['latest_published_at'] !== null
