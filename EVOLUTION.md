@@ -2310,3 +2310,50 @@ Quando conhecidos, largura e altura da imagem destacada são incluídas nas tags
 Attachments sem metadata válida continuam funcionando pela URL original. Metadata quebrada ou serialização inesperada não interrompe a resposta.
 
 A próxima frente WordPress-native é automatizar redirects seguros quando o slug de uma matéria publicada for alterado.
+
+## 42. Preservação automática de URL ao trocar slug
+
+A edição de notícias publicadas passa a tratar mudança de slug como uma operação editorial com efeito de SEO.
+
+### Comportamento
+
+Ao salvar uma notícia publicada com slug diferente, o backend cria um `301` da URL anterior para a nova URL dentro da mesma transação do save.
+
+Não há segundo banco nem tabela de redirects. A implementação reutiliza `nj_redirect` e seus postmeta existentes.
+
+### Proveniência
+
+As regras agora distinguem:
+
+```text
+automatic
+manual
+```
+
+Regras criadas pela mudança de slug recebem `_nj_redirect_origin=auto_slug`.
+
+A tela `/sistema/wordpress` mostra se cada regra é automática ou manual.
+
+Qualquer edição explícita pelo operador converte a regra para manual. Automação futura não sobrescreve regra manual conflitante.
+
+### Redução de cadeias
+
+Mudanças sucessivas de URL atualizam redirects automáticos anteriores para apontarem diretamente ao slug atual. Isso evita hops desnecessários como `A → B → C`.
+
+Reversões também retiram regras automáticas incompatíveis para não criar loops.
+
+### Revisões
+
+Restaurar uma revisão própria que carregue outro slug em matéria publicada executa a mesma proteção.
+
+A restauração de revisão nativa WordPress continua preservando o slug atual e não participa dessa mutation.
+
+### Interface
+
+Após salvar:
+
+- redirect automático criado/atualizado é informado no feedback;
+- quantidade de cadeias encurtadas pode ser informada;
+- conflito com regra manual gera aviso sem sobrescrever a decisão humana.
+
+Próxima frente de maior valor: perfis públicos de autor e arquivo por autor usando `users/usermeta` com allowlist.
