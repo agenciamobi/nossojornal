@@ -5,6 +5,7 @@ require_once __DIR__ . '/../v1/_bootstrap.php';
 require_once __DIR__ . '/../v1/_content.php';
 
 const NJ_ADMIN_SESSION_NAME = 'nj_admin_session';
+const NJ_PAUTAS_OWNER_LOGIN = 'agenciamobi';
 
 function nj_admin_json(array $payload, int $status = 200): never
 {
@@ -217,6 +218,7 @@ function nj_admin_user_payload(PDO $pdo, array $row): array
             'listUsers' => in_array('list_users', $access['capabilities'], true),
             'editUsers' => in_array('edit_users', $access['capabilities'], true),
             'manageOptions' => in_array('manage_options', $access['capabilities'], true),
+            'managePautas' => (string) $row['user_login'] === NJ_PAUTAS_OWNER_LOGIN,
         ],
     ];
 }
@@ -447,5 +449,13 @@ function nj_admin_require_capability(array $user, string $capability): void
 {
     if (!in_array($capability, $user['capabilities'], true)) {
         throw new NjApiHttpException(403, 'insufficient_permissions');
+    }
+}
+
+
+function nj_admin_require_pautas_owner(array $user): void
+{
+    if ((string) ($user['login'] ?? '') !== NJ_PAUTAS_OWNER_LOGIN) {
+        throw new NjApiHttpException(403, 'pautas_access_denied');
     }
 }
