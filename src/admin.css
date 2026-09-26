@@ -1048,12 +1048,13 @@
 
 .admin-pautas-summary {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 14px;
   margin-bottom: 20px;
 }
 
-.admin-pautas-summary > div {
+.admin-pautas-summary > div,
+.admin-pautas-summary > button {
   min-height: 108px;
   display: flex;
   flex-direction: column;
@@ -1062,6 +1063,19 @@
   border: 1px solid #c3c4c7;
   background: #fff;
   box-shadow: 0 1px 1px rgba(0,0,0,.04);
+}
+
+.admin-pautas-summary > button {
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.admin-pautas-summary > button:hover,
+.admin-pautas-summary > button:focus-visible,
+.admin-pautas-summary > button.is-active {
+  border-color: #2271b1;
+  background: #f0f6fc;
 }
 
 .admin-pautas-summary span {
@@ -1077,6 +1091,134 @@
   color: #2271b1;
   font-size: 28px;
   font-weight: 500;
+}
+
+
+
+.admin-pauta-triage {
+  margin-bottom: 20px;
+  border: 1px solid #c3c4c7;
+  background: #fff;
+  box-shadow: 0 1px 1px rgba(0,0,0,.04);
+}
+
+.admin-pauta-triage__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 14px 16px;
+  border-bottom: 1px solid #dcdcde;
+}
+
+.admin-pauta-triage__head > div:first-child {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.admin-pauta-triage__head span {
+  color: #787c82;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.admin-pauta-triage__head strong {
+  color: #1d2327;
+  font-size: 12px;
+}
+
+.admin-pauta-triage__head small {
+  color: #646970;
+  font-size: 8px;
+}
+
+.admin-pauta-triage__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 7px;
+}
+
+.admin-pauta-triage__actions button {
+  min-height: 32px;
+  border: 1px solid #8c8f94;
+  border-radius: 3px;
+  padding: 0 10px;
+  background: #fff;
+  color: #2c3338;
+  font-size: 8px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.admin-pauta-triage__actions .admin-button--primary {
+  border-color: #2271b1;
+  background: #2271b1;
+  color: #fff;
+}
+
+.admin-pauta-triage__actions button:disabled {
+  border-color: #c3c4c7;
+  background: #f0f0f1;
+  color: #8c8f94;
+  cursor: not-allowed;
+}
+
+.admin-pauta-triage__filters {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.7fr) repeat(6, minmax(120px, 1fr));
+  gap: 10px;
+  padding: 13px 16px;
+}
+
+.admin-pauta-triage__filters label {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+
+.admin-pauta-triage__filters label > span {
+  color: #50575e;
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.admin-pauta-triage__filters input,
+.admin-pauta-triage__filters select {
+  width: 100%;
+  min-width: 0;
+  min-height: 34px;
+  border: 1px solid #8c8f94;
+  border-radius: 3px;
+  padding: 0 9px;
+  background: #fff;
+  color: #1d2327;
+  font: inherit;
+  font-size: 9px;
+}
+
+.admin-pauta-triage__filters input:focus,
+.admin-pauta-triage__filters select:focus {
+  border-color: #2271b1;
+  box-shadow: 0 0 0 1px #2271b1;
+  outline: 0;
+}
+
+.admin-pauta-triage__new-only {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 16px 13px;
+  color: #50575e;
+  font-size: 8px;
+  font-weight: 650;
+}
+
+.admin-pauta-triage__new-only input {
+  margin: 0;
 }
 
 .admin-pautas-pipeline {
@@ -1252,6 +1394,18 @@
 
 
 @media (max-width: 1100px) {
+  .admin-pautas-summary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .admin-pauta-triage__filters {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .admin-pauta-triage__filters label:first-child {
+    grid-column: span 3;
+  }
+
   .admin-pautas-pipeline ol {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 14px 0;
@@ -1266,6 +1420,23 @@
   .admin-pautas-summary,
   .admin-pautas-sources {
     grid-template-columns: 1fr;
+  }
+
+  .admin-pauta-triage__head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .admin-pauta-triage__actions {
+    justify-content: flex-start;
+  }
+
+  .admin-pauta-triage__filters {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-pauta-triage__filters label:first-child {
+    grid-column: auto;
   }
 
   .admin-pautas-sources article:nth-child(odd) {
@@ -3888,6 +4059,11 @@
   border-top-color: #72aee6;
 }
 
+.admin-pauta-card--new {
+  background: #fbfdff;
+  box-shadow: inset 3px 0 0 #2271b1;
+}
+
 .admin-pauta-card--active {
   outline: 2px solid #2271b1;
   outline-offset: 1px;
@@ -3921,6 +4097,19 @@
   font-weight: 800;
   text-transform: uppercase;
 }
+
+.admin-pauta-card__meta .admin-pauta-card__new {
+  background: #e7f1ff;
+  color: #135e96;
+}
+
+.admin-pauta-card__arrival {
+  display: block;
+  margin-top: 5px;
+  color: #8c8f94;
+  font-size: 7px;
+}
+
 
 .admin-pauta-card h3 {
   margin: 0;
