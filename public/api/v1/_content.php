@@ -615,6 +615,51 @@ SQL;
     return $result;
 }
 
+function nj_content_tags_for_posts(PDO $pdo, array $postIds): array
+{
+    if ($postIds === []) {
+        return [];
+    }
+
+    $terms = nj_table('terms');
+    $taxonomy = nj_table('term_taxonomy');
+    $relationships = nj_table('term_relationships');
+    $placeholders = implode(',', array_fill(0, count($postIds), '?'));
+
+    $sql = <<<SQL
+SELECT
+    tr.object_id AS post_id,
+    t.term_id AS id,
+    tt.term_taxonomy_id AS taxonomy_id,
+    t.name,
+    t.slug
+FROM {$relationships} tr
+INNER JOIN {$taxonomy} tt
+    ON tt.term_taxonomy_id = tr.term_taxonomy_id
+    AND tt.taxonomy = 'post_tag'
+INNER JOIN {$terms} t
+    ON t.term_id = tt.term_id
+WHERE tr.object_id IN ({$placeholders})
+ORDER BY t.name ASC
+SQL;
+
+    $statement = $pdo->prepare($sql);
+    $statement->execute($postIds);
+
+    $result = [];
+    foreach ($statement->fetchAll() as $row) {
+        $result[(int) $row['post_id']][] = [
+            'id' => (int) $row['id'],
+            'taxonomyId' => (int) $row['taxonomy_id'],
+            'name' => (string) $row['name'],
+            'slug' => (string) $row['slug'],
+            'url' => '/tag/' . rawurlencode((string) $row['slug']),
+        ];
+    }
+
+    return $result;
+}
+
 function nj_content_primary_category(array $categories, int $primaryId): ?array
 {
     $technical = [
@@ -648,6 +693,7 @@ function nj_content_hydrate_articles(PDO $pdo, array $rows, bool $includeBody = 
 
     $postIds = array_map(static fn (array $row): int => (int) $row['id'], $rows);
     $categoriesByPost = nj_content_categories_for_posts($pdo, $postIds);
+    $tagsByPost = nj_content_tags_for_posts($pdo, $postIds);
     $articles = [];
 
     foreach ($rows as $row) {
@@ -682,6 +728,7 @@ function nj_content_hydrate_articles(PDO $pdo, array $rows, bool $includeBody = 
             'views' => (int) ($row['views'] ?? 0),
             'primaryCategory' => $primary,
             'categories' => $categories,
+            'tags' => $tagsByPost[$id] ?? [],
         ];
 
         if ($includeBody) {

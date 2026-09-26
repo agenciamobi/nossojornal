@@ -55,7 +55,11 @@ WHERE
         '_nj_original_source_url',
         '_nj_canonical_url',
         '_nj_social_title',
-        '_nj_social_description'
+        '_nj_social_description',
+        '_nj_related_post_ids',
+        '_nj_series_name',
+        '_nj_series_slug',
+        '_nj_series_order'
     )
 ORDER BY meta_id DESC
 SQL);
@@ -114,8 +118,35 @@ SQL);
         $article['categories']
     )));
 
+    $manualRelatedIds = [];
+    $decodedRelated = json_decode((string) ($metaValues['_nj_related_post_ids'] ?? '[]'), true);
+    if (is_array($decodedRelated)) {
+        $manualRelatedIds = array_values(array_unique(array_filter(
+            array_map('intval', $decodedRelated),
+            static fn (int $id): bool => $id > 0 && $id !== (int) $article['id']
+        )));
+    }
+
     $related = [];
-    if ($categoryTaxonomyIds !== []) {
+    if ($manualRelatedIds !== []) {
+        $placeholders = implode(',', array_fill(0, count($manualRelatedIds), '?'));
+        $manualSql = $select . <<<SQL
+
+WHERE
+    p.post_type = 'post'
+    AND p.post_status = 'publish'
+    AND p.post_password = ''
+    AND p.ID IN ({$placeholders})
+ORDER BY FIELD(p.ID, {$placeholders})
+LIMIT 4
+SQL;
+
+        $manualStatement = $pdo->prepare($manualSql);
+        $manualStatement->execute(array_merge($manualRelatedIds, $manualRelatedIds));
+        $related = nj_content_hydrate_articles($pdo, $manualStatement->fetchAll());
+    }
+
+    if (count($related) < 4 && $categoryTaxonomyIds !== []) {
         $placeholders = implode(',', array_fill(0, count($categoryTaxonomyIds), '?'));
         $relatedSql = $select . <<<SQL
 
@@ -132,12 +163,30 @@ WHERE
             AND related_tr.term_taxonomy_id IN ({$placeholders})
     )
 ORDER BY p.post_date DESC, p.ID DESC
-LIMIT 4
+LIMIT 8
 SQL;
 
         $relatedStatement = $pdo->prepare($relatedSql);
         $relatedStatement->execute(array_merge([$article['id']], $categoryTaxonomyIds));
-        $related = nj_content_hydrate_articles($pdo, $relatedStatement->fetchAll());
+        $automaticRelated = nj_content_hydrate_articles($pdo, $relatedStatement->fetchAll());
+        $alreadyRelated = array_fill_keys(array_map(
+            static fn (array $item): int => (int) $item['id'],
+            $related
+        ), true);
+
+        foreach ($automaticRelated as $candidate) {
+            $candidateId = (int) $candidate['id'];
+            if (isset($alreadyRelated[$candidateId])) {
+                continue;
+            }
+
+            $related[] = $candidate;
+            $alreadyRelated[$candidateId] = true;
+
+            if (count($related) >= 4) {
+                break;
+            }
+        }
     }
 
     $corrections = [];
@@ -203,6 +252,14 @@ SQL);
             'imageCredit' => nj_content_clean_text_source((string) ($metaValues['_nj_image_credit'] ?? '')),
             'imageCaption' => nj_content_clean_text_source((string) ($metaValues['_nj_image_caption'] ?? '')),
             'originalSourceUrl' => (string) ($metaValues['_nj_original_source_url'] ?? ''),
+            'series' => [
+                'name' => nj_content_clean_text_source((string) ($metaValues['_nj_series_name'] ?? '')),
+                'slug' => (string) ($metaValues['_nj_series_slug'] ?? ''),
+                'order' => max(0, min(999, (int) ($metaValues['_nj_series_order'] ?? 0))),
+                'url' => trim((string) ($metaValues['_nj_series_slug'] ?? '')) !== ''
+                    ? '/dossie/' . rawurlencode((string) $metaValues['_nj_series_slug'])
+                    : null,
+            ],
         ],
         'seo' => [
             'title' => $seo['title'] !== '' ? nj_content_clean_text_source($seo['title']) : $article['title'],

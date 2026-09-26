@@ -66,6 +66,36 @@ SQL);
     $categoryStatement->execute(['post_id' => $id]);
     $selectedCategories = $categoryStatement->fetchAll();
 
+    $tagStatement = $pdo->prepare(<<<SQL
+SELECT
+    t.term_id AS id,
+    t.name,
+    t.slug
+FROM {$relationships} tr
+INNER JOIN {$taxonomy} tt
+    ON tt.term_taxonomy_id = tr.term_taxonomy_id
+    AND tt.taxonomy = 'post_tag'
+INNER JOIN {$terms} t ON t.term_id = tt.term_id
+WHERE tr.object_id = :post_id
+ORDER BY t.name ASC
+SQL);
+    $tagStatement->execute(['post_id' => $id]);
+    $selectedTags = $tagStatement->fetchAll();
+
+    $tagSuggestions = $pdo->query(<<<SQL
+SELECT
+    t.term_id AS id,
+    t.name,
+    t.slug,
+    tt.count
+FROM {$terms} t
+INNER JOIN {$taxonomy} tt
+    ON tt.term_id = t.term_id
+    AND tt.taxonomy = 'post_tag'
+ORDER BY tt.count DESC, t.name ASC
+LIMIT 60
+SQL)->fetchAll();
+
     $allCategoryRows = $pdo->query(<<<SQL
 SELECT
     t.term_id AS id,
@@ -178,6 +208,14 @@ SQL);
                 ],
                 $selectedCategories
             ),
+            'tags' => array_map(
+                static fn (array $tag): array => [
+                    'id' => (int) $tag['id'],
+                    'name' => (string) $tag['name'],
+                    'slug' => (string) $tag['slug'],
+                ],
+                $selectedTags
+            ),
             'featuredImage' => $featuredImage,
             'seo' => [
                 'title' => nj_content_clean_text_source((string) ($meta['_yoast_wpseo_title'] ?? '')),
@@ -189,5 +227,14 @@ SQL);
                 : null,
         ],
         'categories' => $allCategories,
+        'tagSuggestions' => array_map(
+            static fn (array $tag): array => [
+                'id' => (int) $tag['id'],
+                'name' => (string) $tag['name'],
+                'slug' => (string) $tag['slug'],
+                'count' => (int) $tag['count'],
+            ],
+            $tagSuggestions
+        ),
     ];
 });

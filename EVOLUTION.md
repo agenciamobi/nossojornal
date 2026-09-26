@@ -1924,3 +1924,124 @@ A edição de Notícias foi ampliada com uma camada persistente de metadados edi
 - título e descrição sociais independentes do SEO;
 - canonical também no JSON-LD da matéria.
 
+
+
+## 36. Newsroom Toolkit
+
+A terceira rodada editorial transforma a administração em uma newsroom mais conectada ao acervo, mantendo o WordPress legado como patrimônio de dados e a API própria como contrato do novo portal.
+
+### Tags nativas
+
+As Notícias passam a editar a taxonomia WordPress `post_tag` diretamente pelo novo sistema.
+
+- tags existentes são sugeridas pela frequência de uso;
+- novas tags são criadas quando necessário;
+- até 20 tags por notícia;
+- remoção e inclusão acontecem no mesmo save da matéria;
+- `term_taxonomy.count` continua sincronizado;
+- nenhuma tabela paralela de tags foi criada.
+
+O portal expõe tags em cada artigo e cria arquivos públicos em:
+
+```text
+/tag/:slug
+```
+
+A API pública de listagem aceita `?tag=:slug`.
+
+### Relações editoriais
+
+O editor permite escolher até 8 matérias relacionadas manualmente.
+
+- busca por título/slug;
+- respeito às permissões de autoria;
+- ordenação manual com subir/descer;
+- remoção sem apagar a matéria relacionada;
+- IDs persistidos em `_nj_related_post_ids`;
+- a seleção editorial tem prioridade;
+- quando há menos de quatro itens publicados selecionados, o portal completa a seção com relações automáticas por editoria.
+
+Endpoint administrativo de apoio:
+
+```text
+GET /api/admin/post-picker.php
+```
+
+### Dossiês e séries
+
+Uma notícia pode pertencer a uma sequência editorial usando:
+
+```text
+_nj_series_name
+_nj_series_slug
+_nj_series_order
+```
+
+Isso cria páginas públicas em:
+
+```text
+/dossie/:slug
+```
+
+A nova API:
+
+```text
+GET /api/v1/series.php?slug=:slug
+```
+
+retorna a série ordenada, quantidade de matérias e paginação.
+
+Dentro da notícia, o dossiê aparece como navegação contextual, incluindo a posição definida pelo editor.
+
+### Ferramentas no editor rico
+
+O conjunto de blocos editoriais foi ampliado. Além de Entenda, Serviço, Em números e Cronologia, o editor agora oferece:
+
+- Principais pontos;
+- Fontes e documentos;
+- Atualização;
+- Citação editorial.
+
+Os blocos usam `data-nj-block`, preservado pela sanitização pública, permitindo estilo e evolução sem transformar o conteúdo em componentes proprietários.
+
+### Descoberta pública
+
+As páginas de artigo agora oferecem:
+
+- tags/assuntos após o corpo;
+- tags também na navegação lateral;
+- card de dossiê;
+- relacionadas manuais com fallback automático;
+- arquivos públicos por tag;
+- páginas públicas de dossiê.
+
+### SEO estruturado
+
+O JSON-LD `NewsArticle` passa a incluir:
+
+- `keywords` derivados das tags;
+- linha fina como descrição quando disponível;
+- `isPartOf` com `CreativeWorkSeries` quando a notícia pertence a um dossiê.
+
+### Compatibilidade
+
+Todos os novos recursos são opt-in e possuem fallback. O acervo existente continua válido sem migração em massa. Tags reutilizam a taxonomia WordPress, enquanto relações e séries permanecem em metadados `_nj_*`.
+
+
+
+### Quality gate no GitHub
+
+A rodada também adiciona `.github/workflows/ci.yml`.
+
+Todo pull request e push na `main` passa a executar:
+
+```text
+npm ci
+npm run typecheck
+npm run build
+php -l public/api/**/*.php
+```
+
+O frontend usa Node 22, conforme `package.json`, e a API é validada com PHP 8.4. O workflow possui concorrência cancelável para evitar gastar execução com commits antigos do mesmo PR.
+
+Também foi adicionado `.github/dependabot.yml`, com atualizações semanais agrupadas para dependências npm e GitHub Actions. Isso permite tratar alertas de segurança e versões defasadas por PR, sem aplicar atualizações forçadas diretamente na aplicação.

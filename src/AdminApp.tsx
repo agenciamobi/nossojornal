@@ -1,6 +1,10 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { AdminRichEditor, type RichEditorMediaItem } from './AdminRichEditor';
 import { AdminEditorialDiagnostics } from './AdminEditorialDiagnostics';
+import {
+  AdminEditorialConnections,
+  type EditorialRelatedStory,
+} from './AdminEditorialConnections';
 import './admin.css';
 
 type AdminUser = {
@@ -182,6 +186,7 @@ type PostDetailPayload = {
       modifiedAt: string;
       author: { id: number; name: string };
       categories: Array<{ id: number; name: string; slug: string }>;
+      tags: Array<{ id: number; name: string; slug: string }>;
       featuredImage: {
         id: number;
         url: string;
@@ -201,6 +206,12 @@ type PostDetailPayload = {
       slug: string;
       parentId: number | null;
       color: string;
+    }>;
+    tagSuggestions: Array<{
+      id: number;
+      name: string;
+      slug: string;
+      count: number;
     }>;
   };
 };
@@ -525,6 +536,14 @@ type EditorialWorkflow = {
     canonicalUrl: string;
     socialTitle: string;
     socialDescription: string;
+  };
+  connections: {
+    related: EditorialRelatedStory[];
+    series: {
+      name: string;
+      slug: string;
+      order: number;
+    };
   };
 };
 
@@ -2286,6 +2305,7 @@ function PostEditorView({
   const [excerpt, setExcerpt] = useState('');
   const [content, setContent] = useState('');
   const [categoryIds, setCategoryIds] = useState<number[]>([]);
+  const [tagNames, setTagNames] = useState<string[]>([]);
   const [seoTitle, setSeoTitle] = useState('');
   const [seoDescription, setSeoDescription] = useState('');
   const [primaryCategoryId, setPrimaryCategoryId] = useState(0);
@@ -2336,6 +2356,7 @@ function PostEditorView({
         setExcerpt(post.excerpt);
         setContent(post.content);
         setCategoryIds(post.categories.map((category) => category.id));
+        setTagNames(post.tags.map((tag) => tag.name));
         setSeoTitle(post.seo.title);
         setSeoDescription(post.seo.description);
         setPrimaryCategoryId(post.seo.primaryCategoryId);
@@ -2454,6 +2475,8 @@ function PostEditorView({
   const selectedCategories = data.categories.filter((category) => selectedSet.has(category.id));
   const originalCategoryIds = post.categories.map((category) => category.id).sort((a, b) => a - b);
   const normalizedCategoryIds = [...categoryIds].sort((a, b) => a - b);
+  const originalTagNames = post.tags.map((tag) => tag.name.toLocaleLowerCase('pt-BR')).sort();
+  const normalizedTagNames = tagNames.map((tag) => tag.toLocaleLowerCase('pt-BR')).sort();
 
   const ownsPost = post.author.id === user.id;
   const canEditOthers = user.capabilities.includes('edit_others_posts');
@@ -2474,7 +2497,8 @@ function PostEditorView({
     || seoTitle !== post.seo.title
     || seoDescription !== post.seo.description
     || primaryCategoryId !== post.seo.primaryCategoryId
-    || JSON.stringify(normalizedCategoryIds) !== JSON.stringify(originalCategoryIds);
+    || JSON.stringify(normalizedCategoryIds) !== JSON.stringify(originalCategoryIds)
+    || JSON.stringify(normalizedTagNames) !== JSON.stringify(originalTagNames);
 
   const editorialChanged =
     JSON.stringify(editorial) !== JSON.stringify(editorialData.editorial);
@@ -2503,6 +2527,14 @@ function PostEditorView({
   function patchDistribution(patch: Partial<EditorialWorkflow['distribution']>) {
     setEditorial((current) => current
       ? { ...current, distribution: { ...current.distribution, ...patch } }
+      : current
+    );
+    setSaveState('idle');
+  }
+
+  function patchConnections(patch: Partial<EditorialWorkflow['connections']>) {
+    setEditorial((current) => current
+      ? { ...current, connections: { ...current.connections, ...patch } }
       : current
     );
     setSaveState('idle');
@@ -2630,6 +2662,10 @@ function PostEditorView({
   }
 
   async function saveEditorialState(): Promise<EditorialWorkflowPayload['data']> {
+    if (!editorial) {
+      throw new Error('editorial_state_unavailable');
+    }
+
     const payload = await adminFetch<EditorialWorkflowPayload>('/api/admin/post-editorial.php', {
       method: 'POST',
       headers: { 'X-CSRF-Token': csrfToken },
@@ -2657,6 +2693,10 @@ function PostEditorView({
         canonicalUrl: editorial.distribution.canonicalUrl,
         socialTitle: editorial.distribution.socialTitle,
         socialDescription: editorial.distribution.socialDescription,
+        relatedPostIds: editorial.connections.related.map((item) => item.id),
+        seriesName: editorial.connections.series.name,
+        seriesSlug: editorial.connections.series.slug,
+        seriesOrder: editorial.connections.series.order,
       }),
     });
 
@@ -2788,6 +2828,8 @@ function PostEditorView({
               content: string;
               status: string;
               categoryIds: number[];
+              tagNames: string[];
+              tags: Array<{ id: number; name: string; slug: string }>;
               seo: {
                 title: string;
                 description: string;
@@ -2807,6 +2849,7 @@ function PostEditorView({
             excerpt,
             content,
             categoryIds,
+            tagNames,
             seoTitle,
             seoDescription,
             primaryCategoryId,
@@ -2818,7 +2861,7 @@ function PostEditorView({
         }
 
         const saved = payload.data.post;
-        const savedCategories = data.categories
+        const savedCategories = (data?.categories ?? [])
           .filter((category) => saved.categoryIds.includes(category.id))
           .map((category) => ({
             id: category.id,
@@ -2836,6 +2879,7 @@ function PostEditorView({
                 excerpt: saved.excerpt,
                 content: saved.content,
                 categories: savedCategories,
+                tags: saved.tags,
                 seo: saved.seo,
                 modifiedAt: saved.modifiedAt,
                 publicUrl: saved.publicUrl,
@@ -2844,6 +2888,7 @@ function PostEditorView({
           : current
         );
         setSlug(saved.slug);
+        setTagNames(saved.tags.map((tag) => tag.name));
       }
 
       if (editorialChanged) {
@@ -2865,6 +2910,7 @@ function PostEditorView({
   }
 
   async function changeStatus(action: 'publish' | 'draft' | 'schedule') {
+    if (!editorial) return;
     if (!canChangeStatus || statusState === 'working' || changed) return;
     if ((action === 'publish' || action === 'schedule') && !user.permissions.publishPosts) return;
 
@@ -3629,6 +3675,21 @@ function PostEditorView({
               </label>
             </div>
           </section>
+
+          <AdminEditorialConnections
+            postId={post.id}
+            disabled={!canEdit}
+            tags={tagNames}
+            tagSuggestions={data.tagSuggestions}
+            related={editorial.connections.related}
+            series={editorial.connections.series}
+            onTagsChange={(nextTags) => {
+              setTagNames(nextTags);
+              setSaveState('idle');
+            }}
+            onRelatedChange={(items) => patchConnections({ related: items })}
+            onSeriesChange={(series) => patchConnections({ series })}
+          />
         </section>
 
         <aside className="admin-editor-sidebar">
@@ -5701,7 +5762,7 @@ function UserEditorView({
         method: 'POST',
         headers: { 'X-CSRF-Token': csrfToken },
         body: JSON.stringify({
-          userId: data.user.id,
+          userId: data?.user.id,
           displayName,
           email,
           role,
@@ -6638,7 +6699,7 @@ function PautasView({ csrfToken }: { csrfToken: string }) {
         return;
       }
 
-      const sources = data.sources ?? [];
+      const sources = data?.sources ?? [];
       let cursor = 0;
       let captured = 0;
       let failures = 0;

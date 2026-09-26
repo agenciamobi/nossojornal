@@ -17,10 +17,19 @@ nj_run(static function (): array {
     $offset = ($page - 1) * $perPage;
 
     $categorySlug = trim((string) ($_GET['category'] ?? ''));
+    $tagSlug = trim((string) ($_GET['tag'] ?? ''));
     $query = trim((string) ($_GET['q'] ?? ''));
 
     if ($categorySlug !== '' && !preg_match('/^[a-z0-9-]+$/', $categorySlug)) {
         throw new NjApiHttpException(400, 'invalid_category');
+    }
+
+    if ($tagSlug !== '' && !preg_match('/^[a-z0-9-]+$/', $tagSlug)) {
+        throw new NjApiHttpException(400, 'invalid_tag');
+    }
+
+    if ($categorySlug !== '' && $tagSlug !== '') {
+        throw new NjApiHttpException(400, 'conflicting_taxonomy_filter');
     }
 
     if (function_exists('mb_substr')) {
@@ -46,6 +55,7 @@ nj_run(static function (): array {
     ];
     $params = [];
     $category = null;
+    $tag = null;
 
     if ($categorySlug !== '') {
         $categoryStatement = $pdo->prepare(<<<SQL
@@ -102,6 +112,45 @@ SQL);
         $params['taxonomy_id'] = $category['taxonomyId'];
     }
 
+    if ($tagSlug !== '') {
+        $tagStatement = $pdo->prepare(<<<SQL
+SELECT
+    t.term_id AS id,
+    tt.term_taxonomy_id AS taxonomy_id,
+    t.name,
+    t.slug
+FROM {$terms} t
+INNER JOIN {$taxonomy} tt
+    ON tt.term_id = t.term_id
+    AND tt.taxonomy = 'post_tag'
+WHERE t.slug = :slug
+LIMIT 1
+SQL);
+        $tagStatement->execute(['slug' => $tagSlug]);
+        $tagRow = $tagStatement->fetch();
+
+        if (!$tagRow) {
+            throw new NjApiHttpException(404, 'tag_not_found');
+        }
+
+        $tag = [
+            'id' => (int) $tagRow['id'],
+            'taxonomyId' => (int) $tagRow['taxonomy_id'],
+            'name' => (string) $tagRow['name'],
+            'slug' => (string) $tagRow['slug'],
+            'url' => '/tag/' . rawurlencode((string) $tagRow['slug']),
+        ];
+
+        $where[] = "EXISTS (
+            SELECT 1
+            FROM {$relationships} tag_tr
+            WHERE
+                tag_tr.object_id = p.ID
+                AND tag_tr.term_taxonomy_id = :tag_taxonomy_id
+        )";
+        $params['tag_taxonomy_id'] = $tag['taxonomyId'];
+    }
+
     if ($query !== '') {
         $where[] = "(
             p.post_title LIKE :search_title
@@ -137,6 +186,7 @@ SQL;
     return [
         'items' => $items,
         'category' => $category,
+        'tag' => $tag,
         'query' => $query,
         'pagination' => [
             'page' => $page,

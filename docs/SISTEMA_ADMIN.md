@@ -1706,3 +1706,67 @@ Campos disponíveis:
 - descrição social.
 
 Esses dados são validados pela API administrativa e expostos pela API pública de artigos. O portal usa os valores quando presentes e mantém fallback para título, resumo, categoria e URL padrão quando estiverem vazios.
+
+
+## Newsroom Toolkit
+
+A edição de Notícias ganhou um painel de organização editorial que reúne tags, matérias relacionadas e dossiês.
+
+### Tags
+
+As tags usam a taxonomia WordPress `post_tag` existente.
+
+O editor permite adicionar até 20 tags, reaproveitar sugestões do acervo ou criar novas. O save atualiza relações e contagens da taxonomia.
+
+No portal:
+
+```text
+/tag/:slug
+GET /api/v1/articles.php?tag=:slug
+```
+
+### Matérias relacionadas
+
+O painel permite buscar e ordenar até 8 matérias. A ordem editorial é persistida em `_nj_related_post_ids`.
+
+```text
+GET /api/admin/post-picker.php
+```
+
+A API pública prioriza as relacionadas manuais e completa até quatro posições com matérias da mesma editoria quando necessário.
+
+### Dossiês
+
+Campos:
+
+```text
+_nj_series_name
+_nj_series_slug
+_nj_series_order
+```
+
+Rotas:
+
+```text
+GET /api/v1/series.php?slug=:slug
+/dossie/:slug
+```
+
+### Blocos de conteúdo
+
+O editor rico oferece os blocos:
+
+- Entenda;
+- Serviço;
+- Em números;
+- Cronologia;
+- Principais pontos;
+- Fontes e documentos;
+- Atualização;
+- Citação.
+
+Eles são marcados com `data-nj-block` e recebem apresentação própria no portal.
+
+### Metadados estruturados
+
+Tags alimentam `keywords` no `NewsArticle`. Matérias pertencentes a dossiês expõem `isPartOf: CreativeWorkSeries`.

@@ -27,6 +27,27 @@ nj_admin_run(['POST'], static function (): array {
         is_array($body['categoryIds'] ?? null) ? $body['categoryIds'] : []
     ))));
 
+    $tagNamesInput = is_array($body['tagNames'] ?? null) ? $body['tagNames'] : [];
+    $tagNames = [];
+    foreach ($tagNamesInput as $tagNameInput) {
+        $tagName = trim((string) $tagNameInput);
+        if ($tagName === '') {
+            continue;
+        }
+
+        $length = function_exists('mb_strlen') ? mb_strlen($tagName, 'UTF-8') : strlen($tagName);
+        if ($length > 80) {
+            throw new NjApiHttpException(422, 'tag_name_too_large');
+        }
+
+        $tagNames[function_exists('mb_strtolower') ? mb_strtolower($tagName, 'UTF-8') : strtolower($tagName)] = $tagName;
+    }
+    $tagNames = array_values($tagNames);
+
+    if (count($tagNames) > 20) {
+        throw new NjApiHttpException(422, 'too_many_tags');
+    }
+
     if (!is_int($postId) || $postId <= 0) {
         throw new NjApiHttpException(422, 'invalid_post_id');
     }
@@ -57,6 +78,7 @@ nj_admin_run(['POST'], static function (): array {
 
     $pdo = nj_db();
     $posts = nj_table('posts');
+    $terms = nj_table('terms');
     $taxonomy = nj_table('term_taxonomy');
     $relationships = nj_table('term_relationships');
 
@@ -142,6 +164,17 @@ SQL);
         $oldTaxonomyStatement->execute(['post_id' => $postId]);
         $oldTaxonomyIds = array_map('intval', $oldTaxonomyStatement->fetchAll(PDO::FETCH_COLUMN));
 
+        $oldTagStatement = $pdo->prepare(<<<SQL
+SELECT tr.term_taxonomy_id
+FROM {$relationships} tr
+INNER JOIN {$taxonomy} tt
+    ON tt.term_taxonomy_id = tr.term_taxonomy_id
+    AND tt.taxonomy = 'post_tag'
+WHERE tr.object_id = :post_id
+SQL);
+        $oldTagStatement->execute(['post_id' => $postId]);
+        $oldTagTaxonomyIds = array_map('intval', $oldTagStatement->fetchAll(PDO::FETCH_COLUMN));
+
         $updatePost = $pdo->prepare(<<<SQL
 UPDATE {$posts}
 SET
@@ -188,6 +221,101 @@ SQL);
             }
         }
 
+        $deleteTagRelations = $pdo->prepare(<<<SQL
+DELETE tr
+FROM {$relationships} tr
+INNER JOIN {$taxonomy} tt
+    ON tt.term_taxonomy_id = tr.term_taxonomy_id
+    AND tt.taxonomy = 'post_tag'
+WHERE tr.object_id = :post_id
+SQL);
+        $deleteTagRelations->execute(['post_id' => $postId]);
+
+        $newTagTaxonomyIds = [];
+        $findExistingTag = $pdo->prepare(<<<SQL
+SELECT
+    t.term_id,
+    tt.term_taxonomy_id,
+    t.name,
+    t.slug
+FROM {$terms} t
+INNER JOIN {$taxonomy} tt
+    ON tt.term_id = t.term_id
+    AND tt.taxonomy = 'post_tag'
+WHERE t.slug = :slug OR t.name = :name
+ORDER BY
+    CASE WHEN t.slug = :preferred_slug THEN 0 ELSE 1 END,
+    t.term_id ASC
+LIMIT 1
+SQL);
+        $slugExists = $pdo->prepare(
+            "SELECT 1 FROM {$terms} WHERE slug = :slug LIMIT 1"
+        );
+        $insertTerm = $pdo->prepare(
+            "INSERT INTO {$terms} (name, slug, term_group)
+             VALUES (:name, :slug, 0)"
+        );
+        $insertTagTaxonomy = $pdo->prepare(
+            "INSERT INTO {$taxonomy} (term_id, taxonomy, description, parent, count)
+             VALUES (:term_id, 'post_tag', '', 0, 0)"
+        );
+        $insertTagRelationship = $pdo->prepare(<<<SQL
+INSERT INTO {$relationships} (object_id, term_taxonomy_id, term_order)
+VALUES (:post_id, :taxonomy_id, 0)
+SQL);
+
+        foreach ($tagNames as $tagName) {
+            $baseTagSlug = nj_admin_slugify($tagName);
+            if ($baseTagSlug === '') {
+                continue;
+            }
+
+            $findExistingTag->execute([
+                'slug' => $baseTagSlug,
+                'name' => $tagName,
+                'preferred_slug' => $baseTagSlug,
+            ]);
+            $existingTag = $findExistingTag->fetch();
+
+            if ($existingTag) {
+                $tagTaxonomyId = (int) $existingTag['term_taxonomy_id'];
+            } else {
+                // WordPress moderno evita shared terms. Se o slug já pertence a
+                // outra taxonomia, gere um slug exclusivo para esta nova tag.
+                $tagSlug = $baseTagSlug;
+                $suffix = 2;
+
+                while (true) {
+                    $slugExists->execute(['slug' => $tagSlug]);
+                    if (!$slugExists->fetchColumn()) {
+                        break;
+                    }
+
+                    $tagSlug = $baseTagSlug . '-' . $suffix;
+                    $suffix++;
+                }
+
+                $insertTerm->execute([
+                    'name' => $tagName,
+                    'slug' => $tagSlug,
+                ]);
+                $termId = (int) $pdo->lastInsertId();
+
+                $insertTagTaxonomy->execute(['term_id' => $termId]);
+                $tagTaxonomyId = (int) $pdo->lastInsertId();
+            }
+
+            if ($tagTaxonomyId <= 0 || in_array($tagTaxonomyId, $newTagTaxonomyIds, true)) {
+                continue;
+            }
+
+            $newTagTaxonomyIds[] = $tagTaxonomyId;
+            $insertTagRelationship->execute([
+                'post_id' => $postId,
+                'taxonomy_id' => $tagTaxonomyId,
+            ]);
+        }
+
         nj_admin_upsert_postmeta($pdo, $postId, '_yoast_wpseo_title', $seoTitle);
         nj_admin_upsert_postmeta($pdo, $postId, '_yoast_wpseo_metadesc', $seoDescription);
         nj_admin_upsert_postmeta(
@@ -202,6 +330,11 @@ SQL);
             array_merge($oldTaxonomyIds, array_values($taxonomyIds))
         );
 
+        nj_admin_recount_categories(
+            $pdo,
+            array_merge($oldTagTaxonomyIds, $newTagTaxonomyIds)
+        );
+
         nj_admin_log_post_activity(
             $pdo,
             $postId,
@@ -211,6 +344,7 @@ SQL);
                 'titleChanged' => (string) $current['post_title'] !== $title,
                 'slugChanged' => (string) $current['post_name'] !== $slug,
                 'categoryCount' => count($categoryIds),
+                'tagCount' => count($newTagTaxonomyIds),
             ]
         );
 
@@ -259,6 +393,29 @@ SQL);
         throw $error;
     }
 
+    $savedTagsStatement = $pdo->prepare(<<<SQL
+SELECT
+    t.term_id AS id,
+    t.name,
+    t.slug
+FROM {$relationships} tr
+INNER JOIN {$taxonomy} tt
+    ON tt.term_taxonomy_id = tr.term_taxonomy_id
+    AND tt.taxonomy = 'post_tag'
+INNER JOIN {$terms} t ON t.term_id = tt.term_id
+WHERE tr.object_id = :post_id
+ORDER BY t.name ASC
+SQL);
+    $savedTagsStatement->execute(['post_id' => $postId]);
+    $savedTags = array_map(
+        static fn (array $tag): array => [
+            'id' => (int) $tag['id'],
+            'name' => (string) $tag['name'],
+            'slug' => (string) $tag['slug'],
+        ],
+        $savedTagsStatement->fetchAll()
+    );
+
     return [
         'post' => [
             'id' => $postId,
@@ -268,6 +425,8 @@ SQL);
             'content' => $content,
             'status' => $status,
             'categoryIds' => $categoryIds,
+            'tagNames' => $tagNames,
+            'tags' => $savedTags,
             'seo' => [
                 'title' => $seoTitle,
                 'description' => $seoDescription,
