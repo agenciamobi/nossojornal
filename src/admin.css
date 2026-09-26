@@ -762,6 +762,98 @@
   to { transform: rotate(360deg); }
 }
 
+
+.admin-media-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.admin-media-card {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid #c3c4c7;
+  border-radius: 3px;
+  background: #fff;
+  box-shadow: 0 1px 1px rgba(0,0,0,.04);
+}
+
+.admin-media-card__preview {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  overflow: hidden;
+  background: #e9eaeb;
+}
+
+.admin-media-card__preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.admin-media-card__preview span {
+  padding: 10px;
+  color: #646970;
+  font-size: 9px;
+  text-align: center;
+  word-break: break-word;
+}
+
+.admin-media-card__body {
+  display: grid;
+  gap: 4px;
+  padding: 9px;
+}
+
+.admin-media-card__body strong {
+  overflow: hidden;
+  color: #1d2327;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-media-card__body small {
+  color: #787c82;
+  font-size: 9px;
+}
+
+.admin-settings {
+  max-width: 900px;
+  display: grid;
+  gap: 1px;
+  border: 1px solid #c3c4c7;
+  background: #dcdcde;
+}
+
+.admin-settings label {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  align-items: center;
+  gap: 20px;
+  min-height: 58px;
+  padding: 10px 14px;
+  background: #fff;
+}
+
+.admin-settings label > span {
+  color: #2c3338;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.admin-settings input {
+  min-height: 34px;
+  border: 1px solid #c3c4c7;
+  border-radius: 3px;
+  padding: 0 9px;
+  background: #f6f7f7;
+  color: #50575e;
+  font: inherit;
+  font-size: 11px;
+}
+
 @media (max-width: 980px) {
   .admin-shell {
     grid-template-columns: 74px minmax(0, 1fr);
@@ -789,6 +881,10 @@
 
   .admin-stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-media-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
 
@@ -877,6 +973,15 @@
 
   .admin-table {
     min-width: 760px;
+  }
+
+  .admin-media-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-settings label {
+    grid-template-columns: 1fr;
+    gap: 7px;
   }
 }
 
