@@ -573,13 +573,19 @@ SELECT
     tt.term_taxonomy_id AS taxonomy_id,
     t.name,
     t.slug,
-    tt.parent AS parent_id
+    tt.parent AS parent_id,
+    COALESCE(parent_t.slug, '') AS parent_slug
 FROM {$relationships} tr
 INNER JOIN {$taxonomy} tt
     ON tt.term_taxonomy_id = tr.term_taxonomy_id
     AND tt.taxonomy = 'category'
 INNER JOIN {$terms} t
     ON t.term_id = tt.term_id
+LEFT JOIN {$taxonomy} parent_tt
+    ON parent_tt.term_id = tt.parent
+    AND parent_tt.taxonomy = 'category'
+LEFT JOIN {$terms} parent_t
+    ON parent_t.term_id = parent_tt.term_id
 WHERE tr.object_id IN ({$placeholders})
 ORDER BY t.name ASC
 SQL;
@@ -600,6 +606,7 @@ SQL;
             'name' => (string) $row['name'],
             'slug' => (string) $row['slug'],
             'parentId' => (int) $row['parent_id'] > 0 ? (int) $row['parent_id'] : null,
+            'parentSlug' => trim((string) ($row['parent_slug'] ?? '')) ?: null,
             'url' => '/categoria/' . rawurlencode((string) $row['slug']),
             'color' => nj_category_color_for(
                 (int) $row['id'],
@@ -671,14 +678,35 @@ function nj_content_primary_category(array $categories, int $primaryId): ?array
         'cobertura-regional' => true,
     ];
 
+    $isEditorial = static function (array $category) use ($technical): bool {
+        $slug = (string) ($category['slug'] ?? '');
+        $parentSlug = (string) ($category['parentSlug'] ?? '');
+
+        return !isset($technical[$slug]) && $parentSlug !== 'cobertura-regional';
+    };
+
     foreach ($categories as $category) {
-        if ($category['id'] === $primaryId && !isset($technical[$category['slug']])) {
+        if ((int) ($category['id'] ?? 0) === $primaryId && $isEditorial($category)) {
             return $category;
         }
     }
 
     foreach ($categories as $category) {
-        if (!isset($technical[$category['slug']])) {
+        if ($isEditorial($category)) {
+            return $category;
+        }
+    }
+
+    foreach ($categories as $category) {
+        $slug = (string) ($category['slug'] ?? '');
+        if ((int) ($category['id'] ?? 0) === $primaryId && !isset($technical[$slug])) {
+            return $category;
+        }
+    }
+
+    foreach ($categories as $category) {
+        $slug = (string) ($category['slug'] ?? '');
+        if (!isset($technical[$slug])) {
             return $category;
         }
     }

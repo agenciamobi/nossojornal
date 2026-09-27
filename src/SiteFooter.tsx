@@ -14,6 +14,32 @@ type FooterColumn = {
   links: NavigationItem[];
 };
 
+type Category = {
+  id: number;
+  name: string;
+  slug: string;
+  parentId: number | null;
+  url: string;
+  color: string;
+  publishedCount: number;
+  children?: Category[];
+};
+
+type CategoriesResponse = {
+  ok: boolean;
+  data?: {
+    tree?: Category[];
+  };
+};
+
+const SYSTEM_CATEGORY_SLUGS = new Set([
+  'capa',
+  'geral',
+  'outros',
+  'eleicoes-2024',
+  'cobertura-regional',
+]);
+
 function footerColumns(menu: NavigationMenu): FooterColumn[] {
   const hierarchical: FooterColumn[] = menu.items
     .filter((item) => item.children.length > 0)
@@ -71,9 +97,11 @@ function NativeFooterNavigation({ menu }: { menu: NavigationMenu }) {
 
 export function SiteFooter() {
   const [navigationMenus, setNavigationMenus] = useState<NavigationMenu[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
 
   useEffect(() => {
     let active = true;
+    const controller = new AbortController();
 
     void loadNavigation()
       .then((menus) => {
@@ -83,8 +111,26 @@ export function SiteFooter() {
         if (active) setNavigationMenus([]);
       });
 
+    void fetch('/api/v1/categories.php?include_empty=0', {
+      headers: { Accept: 'application/json' },
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`categories_http_${response.status}`);
+        return response.json() as Promise<CategoriesResponse>;
+      })
+      .then((payload) => {
+        if (!active || !payload.ok || !Array.isArray(payload.data?.tree)) return;
+        setCategories(payload.data.tree);
+      })
+      .catch((error) => {
+        if (error instanceof DOMException && error.name === 'AbortError') return;
+        if (active) setCategories([]);
+      });
+
     return () => {
       active = false;
+      controller.abort();
     };
   }, []);
 
@@ -92,6 +138,46 @@ export function SiteFooter() {
     () => selectNavigationMenu(navigationMenus, 'footer'),
     [navigationMenus],
   );
+
+  const editorialCategories = useMemo(
+    () =>
+      categories
+        .filter(
+          (category) =>
+            category.parentId === null
+            && category.publishedCount > 0
+            && !SYSTEM_CATEGORY_SLUGS.has(category.slug),
+        )
+        .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')),
+    [categories],
+  );
+
+  const regionalCategory = categories.find(
+    (category) => category.slug === 'cobertura-regional',
+  );
+
+  const regionalCities = useMemo(
+    () =>
+      [...(regionalCategory?.children ?? [])]
+        .filter((category) => category.publishedCount > 0)
+        .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')),
+    [regionalCategory],
+  );
+
+  const serviceLinks = useMemo(() => {
+    if (!footerMenu) return [];
+
+    const serviceColumn = footerColumns(footerMenu).find((column) => {
+      const title = column.title
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLocaleLowerCase('pt-BR');
+
+      return title.includes('servic');
+    });
+
+    return serviceColumn?.links ?? [];
+  }, [footerMenu]);
 
   return (
     <footer className="site-footer site-footer--magazine" id="sobre">
@@ -113,50 +199,55 @@ export function SiteFooter() {
       <div className="container site-footer__rule" />
 
       <div className="container site-footer__mag-grid">
-        {footerMenu ? (
-          <NativeFooterNavigation menu={footerMenu} />
-        ) : (
-          <>
-            <nav aria-label="Editorias no rodapé">
-              <span className="site-footer__column-title">Editorias</span>
-              <a href="/categoria/hulha-negra">Hulha Negra</a>
-              <a href="/categoria/politica">Política</a>
-              <a href="/categoria/seguranca">Segurança</a>
-              <a href="/categoria/economia">Economia</a>
-              <a href="/categoria/educacao">Educação</a>
-              <a href="/categoria/rural">Rural</a>
-              <a href="/categoria/esportes">Esportes</a>
-            </nav>
-
-            <nav aria-label="Cobertura regional no rodapé">
-              <span className="site-footer__column-title">Cobertura regional</span>
-              <a href="/categoria/bage">Bagé</a>
-              <a href="/categoria/acegua">Aceguá</a>
-              <a href="/categoria/candiota">Candiota</a>
-              <a href="/categoria/dom-pedrito">Dom Pedrito</a>
-              <a href="/categoria/herval">Herval</a>
-              <a href="/categoria/pinheiro-machado">Pinheiro Machado</a>
-              <a href="/categoria/piratini">Piratini</a>
-            </nav>
-
-            <nav aria-label="Serviços do Nosso Jornal">
-              <span className="site-footer__column-title">Serviços</span>
+        <div className="site-footer__native-nav">
+          <nav aria-label="Editorias no rodapé">
+            <span className="site-footer__column-title">Editorias</span>
+            {editorialCategories.length > 0 ? (
+              editorialCategories.slice(0, 12).map((category) => (
+                <a href={category.url} key={category.id}>{category.name}</a>
+              ))
+            ) : (
               <a href="/ultimas">Últimas notícias</a>
-              <a href="/classificados">Classificados</a>
-              <a href="/comunicados">Comunicados</a>
-              <a href="/busca">Busca</a>
-              <a href="/sobre">Sobre</a>
-              <a href="/contato">Contato</a>
-            </nav>
-          </>
-        )}
+            )}
+          </nav>
+
+          <nav aria-label="Cobertura regional no rodapé">
+            <span className="site-footer__column-title">Cobertura regional</span>
+            {regionalCities.length > 0 ? (
+              regionalCities.slice(0, 12).map((category) => (
+                <a href={category.url} key={category.id}>{category.name}</a>
+              ))
+            ) : (
+              <a href="/ultimas">Cobertura regional</a>
+            )}
+          </nav>
+
+          <nav aria-label="Serviços do Nosso Jornal">
+            <span className="site-footer__column-title">Serviços</span>
+            {serviceLinks.length > 0 ? (
+              serviceLinks.slice(0, 12).map((item) => (
+                <a key={item.id} href={item.url} {...navigationLinkProps(item)}>
+                  {item.title}
+                </a>
+              ))
+            ) : (
+              <>
+                <a href="/ultimas">Últimas notícias</a>
+                <a href="/classificados">Classificados</a>
+                <a href="/comunicados">Comunicados</a>
+                <a href="/busca">Busca</a>
+                <a href="/sobre">Sobre</a>
+                <a href="/contato">Contato</a>
+              </>
+            )}
+          </nav>
+        </div>
 
         <div className="site-footer__edition">
           <span className="site-footer__column-title">Nosso Jornal</span>
           <strong>Hulha Negra • Rio Grande do Sul</strong>
           <p>
-            Portal regional com cobertura de notícias, política, economia,
-            segurança, educação, rural, esporte e comunidade.
+            Portal regional com cobertura jornalística de Hulha Negra e da região.
           </p>
           <a href="/contato">Fale com a redação</a>
         </div>

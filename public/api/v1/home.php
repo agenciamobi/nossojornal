@@ -195,13 +195,19 @@ SELECT
     tt.term_taxonomy_id AS taxonomy_id,
     t.name,
     t.slug,
-    tt.parent AS parent_id
+    tt.parent AS parent_id,
+    COALESCE(parent_t.slug, '') AS parent_slug
 FROM {$relationships} tr
 INNER JOIN {$taxonomy} tt
     ON tt.term_taxonomy_id = tr.term_taxonomy_id
     AND tt.taxonomy = 'category'
 INNER JOIN {$terms} t
     ON t.term_id = tt.term_id
+LEFT JOIN {$taxonomy} parent_tt
+    ON parent_tt.term_id = tt.parent
+    AND parent_tt.taxonomy = 'category'
+LEFT JOIN {$terms} parent_t
+    ON parent_t.term_id = parent_tt.term_id
 WHERE tr.object_id IN ({$placeholders})
 ORDER BY t.name ASC
 SQL;
@@ -225,6 +231,7 @@ SQL;
             'name' => (string) $row['name'],
             'slug' => (string) $row['slug'],
             'parentId' => (int) $row['parent_id'] > 0 ? (int) $row['parent_id'] : null,
+            'parentSlug' => trim((string) ($row['parent_slug'] ?? '')) ?: null,
             'url' => '/categoria/' . rawurlencode((string) $row['slug']),
             'color' => nj_category_color_for(
                 (int) $row['id'],
@@ -257,20 +264,7 @@ SQL;
         $id = (int) $row['id'];
         $categories = $categoriesByPost[$id] ?? [];
         $primaryCategoryId = (int) $row['primary_category_id'];
-        $primaryCategory = $categoryById[$primaryCategoryId] ?? null;
-
-        if ($primaryCategory === null || isset($technicalCategorySlugs[$primaryCategory['slug']])) {
-            foreach ($categories as $category) {
-                if (!isset($technicalCategorySlugs[$category['slug']])) {
-                    $primaryCategory = $category;
-                    break;
-                }
-            }
-        }
-
-        if ($primaryCategory === null && $categories !== []) {
-            $primaryCategory = $categories[0];
-        }
+        $primaryCategory = nj_content_primary_category($categories, $primaryCategoryId);
 
         $articleTitle = trim(html_entity_decode(
             strip_tags((string) $row['title']),

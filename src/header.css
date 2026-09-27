@@ -1,3 +1,15 @@
+.primary-nav {
+  position: relative;
+  z-index: 30;
+  overflow: visible;
+}
+
+.regional-nav,
+.news-ticker {
+  position: relative;
+  z-index: 1;
+}
+
 .utility__edition {
   display: flex;
   align-items: center;
@@ -140,12 +152,13 @@
   position: absolute;
   left: 0;
   top: 50%;
-  width: 5px;
-  height: 5px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: var(--category-color, var(--blue));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--category-color, var(--blue)) 14%, transparent);
   transform: translateY(-50%);
-  opacity: .45;
+  opacity: 1;
 }
 
 .regional-nav__category:hover::before,
@@ -237,11 +250,12 @@
 }
 
 .news-ticker__dot {
-  width: 5px;
-  height: 5px;
-  flex: 0 0 5px;
+  width: 6px;
+  height: 6px;
+  flex: 0 0 6px;
   border-radius: 999px;
-  background: var(--sky);
+  background: var(--story-color, var(--sky));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--story-color, var(--sky)) 14%, transparent);
 }
 
 .news-ticker__item:hover,
@@ -338,7 +352,8 @@
 
   .primary-nav__category::after,
   .primary-nav__native-item > a::before,
-  .primary-nav__submenu {
+  .primary-nav__submenu,
+  .primary-nav__submenu-toggle span {
     transition: none;
   }
 }
@@ -389,15 +404,36 @@
   color: #fff;
 }
 
-.primary-nav__native-item.has-children > a::after {
-  content: "";
-  width: 6px;
-  height: 6px;
-  margin-left: 7px;
+.primary-nav__submenu-toggle {
+  width: 24px;
+  min-height: 48px;
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 24px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: #dbe6f9;
+  cursor: pointer;
+}
+
+.primary-nav__submenu-toggle span {
+  width: 7px;
+  height: 7px;
   border-right: 1.5px solid currentColor;
   border-bottom: 1.5px solid currentColor;
   transform: translateY(-2px) rotate(45deg);
-  opacity: .7;
+  opacity: .8;
+  transition: transform .16s ease;
+}
+
+.primary-nav__submenu-toggle[aria-expanded="true"] span {
+  transform: translateY(2px) rotate(225deg);
+}
+
+.primary-nav__submenu-toggle:hover,
+.primary-nav__submenu-toggle:focus-visible {
+  color: #fff;
 }
 
 .primary-nav__submenu {
@@ -405,9 +441,12 @@
   z-index: 40;
   top: calc(100% - 2px);
   left: -12px;
-  width: min(280px, 82vw);
+  width: min(300px, 82vw);
+  max-height: min(560px, 70vh);
   display: grid;
   gap: 1px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 8px;
   border: 1px solid #263755;
   border-radius: 0 0 8px 8px;
@@ -463,7 +502,8 @@
 }
 
 .primary-nav__native-item:hover .primary-nav__submenu,
-.primary-nav__native-item:focus-within .primary-nav__submenu {
+.primary-nav__native-item:focus-within .primary-nav__submenu,
+.primary-nav__native-item[data-open="true"] .primary-nav__submenu {
   opacity: 1;
   pointer-events: auto;
   transform: translateY(0);
@@ -480,7 +520,7 @@
     display: none;
   }
 
-  .primary-nav__native-item.has-children > a::after {
+  .primary-nav__submenu-toggle {
     display: none;
   }
 }
