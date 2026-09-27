@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { Editor } from 'grapesjs';
 import './admin-ads.css';
 
 type FormatPreset = {
@@ -212,17 +211,32 @@ function Html5Builder({
   onChange: (next: typeof EMPTY_CREATIVE) => void;
 }) {
   const rootRef = useRef<HTMLDivElement | null>(null);
-  const editorRef = useRef<Editor | null>(null);
+  const editorRef = useRef<{
+    destroy: () => void;
+    getHtml: () => string;
+    getCss: () => string;
+    on: (event: string, callback: () => void) => void;
+    BlockManager: { add: (id: string, options: Record<string, unknown>) => void };
+  } | null>(null);
 
   useEffect(() => {
     if (!rootRef.current || editorRef.current) return;
 
     let cancelled = false;
 
-    void Promise.all([
-      import('grapesjs'),
-      import('grapesjs/dist/css/grapes.min.css'),
-    ]).then(([module]) => {
+    const styleId = 'nj-grapesjs-styles';
+    if (!document.getElementById(styleId)) {
+      const link = document.createElement('link');
+      link.id = styleId;
+      link.rel = 'stylesheet';
+      link.href = 'https://cdn.jsdelivr.net/npm/grapesjs@0.23.6/dist/css/grapes.min.css';
+      link.crossOrigin = 'anonymous';
+      document.head.appendChild(link);
+    }
+
+    const moduleUrl = 'https://cdn.jsdelivr.net/npm/grapesjs@0.23.6/+esm';
+
+    void import(/* @vite-ignore */ moduleUrl).then((module) => {
       if (cancelled || !rootRef.current) return;
 
       const initialHtml = creative.html || `
