@@ -3365,3 +3365,44 @@ O arquivo de categoria deixa de usar:
 - acento inferior animado em cada card.
 
 O resultado aproxima a navegação interna da identidade da homepage, mantendo a página de editoria mais limpa e própria para leitura sequencial.
+
+
+## 61. Autonomia cromática dos cards em arquivos mistos
+
+Em páginas que reúnem notícias de várias editorias, a cor deixa de ser definida pelo contexto da página e passa a ser definida pelo próprio card.
+
+Exemplos:
+
+- Últimas notícias;
+- busca;
+- páginas de tag;
+- páginas de autor;
+- notícias relacionadas;
+- outros grids mistos que reutilizem `ArticleCard`.
+
+### Regra
+
+Cada `ArticleCard` usa a cor de `article.primaryCategory.color` para expor:
+
+```text
+--card-accent
+--editorial-color
+--editorial-contrast
+```
+
+Nos arquivos de uma editoria específica, a exceção continua válida: o card herda a cor da própria página de categoria para manter unidade editorial.
+
+### Aplicação visual
+
+Nos contextos mistos, a cor própria da notícia passa a aparecer também no estado normal em:
+
+- manchete;
+- chip de categoria;
+- foco de teclado na mídia;
+- hover/focus do chip;
+- links dos metadados;
+- fallback visual quando a notícia não possui imagem.
+
+O zoom discreto da fotografia passa a funcionar em todos os cards de arquivo com ponteiro compatível, e continua respeitando `prefers-reduced-motion`.
+
+Assim, uma página como `/ultimas` pode exibir Política, Economia, Segurança ou Esportes lado a lado sem voltar para um azul genérico: cada matéria carrega sua própria identidade cromática.
