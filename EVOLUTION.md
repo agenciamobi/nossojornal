@@ -3267,3 +3267,54 @@ A informação de autoria continua disponível nas matérias e em contextos onde
 - todas as novas transições respeitam `prefers-reduced-motion`.
 
 O objetivo é aproximar a homepage do ritmo de uma capa editorial, evitando tanto blocos excessivamente uniformes quanto animações típicas de interfaces SaaS.
+
+
+## 59. Herança cromática integral e limpeza das réguas editoriais
+
+A homepage passa a tratar a cor da editoria como linguagem visual integral dos cards exibidos dentro de sua seção.
+
+### Herança dentro das editorias
+
+Em uma seção como `Política`:
+
+- manchetes já aparecem na cor de Política no estado normal;
+- badges mantêm seu texto/categoria original, mas herdam a cor da editoria em que o card está sendo apresentado;
+- hover/focus escurece discretamente a cor existente, em vez de ativar a identidade cromática apenas durante a interação;
+- cards globais fora das seções editoriais continuam usando a cor de sua própria categoria primária.
+
+Isso evita que chips com azul padrão ou outra cor concorrente quebrem a unidade cromática da editoria.
+
+### Réguas e filetes
+
+Foram removidos elementos decorativos que pareciam traços soltos:
+
+- filete superior de hover dos cards de Últimas;
+- pequenos filetes sobre cards secundários;
+- filete superior da matéria de continuidade;
+- acento inferior animado dos cards editoriais.
+
+O cabeçalho da editoria passa a ser composto por:
+
+```text
+EDITORIA
+[Título arredondado]────────────────────────────
+```
+
+A régua nasce diretamente no bloco do título e segue apenas para a direita, sem segmento perdido antes dele.
+
+### Arredondamento
+
+Imagens e links de mídia recebem raios consistentes e clipping explícito:
+
+- cards principais e globais: 18px;
+- cards secundários e de continuidade: 16px;
+- título cromático da editoria: cantos superiores arredondados.
+
+### Transição entre editorias
+
+A alternância de fundo deixa de depender da posição genérica do elemento na página e passa a ser controlada explicitamente pelo índice da editoria:
+
+- seção base branca;
+- seção alternada com cinza editorial muito leve.
+
+Isso estabiliza a alternância mesmo se novas seções forem inseridas antes do bloco editorial.
