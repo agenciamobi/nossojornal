@@ -182,6 +182,15 @@ function nj_table(string $suffix): string
     return '`' . $prefix . $suffix . '`';
 }
 
+function nj_app_table(string $suffix): string
+{
+    if (!preg_match('/^[a-z0-9_]+$/', $suffix)) {
+        throw new LogicException('invalid_app_table_suffix');
+    }
+
+    return '`njapp_' . $suffix . '`';
+}
+
 function nj_db(): PDO
 {
     static $pdo = null;
