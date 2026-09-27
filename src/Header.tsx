@@ -187,7 +187,7 @@ function NativePrimaryItem({
           <button
             className="primary-nav__submenu-toggle"
             type="button"
-            aria-label={`Abrir submenu de ${item.title}`}
+            aria-label={`${submenuOpen ? 'Fechar' : 'Abrir'} submenu de ${item.title}`}
             aria-expanded={submenuOpen}
             onClick={() => setSubmenuOpen((open) => !open)}
           >
