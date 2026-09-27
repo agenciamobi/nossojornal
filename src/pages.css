@@ -123,6 +123,7 @@
 
 .article-detail__header h1 {
   margin: 12px 0 20px;
+  color: var(--editorial-color, var(--ink));
   font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
   font-size: clamp(48px, 7vw, 82px);
   font-weight: 600;
@@ -136,6 +137,15 @@
   color: #526074;
   font-size: clamp(18px, 2vw, 23px);
   line-height: 1.45;
+}
+
+.article-detail__header .article-detail__eyebrow-row .internal-kicker {
+  min-height: 24px;
+  align-items: center;
+  border-radius: 999px;
+  padding: 2px 9px;
+  background: color-mix(in srgb, var(--editorial-color, var(--blue)) 10%, #fff);
+  color: var(--editorial-color, var(--blue));
 }
 
 .article-detail__meta-row {
@@ -586,14 +596,28 @@
 }
 
 .article-detail__categories a {
-  padding-block: 5px;
-  color: #536073;
+  position: relative;
+  padding: 5px 0 5px 12px;
+  color: var(--category-color, var(--editorial-color, var(--blue)));
   font-size: 12px;
+  font-weight: 700;
+}
+
+.article-detail__categories a::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--category-color, var(--editorial-color, var(--blue)));
+  transform: translateY(-50%);
 }
 
 .article-detail__categories a:hover,
 .article-detail__categories a:focus-visible {
-  color: var(--editorial-color, var(--blue));
+  color: color-mix(in srgb, var(--category-color, var(--editorial-color, var(--blue))) 82%, #000 18%);
 }
 
 .article-detail__back-category {
