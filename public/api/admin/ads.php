@@ -89,6 +89,39 @@ function nj_ads_slug(string $value): string
     return $slug;
 }
 
+function nj_ads_ensure_default_slots(PDO $pdo): void
+{
+    $slots = nj_app_table('ad_slots');
+    $statement = $pdo->prepare("SELECT id FROM {$slots} WHERE code = :code LIMIT 1");
+    $statement->execute(['code' => 'header']);
+
+    if ($statement->fetchColumn() !== false) {
+        return;
+    }
+
+    $insert = $pdo->prepare(
+        "INSERT INTO {$slots}
+            (code,name,location,description,allowed_sizes,fallback_strategy,enabled)
+         VALUES
+            (:code,:name,:location,:description,:allowed_sizes,:fallback_strategy,1)"
+    );
+
+    try {
+        $insert->execute([
+            'code' => 'header',
+            'name' => 'Header / Masthead',
+            'location' => 'Topo do portal, ao lado da marca',
+            'description' => 'Primeiro slot nativo. Quando não houver campanha ativa, preserva o texto institucional atual.',
+            'allowed_sizes' => '970x90,728x90,468x60,300x100,300x50',
+            'fallback_strategy' => 'header_message',
+        ]);
+    } catch (PDOException $error) {
+        if ((string) $error->getCode() !== '23000') {
+            throw $error;
+        }
+    }
+}
+
 function nj_ads_snapshot(PDO $pdo): array
 {
     $advertisers = nj_app_table('advertisers');
@@ -204,6 +237,7 @@ nj_admin_run(['GET', 'POST'], static function (string $method): array {
     nj_admin_require_capability($user, 'manage_options');
 
     $pdo = nj_db();
+    nj_ads_ensure_default_slots($pdo);
 
     if ($method === 'GET') {
         return nj_ads_snapshot($pdo);
