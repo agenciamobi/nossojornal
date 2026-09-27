@@ -3480,3 +3480,140 @@ Elas passam a consumir `/api/v1/categories.php`:
 - inclusão e remoção de categorias se refletem automaticamente no frontend.
 
 A descrição institucional do rodapé também deixa de enumerar editorias fixas em texto.
+
+
+## 64. Gerenciador nativo de publicidade
+
+O portal passa a possuir uma camada própria de anúncios, sem dependência inicial de Google Ads ou outro provedor externo.
+
+A modelagem segue conceitos consolidados de ad servers, como anunciante, campanha, criativo, posição e veiculação, mas permanece nativa do Nosso Jornal.
+
+### Namespace de banco
+
+Toda a nova camada usa `njapp_*`:
+
+- `njapp_advertisers`;
+- `njapp_ad_campaigns`;
+- `njapp_ad_slots`;
+- `njapp_ad_creatives`;
+- `njapp_ad_placements`.
+
+Nenhuma tabela nova é criada no namespace legado `njsite_*`.
+
+### Formatos suportados no primeiro gate
+
+Presets desktop:
+
+- 970×90;
+- 728×90;
+- 468×60;
+- 336×280;
+- 300×600;
+- 300×250;
+- 160×600;
+- 250×250;
+- 200×200.
+
+Presets mobile:
+
+- 300×200;
+- 300×100;
+- 300×50;
+- 300×250;
+- 250×250;
+- 200×200.
+
+Cada posição declara explicitamente quais formatos aceita. Uma veiculação só pode ser criada quando o tamanho do criativo é aceito pelo slot.
+
+### Painel `/sistema/publicidade`
+
+A área administrativa, restrita a usuários com `manage_options`, possui cinco superfícies:
+
+1. **Anunciantes**: identidade e contato comercial;
+2. **Campanhas**: anunciante, janela de tempo, status e prioridade;
+3. **Criativos**: imagem ou HTML5 + CSS3, formato, destino e preview;
+4. **Posições**: localização, formatos aceitos e estratégia de fallback;
+5. **Veiculação**: ligação entre campanha, criativo e posição, com dispositivo, período e prioridade.
+
+### Assistente visual HTML5
+
+O editor visual usa GrapesJS OSS 0.23.6 sob demanda.
+
+Ele só é carregado quando o editor HTML5 é aberto, evitando peso adicional na navegação pública e no restante do painel.
+
+O primeiro gate permite:
+
+- blocos de título, texto, CTA, imagem e layout;
+- edição visual;
+- CSS gerado pelo editor;
+- animações via CSS;
+- preview no formato real.
+
+Por segurança, o backend rejeita:
+
+- `<script>`;
+- iframes internos;
+- objetos/embeds;
+- formulários;
+- handlers `on*`;
+- URLs `javascript:`;
+- `@import` e expressões CSS inseguras.
+
+O criativo publicado roda em `iframe sandbox` com CSP própria e sem permissão para scripts.
+
+### Entrega pública
+
+O endpoint:
+
+```text
+GET /api/v1/ads.php?slot=<codigo>&device=desktop|mobile
+```
+
+resolve a veiculação ativa pela seguinte ordem:
+
+- slot habilitado;
+- placement ativo e dentro da janela;
+- campanha ativa e dentro da janela;
+- criativo ativo;
+- anunciante ativo;
+- dispositivo compatível;
+- maior prioridade.
+
+Sem anúncio válido, a API retorna `ad: null`.
+
+### Primeiro slot: header
+
+O masthead passa a usar:
+
+```text
+AdSlot("header")
+```
+
+O slot aceita inicialmente:
+
+- 970×90;
+- 728×90;
+- 468×60;
+- 300×100;
+- 300×50.
+
+Quando existe anúncio ativo, ele ocupa a área ao lado da marca.
+
+Quando não existe anúncio, o header mantém como fallback:
+
+> Jornalismo local • cobertura regional  
+> Informação de Hulha Negra, da região e do Rio Grande do Sul.
+
+Portanto não existe moldura vazia, placeholder comercial ou espaço demarcado sem campanha.
+
+### Próximos gates
+
+A arquitetura já permite adicionar sem alterar o contrato central:
+
+- slots entre editorias;
+- slots no corpo de matérias;
+- sidebar;
+- rotação ponderada;
+- impressões e cliques;
+- relatórios por anunciante/campanha;
+- futura fonte externa de anúncios usando os mesmos slots.

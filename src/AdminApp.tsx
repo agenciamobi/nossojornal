@@ -6,6 +6,7 @@ import {
   type EditorialRelatedStory,
 } from './AdminEditorialConnections';
 import { AdminWordPressTools } from './AdminWordPressTools';
+import { AdminAds } from './AdminAds';
 import { useAdminEditorGuard } from './admin/useAdminEditorGuard';
 import './admin.css';
 
@@ -774,7 +775,7 @@ type AgendaPayload = {
   };
 };
 
-type AdminView = 'dashboard' | 'homeLayout' | 'agenda' | 'sources' | 'posts' | 'post' | 'pages' | 'page' | 'categories' | 'category' | 'categoryNew' | 'media' | 'mediaItem' | 'comments' | 'users' | 'user' | 'userNew' | 'settings' | 'wordpress' | 'pautas';
+type AdminView = 'dashboard' | 'homeLayout' | 'agenda' | 'sources' | 'posts' | 'post' | 'pages' | 'page' | 'categories' | 'category' | 'categoryNew' | 'media' | 'mediaItem' | 'comments' | 'users' | 'user' | 'userNew' | 'ads' | 'settings' | 'wordpress' | 'pautas';
 
 function resolveAdminView(pathname: string): AdminView {
   const clean = pathname.replace(/\/+$/, '');
@@ -795,6 +796,7 @@ function resolveAdminView(pathname: string): AdminView {
   if (clean === '/sistema/usuarios') return 'users';
   if (clean === '/sistema/usuarios/novo') return 'userNew';
   if (/^\/sistema\/usuarios\/\d+$/.test(clean)) return 'user';
+  if (clean === '/sistema/publicidade') return 'ads';
   if (clean === '/sistema/configuracoes') return 'settings';
   if (clean === '/sistema/wordpress') return 'wordpress';
   if (clean === '/sistema/pautas') return 'pautas';
@@ -1068,6 +1070,7 @@ type AdminIconName =
   | 'users'
   | 'pautas'
   | 'wordpress'
+  | 'ads'
   | 'settings';
 
 function AdminIcon({ name }: { name: AdminIconName }) {
@@ -1191,6 +1194,16 @@ function AdminIcon({ name }: { name: AdminIconName }) {
     );
   }
 
+  if (name === 'ads') {
+    return (
+      <svg {...common}>
+        <rect x="3" y="5" width="18" height="14" rx="2" />
+        <path d="M7 9h10M7 12h6M7 15h4" />
+        <path d="M17 12v4M15 14h4" />
+      </svg>
+    );
+  }
+
   if (name === 'wordpress') {
     return (
       <svg {...common}>
@@ -1250,6 +1263,7 @@ function AdminNav({ user, view }: { user: AdminUser; view: AdminView }) {
       : []),
     ...(user.permissions.manageOptions
       ? [
+          { key: 'ads' as const, label: 'Publicidade', href: '/sistema/publicidade', icon: 'ads' as const, group: 'management' as const },
           { key: 'wordpress' as const, label: 'Acervo WordPress', href: '/sistema/wordpress', icon: 'wordpress' as const, group: 'system' as const },
           { key: 'settings' as const, label: 'Configurações', href: '/sistema/configuracoes', icon: 'settings' as const, group: 'system' as const },
         ]
@@ -9933,6 +9947,11 @@ export function AdminApp() {
               : <AdminAccessDenied />
           )}
           {view === 'user' && <UserEditorView user={user} csrfToken={csrfToken} />}
+          {view === 'ads' && (
+            user.permissions.manageOptions
+              ? <AdminAds csrfToken={csrfToken} />
+              : <AdminAccessDenied />
+          )}
           {view === 'settings' && <SettingsView csrfToken={csrfToken} />}
           {view === 'wordpress' && (
             user.permissions.manageOptions

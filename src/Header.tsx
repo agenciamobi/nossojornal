@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { CSSProperties } from 'react';
+import { AdSlot } from './AdSlot';
 import {
   loadNavigation,
   navigationLinkProps,
@@ -458,10 +459,16 @@ export function SiteHeader() {
       <div className="masthead">
         <div className="container masthead__inner">
           <Brand />
-          <div className="masthead__message">
-            <span>Jornalismo local • cobertura regional</span>
-            <strong>Informação de Hulha Negra, da região e do Rio Grande do Sul.</strong>
-          </div>
+          <AdSlot
+            slot="header"
+            className="masthead__ad-slot"
+            fallback={(
+              <div className="masthead__message">
+                <span>Jornalismo local • cobertura regional</span>
+                <strong>Informação de Hulha Negra, da região e do Rio Grande do Sul.</strong>
+              </div>
+            )}
+          />
         </div>
       </div>
 
