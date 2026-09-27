@@ -247,8 +247,7 @@ export function SiteFooter() {
           <span className="site-footer__column-title">Nosso Jornal</span>
           <strong>Hulha Negra • Rio Grande do Sul</strong>
           <p>
-            Portal regional com cobertura de notícias, política, economia,
-            segurança, educação, rural, esporte e comunidade.
+            Portal regional com cobertura jornalística de Hulha Negra e da região.
           </p>
           <a href="/contato">Fale com a redação</a>
         </div>
