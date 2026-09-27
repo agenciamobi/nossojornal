@@ -3480,3 +3480,49 @@ Elas passam a consumir `/api/v1/categories.php`:
 - inclusão e remoção de categorias se refletem automaticamente no frontend.
 
 A descrição institucional do rodapé também deixa de enumerar editorias fixas em texto.
+
+
+## 63. Política de categorização editorial
+
+A taxonomia das notícias passa a seguir um contrato simples para evitar matérias com três ou quatro editorias concorrentes.
+
+### Regra pública
+
+Cada notícia pode ter:
+
+- **uma editoria**, responsável por identidade, cor e distribuição;
+- **uma localidade**, opcional, responsável apenas pelo contexto regional.
+
+Exemplo:
+
+```text
+Rural        ← principal
+Hulha Negra  ← contexto regional
+```
+
+Não é permitido acumular duas editorias ou duas localidades na mesma notícia.
+
+Categorias técnicas como `Capa`, `Outros`, `Cobertura Regional` e `Eleições 2024` não são aceitas como categorias editoriais de uma matéria.
+
+### Categoria principal
+
+A categoria principal deixa de depender de ordem acidental do banco ou de uma seleção esquecida.
+
+Ao salvar:
+
+1. se houver uma editoria, ela é a principal;
+2. se houver apenas uma localidade, ela é a principal;
+3. sem categorias, a primária fica vazia.
+
+O valor é persistido em `_yoast_wpseo_primary_category`, mantendo compatibilidade com o banco legado e oferecendo uma única fonte para cor e herança editorial.
+
+### Editor
+
+No painel:
+
+- selecionar uma nova editoria substitui a editoria anterior;
+- selecionar uma nova localidade substitui a localidade anterior;
+- categorias técnicas deixam de aparecer no seletor da notícia;
+- a categoria principal é exibida como resultado automático da composição editorial.
+
+O backend repete as mesmas validações, portanto chamadas diretas à API não conseguem reintroduzir combinações ambíguas.
