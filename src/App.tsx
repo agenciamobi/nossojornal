@@ -171,7 +171,13 @@ function editorialStyle(color?: string) {
     : undefined;
 }
 
-function CategoryBadge({ category }: { category: Category | null }) {
+function CategoryBadge({
+  category,
+  inheritColor = false,
+}: {
+  category: Category | null;
+  inheritColor?: boolean;
+}) {
   if (!category) {
     return <span className="home-eyebrow">Nosso Jornal</span>;
   }
@@ -180,7 +186,7 @@ function CategoryBadge({ category }: { category: Category | null }) {
     <a
       className="home-eyebrow"
       href={category.url}
-      style={editorialStyle(category.color)}
+      style={inheritColor ? undefined : editorialStyle(category.color)}
     >
       {category.name}
     </a>
@@ -406,9 +412,9 @@ function PublicSite() {
             </div>
           </section>
 
-          {sections.map((section) => (
+          {sections.map((section, sectionIndex) => (
             <section
-              className="home-category-section"
+              className={`home-category-section ${sectionIndex % 2 === 1 ? 'home-category-section--alt' : ''}`}
               key={section.category.id}
               aria-labelledby={`section-${section.category.slug}`}
               style={editorialStyle(section.category.color)}
@@ -455,7 +461,7 @@ function PublicSite() {
                       </a>
 
                       <div className="home-category-card__body">
-                        <CategoryBadge category={article.primaryCategory} />
+                        <CategoryBadge category={article.primaryCategory} inheritColor />
                         <h3>
                           <a href={article.url}>{homeTitle(article)}</a>
                         </h3>
