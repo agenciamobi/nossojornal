@@ -89,7 +89,22 @@ type AdsPayload = {
   error?: { code?: string };
 };
 
-const EMPTY_ADVERTISER = {
+type AdvertiserDraft = Advertiser;
+type CampaignDraft = Omit<Campaign, 'advertiserName' | 'startsAt' | 'endsAt'> & {
+  startsAt: string;
+  endsAt: string;
+};
+type SlotDraft = AdSlotRecord;
+type CreativeDraft = Omit<Creative, 'campaignName'>;
+type PlacementDraft = Omit<
+  Placement,
+  'campaignName' | 'creativeName' | 'slotName' | 'slotCode' | 'startsAt' | 'endsAt'
+> & {
+  startsAt: string;
+  endsAt: string;
+};
+
+const EMPTY_ADVERTISER: AdvertiserDraft = {
   id: 0,
   name: '',
   slug: '',
@@ -100,7 +115,7 @@ const EMPTY_ADVERTISER = {
   status: 'active' as const,
 };
 
-const EMPTY_CAMPAIGN = {
+const EMPTY_CAMPAIGN: CampaignDraft = {
   id: 0,
   advertiserId: 0,
   name: '',
@@ -111,7 +126,7 @@ const EMPTY_CAMPAIGN = {
   notes: '',
 };
 
-const EMPTY_SLOT = {
+const EMPTY_SLOT: SlotDraft = {
   id: 0,
   code: '',
   name: '',
@@ -122,7 +137,7 @@ const EMPTY_SLOT = {
   enabled: true,
 };
 
-const EMPTY_CREATIVE = {
+const EMPTY_CREATIVE: CreativeDraft = {
   id: 0,
   campaignId: 0,
   name: '',
@@ -137,7 +152,7 @@ const EMPTY_CREATIVE = {
   status: 'draft' as const,
 };
 
-const EMPTY_PLACEMENT = {
+const EMPTY_PLACEMENT: PlacementDraft = {
   id: 0,
   campaignId: 0,
   creativeId: 0,
@@ -207,8 +222,8 @@ function Html5Builder({
   creative,
   onChange,
 }: {
-  creative: typeof EMPTY_CREATIVE;
-  onChange: (next: typeof EMPTY_CREATIVE) => void;
+  creative: CreativeDraft;
+  onChange: (next: CreativeDraft) => void;
 }) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const editorRef = useRef<{
@@ -360,11 +375,11 @@ export function AdminAds({ csrfToken }: { csrfToken: string }) {
   const [errorCode, setErrorCode] = useState('');
   const [builderOpen, setBuilderOpen] = useState(false);
 
-  const [advertiser, setAdvertiser] = useState({ ...EMPTY_ADVERTISER });
-  const [campaign, setCampaign] = useState({ ...EMPTY_CAMPAIGN });
-  const [slot, setSlot] = useState({ ...EMPTY_SLOT });
-  const [creative, setCreative] = useState({ ...EMPTY_CREATIVE });
-  const [placement, setPlacement] = useState({ ...EMPTY_PLACEMENT });
+  const [advertiser, setAdvertiser] = useState<AdvertiserDraft>({ ...EMPTY_ADVERTISER });
+  const [campaign, setCampaign] = useState<CampaignDraft>({ ...EMPTY_CAMPAIGN });
+  const [slot, setSlot] = useState<SlotDraft>({ ...EMPTY_SLOT });
+  const [creative, setCreative] = useState<CreativeDraft>({ ...EMPTY_CREATIVE });
+  const [placement, setPlacement] = useState<PlacementDraft>({ ...EMPTY_PLACEMENT });
 
   useEffect(() => {
     void adminRequest(csrfToken)
