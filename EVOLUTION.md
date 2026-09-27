@@ -3406,3 +3406,77 @@ Nos contextos mistos, a cor própria da notícia passa a aparecer também no est
 O zoom discreto da fotografia passa a funcionar em todos os cards de arquivo com ponteiro compatível, e continua respeitando `prefers-reduced-motion`.
 
 Assim, uma página como `/ultimas` pode exibir Política, Economia, Segurança ou Esportes lado a lado sem voltar para um azul genérico: cada matéria carrega sua própria identidade cromática.
+
+
+## 62. Navegação dinâmica, cores por categoria e prioridade editorial
+
+Esta rodada consolida a taxonomia pública como fonte de verdade para navegação e identidade cromática.
+
+### Submenu Notícias
+
+O item `Notícias` do menu principal deixa de depender apenas de filhos cadastrados manualmente no menu WordPress.
+
+Quando a taxonomia pública está disponível, o submenu é montado dinamicamente a partir das categorias editoriais publicadas:
+
+- categorias novas entram automaticamente;
+- categorias removidas deixam de aparecer;
+- categorias sem publicações não entram no submenu;
+- a ordem editorial conhecida continua sendo respeitada e categorias novas entram de forma previsível.
+
+O submenu também recebe um controle explícito de abertura/fechamento por botão, além de hover e foco, com `aria-expanded`, fechamento por perda de foco e suporte à tecla Escape.
+
+A camada do menu recebe prioridade visual própria para que o dropdown não fique escondido atrás das barras regional e de últimas.
+
+### Bolinhas cromáticas
+
+As bolinhas passam a representar a origem real do conteúdo:
+
+- cidades na faixa Cobertura Regional usam a cor da respectiva categoria;
+- notícias no ticker de Últimas usam a cor da categoria primária da própria matéria.
+
+O endpoint `/api/v1/latest.php` passa a incluir `primaryCategory` com a cor editorial necessária para esse comportamento.
+
+### Editorias x localização
+
+O resolvedor de categoria primária passa a diferenciar editoria de contexto geográfico.
+
+Uma matéria vinculada, por exemplo, a:
+
+```text
+Rural
+Hulha Negra
+```
+
+passa a usar `Rural` como categoria editorial primária e `Hulha Negra` como contexto regional.
+
+A regra é:
+
+1. respeitar a categoria primária configurada quando ela for editorial;
+2. caso contrário, priorizar uma categoria editorial disponível;
+3. somente depois usar categorias regionais;
+4. preservar categoria regional quando não houver outra editoria.
+
+Essa resolução é compartilhada entre matérias, arquivos, ticker e homepage.
+
+### Página da matéria
+
+A matéria interna passa a usar a cor da categoria editorial primária também no estado normal:
+
+- título principal;
+- kicker;
+- botões e acentos já existentes;
+- lista dinâmica de categorias no rail lateral.
+
+As categorias relacionadas à matéria continuam vindo diretamente da taxonomia e cada item da lista expõe sua própria cor.
+
+### Rodapé dinâmico
+
+As colunas `Editorias` e `Cobertura regional` do rodapé deixam de depender de listas fixas.
+
+Elas passam a consumir `/api/v1/categories.php`:
+
+- editorias publicadas são listadas dinamicamente;
+- cidades são derivadas dos filhos de `cobertura-regional`;
+- inclusão e remoção de categorias se refletem automaticamente no frontend.
+
+A descrição institucional do rodapé também deixa de enumerar editorias fixas em texto.
