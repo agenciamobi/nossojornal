@@ -791,8 +791,13 @@
   margin-bottom: 15px;
   border-radius: 18px;
   outline: 0;
-  background: linear-gradient(145deg, #152750, #0a3284);
-  color: rgba(255,255,255,.72);
+  background:
+    linear-gradient(
+      145deg,
+      color-mix(in srgb, var(--card-accent, var(--blue)) 72%, #152750),
+      color-mix(in srgb, var(--card-accent, var(--blue)) 78%, #0a3284)
+    );
+  color: rgba(255,255,255,.78);
   font-size: 10px;
   font-weight: 900;
   letter-spacing: .12em;
@@ -807,8 +812,8 @@
   transition: transform .32s cubic-bezier(.2, .72, .28, 1);
 }
 
-.archive-page--category .archive-card__media:focus-visible {
-  outline: 3px solid color-mix(in srgb, var(--editorial-color, var(--blue)) 54%, #fff);
+.archive-card__media:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--card-accent, var(--editorial-color, var(--blue))) 54%, #fff);
   outline-offset: 4px;
 }
 
@@ -821,9 +826,9 @@
   color: var(--card-accent, var(--editorial-color, var(--blue)));
 }
 
-.archive-page--category .archive-card__body > .internal-kicker:hover,
-.archive-page--category .archive-card__body > .internal-kicker:focus-visible {
-  background: var(--editorial-color, var(--blue));
+.archive-card__body > .internal-kicker:hover,
+.archive-card__body > .internal-kicker:focus-visible {
+  background: var(--card-accent, var(--editorial-color, var(--blue)));
   color: var(--editorial-contrast, #fff);
 }
 
@@ -836,8 +841,8 @@
   line-height: 1.08;
 }
 
-.archive-page--category .archive-card__body h2 a {
-  color: var(--editorial-color, var(--blue));
+.archive-card__body h2 a {
+  color: var(--card-accent, var(--editorial-color, var(--blue)));
 }
 
 .archive-card__body h2 a:hover,
@@ -871,7 +876,7 @@
 
 .archive-card__meta a:hover,
 .archive-card__meta a:focus-visible {
-  color: var(--editorial-color, var(--blue));
+  color: var(--card-accent, var(--editorial-color, var(--blue)));
 }
 
 .archive-card__meta span + span::before,
@@ -1212,7 +1217,7 @@
 
 
 @media (hover: hover) and (pointer: fine) {
-  .archive-page--category .archive-card:hover .archive-card__media img {
+  .archive-card:hover .archive-card__media img {
     transform: scale(1.025);
   }
 }
