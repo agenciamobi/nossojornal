@@ -7,6 +7,8 @@ require __DIR__ . '/_content.php';
 nj_run(static function (): array {
     $pdo = nj_db();
     $posts = nj_table('posts');
+    $postmeta = nj_table('postmeta');
+    $users = nj_table('users');
 
     $requestedLimit = filter_input(INPUT_GET, 'limit', FILTER_VALIDATE_INT, [
         'options' => [
@@ -19,50 +21,34 @@ nj_run(static function (): array {
     $limit = is_int($requestedLimit) ? $requestedLimit : 6;
     $limit = max(1, min(20, $limit));
 
-    $sql = <<<SQL
-SELECT
-    ID AS id,
-    post_title AS title,
-    post_name AS slug,
-    post_date AS published_at,
-    post_modified AS modified_at
-FROM {$posts}
+    $select = nj_content_article_select($posts, $postmeta, $users);
+    $sql = $select . <<<SQL
+
 WHERE
-    post_type = 'post'
-    AND post_status = 'publish'
-    AND post_password = ''
-    AND post_title <> ''
-    AND post_name <> ''
+    p.post_type = 'post'
+    AND p.post_status = 'publish'
+    AND p.post_password = ''
+    AND p.post_title <> ''
+    AND p.post_name <> ''
 ORDER BY
-    post_date DESC,
-    ID DESC
+    p.post_date DESC,
+    p.ID DESC
 LIMIT {$limit}
 SQL;
 
-    $rows = $pdo->query($sql)->fetchAll();
-    $items = [];
-
-    foreach ($rows as $row) {
-        $slug = (string) $row['slug'];
-        $title = trim(strip_tags(html_entity_decode(
-            (string) $row['title'],
-            ENT_QUOTES | ENT_HTML5,
-            'UTF-8'
-        )));
-
-        if ($title === '') {
-            continue;
-        }
-
-        $items[] = [
-            'id' => (int) $row['id'],
-            'title' => $title,
-            'slug' => $slug,
-            'url' => '/noticia/' . rawurlencode($slug),
-            'publishedAt' => nj_content_iso8601((string) $row['published_at']),
-            'modifiedAt' => nj_content_iso8601((string) $row['modified_at']),
-        ];
-    }
+    $articles = nj_content_hydrate_articles($pdo, $pdo->query($sql)->fetchAll());
+    $items = array_map(
+        static fn (array $article): array => [
+            'id' => (int) $article['id'],
+            'title' => (string) $article['title'],
+            'slug' => (string) $article['slug'],
+            'url' => (string) $article['url'],
+            'publishedAt' => (string) $article['publishedAt'],
+            'modifiedAt' => (string) $article['modifiedAt'],
+            'primaryCategory' => $article['primaryCategory'],
+        ],
+        $articles
+    );
 
     return [
         'items' => $items,
