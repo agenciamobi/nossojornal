@@ -3318,3 +3318,50 @@ A alternância de fundo deixa de depender da posição genérica do elemento na 
 - seção alternada com cinza editorial muito leve.
 
 Isso estabiliza a alternância mesmo se novas seções forem inseridas antes do bloco editorial.
+
+
+## 60. Sistema visual editorial nas páginas internas de categoria
+
+As páginas `/categoria/:slug` passam a compartilhar a mesma linguagem cromática consolidada na homepage, sem copiar a composição da capa.
+
+### Cabeçalho da editoria
+
+O título da categoria usa o mesmo princípio editorial:
+
+```text
+EDITORIA
+[Título arredondado]────────────────────────────
+descrição                                  [N publicações]
+```
+
+A régua nasce diretamente do bloco do título e segue somente para a direita.
+
+O bloco cromático recebe cantos superiores arredondados e continua usando contraste calculado por `--editorial-contrast`.
+
+### Herança cromática dos cards
+
+Dentro de uma página de editoria:
+
+- os cards deixam de trocar visualmente para a cor da categoria primária individual da matéria;
+- manchetes usam a cor da editoria no estado normal;
+- chips preservam o nome real da categoria da notícia, mas usam a cor da editoria;
+- hover e foco escurecem discretamente a mesma cor;
+- paginação, contador e breadcrumbs continuam usando o mesmo contexto cromático.
+
+Essa regra vale somente para arquivos de categoria. Tags, busca, últimas e páginas de autor continuam podendo usar a cor primária própria de cada matéria.
+
+### Bordas e imagens
+
+- imagens dos cards passam a usar raio de 18px;
+- foco de teclado na imagem recebe outline derivado da cor editorial;
+- imagens podem receber zoom fotográfico discreto apenas em dispositivos com ponteiro e hover;
+- o movimento respeita `prefers-reduced-motion`.
+
+### Limpeza visual
+
+O arquivo de categoria deixa de usar:
+
+- régua escura genérica acima da grade;
+- acento inferior animado em cada card.
+
+O resultado aproxima a navegação interna da identidade da homepage, mantendo a página de editoria mais limpa e própria para leitura sequencial.
