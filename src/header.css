@@ -441,9 +441,12 @@
   z-index: 40;
   top: calc(100% - 2px);
   left: -12px;
-  width: min(280px, 82vw);
+  width: min(300px, 82vw);
+  max-height: min(560px, 70vh);
   display: grid;
   gap: 1px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 8px;
   border: 1px solid #263755;
   border-radius: 0 0 8px 8px;
