@@ -30,6 +30,12 @@ type LatestStory = {
   url: string;
   publishedAt: string;
   modifiedAt: string;
+  primaryCategory: {
+    name: string;
+    slug: string;
+    url: string;
+    color: string;
+  } | null;
 };
 
 type CategoriesResponse = {
@@ -116,28 +122,56 @@ function navigationPath(url: string) {
   return url.split(/[?#]/, 1)[0].replace(/\/+$/, '') || '/';
 }
 
+function isNewsNavigationItem(item: NavigationItem) {
+  const normalizedTitle = item.title
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLocaleLowerCase('pt-BR');
+  const path = navigationPath(item.url);
+
+  return normalizedTitle === 'noticias' || path === '/noticias';
+}
+
 function NativePrimaryItem({
   item,
   currentPath,
   categoryColorByPath,
+  dynamicCategories = [],
 }: {
   item: NavigationItem;
   currentPath: string;
   categoryColorByPath: Map<string, string>;
+  dynamicCategories?: Category[];
 }) {
+  const [submenuOpen, setSubmenuOpen] = useState(false);
   const itemPath = navigationPath(item.url);
   const active = itemPath !== '' && currentPath === itemPath;
-  const hasChildren = item.children.length > 0;
-  const descendantActive = item.children.some((child) => {
-    const childPath = navigationPath(child.url);
-    return childPath !== '' && childPath === currentPath;
-  });
+  const useDynamicCategories = dynamicCategories.length > 0;
+  const hasChildren = useDynamicCategories || item.children.length > 0;
+  const descendantActive = useDynamicCategories
+    ? dynamicCategories.some((category) => navigationPath(category.url) === currentPath)
+    : item.children.some((child) => {
+        const childPath = navigationPath(child.url);
+        return childPath !== '' && childPath === currentPath;
+      });
   const itemColor = categoryColorByPath.get(itemPath);
 
   return (
     <div
       className={'primary-nav__native-item' + (hasChildren ? ' has-children' : '')}
       data-active={active || descendantActive ? 'true' : undefined}
+      data-open={submenuOpen ? 'true' : undefined}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+          setSubmenuOpen(false);
+        }
+      }}
+      onKeyDown={(event) => {
+        if (event.key === 'Escape') {
+          setSubmenuOpen(false);
+        }
+      }}
     >
       <a
         href={item.url}
@@ -149,25 +183,53 @@ function NativePrimaryItem({
       </a>
 
       {hasChildren && (
-        <div className="primary-nav__submenu" aria-label={`Submenu de ${item.title}`}>
-          {item.children.map((child) => {
-            const childPath = navigationPath(child.url);
-            const childActive = childPath !== '' && currentPath === childPath;
-            const childColor = categoryColorByPath.get(childPath);
+        <>
+          <button
+            className="primary-nav__submenu-toggle"
+            type="button"
+            aria-label={`Abrir submenu de ${item.title}`}
+            aria-expanded={submenuOpen}
+            onClick={() => setSubmenuOpen((open) => !open)}
+          >
+            <span aria-hidden="true" />
+          </button>
 
-            return (
-              <a
-                key={child.id}
-                href={child.url}
-                aria-current={childActive ? 'page' : undefined}
-                style={childColor ? ({ '--category-color': childColor } as CSSProperties) : undefined}
-                {...navigationLinkProps(child)}
-              >
-                {child.title}
-              </a>
-            );
-          })}
-        </div>
+          <div className="primary-nav__submenu" aria-label={`Submenu de ${item.title}`}>
+            {useDynamicCategories
+              ? dynamicCategories.map((category) => {
+                  const categoryPath = navigationPath(category.url);
+                  const categoryActive = categoryPath !== '' && currentPath === categoryPath;
+
+                  return (
+                    <a
+                      key={category.id}
+                      href={category.url}
+                      aria-current={categoryActive ? 'page' : undefined}
+                      style={{ '--category-color': category.color } as CSSProperties}
+                    >
+                      {category.name}
+                    </a>
+                  );
+                })
+              : item.children.map((child) => {
+                  const childPath = navigationPath(child.url);
+                  const childActive = childPath !== '' && currentPath === childPath;
+                  const childColor = categoryColorByPath.get(childPath);
+
+                  return (
+                    <a
+                      key={child.id}
+                      href={child.url}
+                      aria-current={childActive ? 'page' : undefined}
+                      style={childColor ? ({ '--category-color': childColor } as CSSProperties) : undefined}
+                      {...navigationLinkProps(child)}
+                    >
+                      {child.title}
+                    </a>
+                  );
+                })}
+          </div>
+        </>
       )}
     </div>
   );
@@ -188,6 +250,9 @@ function TickerGroup({
           href={story.url}
           className="news-ticker__item"
           tabIndex={duplicate ? -1 : undefined}
+          style={story.primaryCategory?.color
+            ? ({ '--story-color': story.primaryCategory.color } as CSSProperties)
+            : undefined}
         >
           <span className="news-ticker__dot" aria-hidden="true" />
           <span>{story.title}</span>
@@ -306,6 +371,7 @@ export function SiteHeader() {
         categories.filter(
           (category) =>
             category.parentId === null &&
+            category.publishedCount > 0 &&
             !SYSTEM_CATEGORY_SLUGS.has(category.slug),
         ),
       ),
@@ -418,6 +484,7 @@ export function SiteHeader() {
                 item={item}
                 currentPath={currentPath}
                 categoryColorByPath={categoryColorByPath}
+                dynamicCategories={isNewsNavigationItem(item) ? editorialCategories : undefined}
               />
             ))
           ) : (
