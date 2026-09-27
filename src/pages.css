@@ -1454,7 +1454,8 @@
     animation: none;
   }
 
-  .archive-card::after {
+  .archive-card::after,
+  .archive-card__media img {
     transition: none;
   }
 }
