@@ -2869,6 +2869,18 @@ function PostEditorView({
   if (!data || !editorialData || !editorial) return <AdminLoading />;
 
   const post = data.post;
+  const technicalPostCategorySlugs = new Set([
+    'capa',
+    'outros',
+    'cobertura-regional',
+    'eleicoes-2024',
+  ]);
+  const regionalRootId = data.categories.find(
+    (category) => category.slug === 'cobertura-regional',
+  )?.id ?? 0;
+  const selectableCategories = data.categories.filter(
+    (category) => !technicalPostCategorySlugs.has(category.slug),
+  );
   const selectedSet = new Set(categoryIds);
   const selectedCategories = data.categories.filter((category) => selectedSet.has(category.id));
   const originalCategoryIds = post.categories.map((category) => category.id).sort((a, b) => a - b);
@@ -3471,18 +3483,58 @@ function PostEditorView({
   }
 
   function toggleCategory(categoryId: number) {
+    const category = data.categories.find((item) => item.id === categoryId);
+    if (!category || technicalPostCategorySlugs.has(category.slug)) return;
+
+    const isRegional = regionalRootId > 0 && category.parentId === regionalRootId;
+
     setCategoryIds((current) => {
       const exists = current.includes(categoryId);
-      const next = exists
-        ? current.filter((id) => id !== categoryId)
-        : [...current, categoryId];
 
-      if (exists && primaryCategoryId === categoryId) {
-        setPrimaryCategoryId(0);
+      if (exists) {
+        const next = current.filter((id) => id !== categoryId);
+
+        if (primaryCategoryId === categoryId) {
+          const nextEditorial = next
+            .map((id) => data.categories.find((item) => item.id === id))
+            .find(
+              (item) =>
+                item
+                && !technicalPostCategorySlugs.has(item.slug)
+                && !(regionalRootId > 0 && item.parentId === regionalRootId),
+            );
+
+          setPrimaryCategoryId(nextEditorial?.id ?? next[0] ?? 0);
+        }
+
+        return next;
       }
 
+      const next = current.filter((id) => {
+        const currentCategory = data.categories.find((item) => item.id === id);
+        if (!currentCategory || technicalPostCategorySlugs.has(currentCategory.slug)) return false;
+
+        const currentIsRegional =
+          regionalRootId > 0 && currentCategory.parentId === regionalRootId;
+
+        return currentIsRegional !== isRegional;
+      });
+
+      next.push(categoryId);
+
+      const editorial = next
+        .map((id) => data.categories.find((item) => item.id === id))
+        .find(
+          (item) =>
+            item
+            && !technicalPostCategorySlugs.has(item.slug)
+            && !(regionalRootId > 0 && item.parentId === regionalRootId),
+        );
+
+      setPrimaryCategoryId(editorial?.id ?? next[0] ?? 0);
       return next;
     });
+
     setSaveState('idle');
   }
 
@@ -4406,7 +4458,7 @@ function PostEditorView({
             </div>
 
             <div className="admin-editor-categories">
-              {data.categories.map((category) => (
+              {selectableCategories.map((category) => (
                 <label key={category.id}>
                   <input
                     type="checkbox"
@@ -4423,19 +4475,14 @@ function PostEditorView({
             {selectedCategories.length > 0 && (
               <label className="admin-editor-primary-category">
                 <span>Categoria principal</span>
-                <select
-                  value={primaryCategoryId || ''}
-                  disabled={!canEdit}
-                  onChange={(event) => {
-                    setPrimaryCategoryId(Number(event.target.value) || 0);
-                    setSaveState('idle');
-                  }}
-                >
-                  <option value="">Automática</option>
+                <select value={primaryCategoryId || ''} disabled>
                   {selectedCategories.map((category) => (
                     <option value={category.id} key={category.id}>{category.name}</option>
                   ))}
                 </select>
+                <small className="admin-field-help">
+                  A editoria é principal automaticamente; a categoria regional funciona como contexto.
+                </small>
               </label>
             )}
           </section>
