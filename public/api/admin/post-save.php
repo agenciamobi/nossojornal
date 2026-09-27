@@ -126,28 +126,90 @@ SQL);
     }
 
     $taxonomyIds = [];
+    $categoryDetails = [];
     if ($categoryIds !== []) {
+        if (count($categoryIds) > 2) {
+            throw new NjApiHttpException(422, 'too_many_categories');
+        }
+
         $placeholders = implode(',', array_fill(0, count($categoryIds), '?'));
         $categoryStatement = $pdo->prepare(<<<SQL
-SELECT term_id, term_taxonomy_id
-FROM {$taxonomy}
+SELECT
+    tt.term_id,
+    tt.term_taxonomy_id,
+    tt.parent AS parent_id,
+    t.slug,
+    COALESCE(parent_t.slug, '') AS parent_slug
+FROM {$taxonomy} tt
+INNER JOIN {$terms} t
+    ON t.term_id = tt.term_id
+LEFT JOIN {$taxonomy} parent_tt
+    ON parent_tt.term_id = tt.parent
+    AND parent_tt.taxonomy = 'category'
+LEFT JOIN {$terms} parent_t
+    ON parent_t.term_id = parent_tt.term_id
 WHERE
-    taxonomy = 'category'
-    AND term_id IN ({$placeholders})
+    tt.taxonomy = 'category'
+    AND tt.term_id IN ({$placeholders})
 SQL);
         $categoryStatement->execute($categoryIds);
 
         foreach ($categoryStatement->fetchAll() as $categoryRow) {
-            $taxonomyIds[(int) $categoryRow['term_id']] = (int) $categoryRow['term_taxonomy_id'];
+            $termId = (int) $categoryRow['term_id'];
+            $taxonomyIds[$termId] = (int) $categoryRow['term_taxonomy_id'];
+            $categoryDetails[$termId] = [
+                'slug' => (string) $categoryRow['slug'],
+                'parentId' => (int) $categoryRow['parent_id'],
+                'parentSlug' => (string) $categoryRow['parent_slug'],
+            ];
         }
 
         if (count($taxonomyIds) !== count($categoryIds)) {
             throw new NjApiHttpException(422, 'invalid_categories');
         }
-    }
 
-    if ($primaryCategoryId > 0 && !in_array($primaryCategoryId, $categoryIds, true)) {
-        throw new NjApiHttpException(422, 'invalid_primary_category');
+        $technicalSlugs = [
+            'capa' => true,
+            'outros' => true,
+            'cobertura-regional' => true,
+            'eleicoes-2024' => true,
+        ];
+        $editorialCategoryIds = [];
+        $regionalCategoryIds = [];
+
+        foreach ($categoryIds as $categoryId) {
+            $details = $categoryDetails[$categoryId] ?? null;
+            if (!is_array($details)) {
+                continue;
+            }
+
+            if (isset($technicalSlugs[(string) $details['slug']])) {
+                throw new NjApiHttpException(422, 'technical_category_not_allowed');
+            }
+
+            if ((string) $details['parentSlug'] === 'cobertura-regional') {
+                $regionalCategoryIds[] = $categoryId;
+                continue;
+            }
+
+            $editorialCategoryIds[] = $categoryId;
+        }
+
+        if (count($editorialCategoryIds) > 1) {
+            throw new NjApiHttpException(422, 'multiple_editorial_categories');
+        }
+
+        if (count($regionalCategoryIds) > 1) {
+            throw new NjApiHttpException(422, 'multiple_regional_categories');
+        }
+
+        // A editoria define identidade, cor e distribuição. A localidade é contexto.
+        $primaryCategoryId = $editorialCategoryIds[0]
+            ?? $regionalCategoryIds[0]
+            ?? $categoryIds[0]
+            ?? 0;
+    } else {
+        $primaryCategoryId = 0;
     }
 
     $redirectResult = null;
