@@ -1025,7 +1025,13 @@ function ArticlePage({ slug }: { slug: string }) {
                 <span className="internal-kicker">Editorias</span>
                 <div className="article-detail__categories">
                   {article.categories.map((category) => (
-                    <a href={category.url} key={category.id}>{category.name}</a>
+                    <a
+                      href={category.url}
+                      key={category.id}
+                      style={{ '--category-color': category.color } as CSSProperties}
+                    >
+                      {category.name}
+                    </a>
                   ))}
                 </div>
               </div>
