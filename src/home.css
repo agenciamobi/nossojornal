@@ -580,7 +580,6 @@
 .home-category-card .home-media img {
   transform: scale(1.001);
   transition: transform .32s cubic-bezier(.2, .72, .28, 1);
-  will-change: transform;
 }
 
 .home-category-card:focus-within .home-media {
@@ -1101,5 +1100,4 @@
   .home-category-card .home-media img {
     transition: none;
   }
-}
 }
