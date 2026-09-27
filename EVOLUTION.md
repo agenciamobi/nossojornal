@@ -3606,6 +3606,8 @@ Quando não existe anúncio, o header mantém como fallback:
 
 Portanto não existe moldura vazia, placeholder comercial ou espaço demarcado sem campanha.
 
+O slot padrão `header` também é garantido de forma idempotente ao abrir a área administrativa de publicidade. Isso permite recuperar automaticamente instalações em que as tabelas `njapp_*` já existam, mas o seed inicial ainda não tenha sido executado.
+
 ### Próximos gates
 
 A arquitetura já permite adicionar sem alterar o contrato central:
