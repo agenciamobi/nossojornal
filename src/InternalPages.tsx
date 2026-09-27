@@ -471,11 +471,17 @@ function Breadcrumbs({
   );
 }
 
-function ArticleCard({ article }: { article: Article }) {
+function ArticleCard({
+  article,
+  inheritEditorialColor = false,
+}: {
+  article: Article;
+  inheritEditorialColor?: boolean;
+}) {
   return (
     <article
       className="archive-card"
-      style={editorialStyle(article.primaryCategory?.color)}
+      style={inheritEditorialColor ? undefined : editorialStyle(article.primaryCategory?.color)}
     >
       <a className="archive-card__media" href={article.url} aria-label={article.title}>
         {article.featuredImage ? (
@@ -1266,7 +1272,11 @@ function ArchivePage({
           <>
             <div className="archive-grid">
               {payload.items.map((article) => (
-                <ArticleCard article={article} key={article.id} />
+                <ArticleCard
+                  article={article}
+                  inheritEditorialColor={mode === 'category'}
+                  key={article.id}
+                />
               ))}
             </div>
 
