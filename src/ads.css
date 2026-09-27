@@ -1,0 +1,69 @@
+.ad-slot {
+  --ad-width: 970;
+  --ad-height: 90;
+  position: relative;
+  width: min(100%, calc(var(--ad-width) * 1px));
+  min-width: 0;
+}
+
+.ad-slot__label {
+  position: absolute;
+  top: -15px;
+  right: 0;
+  color: rgba(255,255,255,.62);
+  font-size: 8px;
+  font-weight: 850;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.ad-slot__frame {
+  position: relative;
+  width: 100%;
+  aspect-ratio: var(--ad-width) / var(--ad-height);
+  overflow: hidden;
+  border-radius: 10px;
+  background: rgba(255,255,255,.05);
+}
+
+.ad-slot__frame > a,
+.ad-slot__frame > img,
+.ad-slot__frame iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.ad-slot__frame img {
+  object-fit: contain;
+}
+
+.ad-slot__frame iframe {
+  pointer-events: none;
+  background: transparent;
+}
+
+.ad-slot__click-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+}
+
+.masthead__ad-slot {
+  flex: 1 1 auto;
+  max-width: 970px;
+  margin-left: auto;
+}
+
+@media (max-width: 720px) {
+  .ad-slot__label {
+    top: -13px;
+    font-size: 7px;
+  }
+
+  .masthead__ad-slot {
+    width: min(100%, 300px);
+    margin-inline: auto;
+  }
+}
