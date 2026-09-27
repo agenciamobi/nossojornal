@@ -3223,3 +3223,47 @@ O ritmo muda para leitura vertical:
 - proporções de imagem e tamanhos tipográficos deixam de repetir o desktop.
 
 A mudança é puramente de apresentação. O contrato da API e a ordem editorial das matérias permanecem inalterados.
+
+
+## 58. Ritmo interno dos cards editoriais
+
+A hierarquia estrutural da homepage recebe uma segunda camada de refinamento voltada à leitura e à consistência visual.
+
+### Imagens
+
+- a principal mantém proporção panorâmica 16:9;
+- as secundárias ficam menos altas, em 5:3;
+- a matéria de continuidade usa 16:10;
+- no mobile, secundárias e continuidade preservam thumbnails quadradas para economizar altura;
+- hover em dispositivos com ponteiro aplica zoom fotográfico muito discreto, sem deslocar o card.
+
+### Manchetes
+
+As manchetes passam a ter limites visuais por nível:
+
+- principal: até 3 linhas;
+- secundárias: até 3 linhas;
+- continuidade: 2 linhas no desktop e até 3 no mobile.
+
+As secundárias mantêm uma altura mínima de manchete no desktop para evitar degraus excessivos entre os dois cards paralelos.
+
+### Resumo e metadados
+
+O resumo da matéria principal fica limitado a duas linhas.
+
+A densidade dos metadados acompanha o peso editorial:
+
+- principal preserva data e autoria;
+- secundárias e continuidade priorizam data e ocultam autoria na composição compacta;
+- cards compactos usam tipografia e espaçamento menores.
+
+A informação de autoria continua disponível nas matérias e em contextos onde há espaço editorial suficiente.
+
+### Interação e acessibilidade
+
+- links de imagem recebem foco visível com a cor da editoria;
+- foco dentro do card reforça discretamente a fotografia;
+- hover de imagem só é ativado em dispositivos com `hover` e ponteiro fino;
+- todas as novas transições respeitam `prefers-reduced-motion`.
+
+O objetivo é aproximar a homepage do ritmo de uma capa editorial, evitando tanto blocos excessivamente uniformes quanto animações típicas de interfaces SaaS.
