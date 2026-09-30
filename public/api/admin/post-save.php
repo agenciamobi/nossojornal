@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/_admin.php';
 require_once __DIR__ . '/_redirects.php';
+require_once __DIR__ . '/_post_categories.php';
 
 nj_admin_run(['POST'], static function (): array {
     $user = nj_admin_current_user(true);
@@ -125,30 +126,10 @@ SQL);
         $slug = nj_admin_unique_post_slug($pdo, $postId, $slug, $title);
     }
 
-    $taxonomyIds = [];
-    if ($categoryIds !== []) {
-        $placeholders = implode(',', array_fill(0, count($categoryIds), '?'));
-        $categoryStatement = $pdo->prepare(<<<SQL
-SELECT term_id, term_taxonomy_id
-FROM {$taxonomy}
-WHERE
-    taxonomy = 'category'
-    AND term_id IN ({$placeholders})
-SQL);
-        $categoryStatement->execute($categoryIds);
-
-        foreach ($categoryStatement->fetchAll() as $categoryRow) {
-            $taxonomyIds[(int) $categoryRow['term_id']] = (int) $categoryRow['term_taxonomy_id'];
-        }
-
-        if (count($taxonomyIds) !== count($categoryIds)) {
-            throw new NjApiHttpException(422, 'invalid_categories');
-        }
-    }
-
-    if ($primaryCategoryId > 0 && !in_array($primaryCategoryId, $categoryIds, true)) {
-        throw new NjApiHttpException(422, 'invalid_primary_category');
-    }
+    $categoryPolicy = nj_post_category_policy($pdo, $categoryIds);
+    $categoryIds = $categoryPolicy['categoryIds'];
+    $taxonomyIds = $categoryPolicy['taxonomyIds'];
+    $primaryCategoryId = (int) $categoryPolicy['primaryCategoryId'];
 
     $redirectResult = null;
 
