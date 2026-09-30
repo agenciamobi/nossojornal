@@ -3909,3 +3909,28 @@ O teste falha se qualquer alteração futura mudar contexto, derivação, hash d
 
 O primeiro smoke pelo MCP live em 30/09/2026 parou antes do provider com `query_not_allowed` no transporte Core r47. Nenhuma mudança no `agenciamobi/mobimarketinginteligente` foi feita nesta rodada. O Nosso Jornal permanece preparado para retomar o smoke assim que o binding/transporte do Core estiver disponível.
 
+
+
+## 68. Paridade operacional do /sistema com wp-admin
+
+O `/sistema` passa a usar o wp-admin como referência explícita de ergonomia administrativa, sem reintroduzir WordPress como runtime da aplicação.
+
+### Primeira onda
+
+O grupo `Notícias` passa a funcionar como menu-pai e expõe `Todas as notícias`, `Adicionar notícia`, `Categorias` e `Tags`.
+
+`/sistema/noticias/nova` cria um rascunho nativo e encaminha diretamente ao editor existente. A listagem de notícias recebe contagem por status e ações em massa de lixeira/restauração, preservando os checks de capability já existentes.
+
+A tela de categorias passa a reunir formulário de criação e listagem na mesma tela, mantendo pesquisa, hierarquia, slug, descrição, cor editorial e o editor detalhado existente.
+
+### Tags
+
+A taxonomia `post_tag`, que já era usada pelo editor, recebe administração própria em `/sistema/tags`, com leitura, criação, edição rápida, busca, contagem de uso e exclusão protegida por endpoints próprios em `/api/admin/`.
+
+### Comentários
+
+A moderação passa a incluir edição rápida de autor, e-mail, URL e conteúdo, além de resposta administrativa encadeada ao comentário original. As respostas são vinculadas ao usuário autenticado e permanecem submetidas à autorização server-side e CSRF.
+
+### Regra arquitetural
+
+Paridade não significa clonagem de código nem dependência do WordPress. O `/sistema` continua React/Vite, os endpoints continuam PHP próprios em `/api/admin/*`, e o MariaDB existente permanece a autoridade durante a transição. Recursos próprios do Nosso Jornal, como Capa, Agenda, Fontes, Mesa de Pautas e Publicidade, continuam adicionais ao modelo do wp-admin.

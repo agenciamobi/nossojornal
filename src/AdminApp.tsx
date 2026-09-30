@@ -7,8 +7,10 @@ import {
 } from './AdminEditorialConnections';
 import { AdminWordPressTools } from './AdminWordPressTools';
 import { AdminAds } from './AdminAds';
+import { AdminTags } from './AdminTags';
 import { useAdminEditorGuard } from './admin/useAdminEditorGuard';
 import './admin.css';
+import './admin-wp-parity.css';
 
 type AdminUser = {
   id: number;
@@ -181,6 +183,7 @@ type PostsPayload = {
     items: AdminPost[];
     query: string;
     status: string;
+    counts: Record<'all' | 'publish' | 'draft' | 'pending' | 'future' | 'private' | 'trash', number>;
     pagination: {
       page: number;
       perPage: number;
@@ -282,6 +285,7 @@ type CategoriesPayload = {
       slug: string;
       parentId: number | null;
       parentName: string;
+      description: string;
       count: number;
       color: string;
       colorSource: 'palette' | 'termmeta';
@@ -775,7 +779,7 @@ type AgendaPayload = {
   };
 };
 
-type AdminView = 'dashboard' | 'homeLayout' | 'agenda' | 'sources' | 'posts' | 'post' | 'pages' | 'page' | 'categories' | 'category' | 'categoryNew' | 'media' | 'mediaItem' | 'comments' | 'users' | 'user' | 'userNew' | 'ads' | 'settings' | 'wordpress' | 'pautas';
+type AdminView = 'dashboard' | 'homeLayout' | 'agenda' | 'sources' | 'posts' | 'postNew' | 'post' | 'pages' | 'page' | 'categories' | 'category' | 'categoryNew' | 'tags' | 'media' | 'mediaItem' | 'comments' | 'users' | 'user' | 'userNew' | 'ads' | 'settings' | 'wordpress' | 'pautas';
 
 function resolveAdminView(pathname: string): AdminView {
   const clean = pathname.replace(/\/+$/, '');
@@ -784,12 +788,14 @@ function resolveAdminView(pathname: string): AdminView {
   if (clean === '/sistema/agenda') return 'agenda';
   if (clean === '/sistema/fontes') return 'sources';
   if (clean === '/sistema/noticias') return 'posts';
+  if (clean === '/sistema/noticias/nova') return 'postNew';
   if (/^\/sistema\/noticias\/\d+$/.test(clean)) return 'post';
   if (clean === '/sistema/paginas') return 'pages';
   if (/^\/sistema\/paginas\/\d+$/.test(clean)) return 'page';
   if (clean === '/sistema/categorias') return 'categories';
   if (clean === '/sistema/categorias/nova') return 'categoryNew';
   if (/^\/sistema\/categorias\/\d+$/.test(clean)) return 'category';
+  if (clean === '/sistema/tags') return 'tags';
   if (clean === '/sistema/midia') return 'media';
   if (/^\/sistema\/midia\/\d+$/.test(clean)) return 'mediaItem';
   if (clean === '/sistema/comentarios') return 'comments';
@@ -1243,9 +1249,6 @@ function AdminNav({ user, view }: { user: AdminUser; view: AdminView }) {
     ...(user.permissions.editPages
       ? [{ key: 'pages' as const, label: 'Páginas', href: '/sistema/paginas', icon: 'pages' as const, group: 'content' as const }]
       : []),
-    ...(user.permissions.manageCategories
-      ? [{ key: 'categories' as const, label: 'Categorias', href: '/sistema/categorias', icon: 'categories' as const, group: 'content' as const }]
-      : []),
     ...(user.permissions.uploadFiles
       ? [{ key: 'media' as const, label: 'Mídia', href: '/sistema/midia', icon: 'media' as const, group: 'content' as const }]
       : []),
@@ -1276,6 +1279,16 @@ function AdminNav({ user, view }: { user: AdminUser; view: AdminView }) {
     { key: 'system' as const, label: 'Sistema' },
   ];
 
+  const postsFamily = [
+    'posts',
+    'postNew',
+    'post',
+    'categories',
+    'category',
+    'categoryNew',
+    'tags',
+  ].includes(view);
+
   return (
     <aside className="admin-sidebar">
       <a className="admin-sidebar__brand" href="/sistema" aria-label="Painel Nosso Jornal">
@@ -1292,37 +1305,53 @@ function AdminNav({ user, view }: { user: AdminUser; view: AdminView }) {
             <section className="admin-nav__group" key={group.key}>
               <span className="admin-nav__group-label">{group.label}</span>
 
-              {items.map((entry) => (
-                <a
-                  key={entry.key}
-                  href={entry.href}
-                  className={
-                    view === entry.key
-                      || (view === 'post' && entry.key === 'posts')
-                      || (view === 'page' && entry.key === 'pages')
-                      || ((view === 'category' || view === 'categoryNew') && entry.key === 'categories')
-                      || (view === 'mediaItem' && entry.key === 'media')
-                      || ((view === 'user' || view === 'userNew') && entry.key === 'users')
-                      ? 'admin-nav__item admin-nav__item--active'
-                      : 'admin-nav__item'
-                  }
-                  aria-current={
-                    view === entry.key
-                      || (view === 'post' && entry.key === 'posts')
-                      || (view === 'page' && entry.key === 'pages')
-                      || ((view === 'category' || view === 'categoryNew') && entry.key === 'categories')
-                      || (view === 'mediaItem' && entry.key === 'media')
-                      || ((view === 'user' || view === 'userNew') && entry.key === 'users')
-                      ? 'page'
-                      : undefined
-                  }
-                >
-                  <span className="admin-nav__icon">
-                    <AdminIcon name={entry.icon} />
-                  </span>
-                  <span>{entry.label}</span>
-                </a>
-              ))}
+              {items.map((entry) => {
+                const active =
+                  (entry.key === 'posts' && postsFamily)
+                  || view === entry.key
+                  || (view === 'page' && entry.key === 'pages')
+                  || (view === 'mediaItem' && entry.key === 'media')
+                  || ((view === 'user' || view === 'userNew') && entry.key === 'users');
+
+                return (
+                  <div className="admin-nav__cluster" key={entry.key}>
+                    <a
+                      href={entry.href}
+                      className={active ? 'admin-nav__item admin-nav__item--active' : 'admin-nav__item'}
+                      aria-current={active ? 'page' : undefined}
+                    >
+                      <span className="admin-nav__icon">
+                        <AdminIcon name={entry.icon} />
+                      </span>
+                      <span>{entry.label}</span>
+                    </a>
+
+                    {entry.key === 'posts' && postsFamily && (
+                      <div className="admin-nav__submenu" aria-label="Submenu de notícias">
+                        <a href="/sistema/noticias" aria-current={view === 'posts' ? 'page' : undefined}>
+                          Todas as notícias
+                        </a>
+                        <a href="/sistema/noticias/nova" aria-current={view === 'postNew' ? 'page' : undefined}>
+                          Adicionar notícia
+                        </a>
+                        {user.permissions.manageCategories && (
+                          <>
+                            <a
+                              href="/sistema/categorias"
+                              aria-current={['categories', 'category', 'categoryNew'].includes(view) ? 'page' : undefined}
+                            >
+                              Categorias
+                            </a>
+                            <a href="/sistema/tags" aria-current={view === 'tags' ? 'page' : undefined}>
+                              Tags
+                            </a>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </section>
           );
         })}
@@ -2392,6 +2421,52 @@ function AgendaView({ csrfToken }: { csrfToken: string }) {
   );
 }
 
+function NewPostView({
+  user,
+  csrfToken,
+}: {
+  user: AdminUser;
+  csrfToken: string;
+}) {
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    if (!user.permissions.editPosts) {
+      setError(true);
+      return;
+    }
+
+    void adminFetch<{
+      ok: boolean;
+      data?: { post: { id: number; adminUrl: string } };
+    }>('/api/admin/post-create-draft.php', {
+      method: 'POST',
+      headers: { 'X-CSRF-Token': csrfToken },
+      body: JSON.stringify({ title: 'Nova notícia' }),
+    })
+      .then((payload) => {
+        if (!payload.ok || !payload.data?.post.adminUrl) {
+          throw new Error('draft_create_invalid_response');
+        }
+
+        window.location.replace(payload.data.post.adminUrl);
+      })
+      .catch(() => setError(true));
+  }, [csrfToken, user.permissions.editPosts]);
+
+  if (error) {
+    return (
+      <div className="admin-error" role="alert">
+        <strong>Não foi possível criar a notícia.</strong>
+        <p>Volte para Todas as notícias e tente novamente.</p>
+      </div>
+    );
+  }
+
+  return <AdminLoading />;
+}
+
+
 function PostsView({
   user,
   csrfToken,
@@ -2407,6 +2482,9 @@ function PostsView({
   const [data, setData] = useState<PostsPayload['data']>();
   const [creating, setCreating] = useState(false);
   const [postActionId, setPostActionId] = useState(0);
+  const [selectedPostIds, setSelectedPostIds] = useState<number[]>([]);
+  const [bulkAction, setBulkAction] = useState('');
+  const [bulkBusy, setBulkBusy] = useState(false);
   const [createError, setCreateError] = useState(false);
   const [actionError, setActionError] = useState(false);
   const [error, setError] = useState(false);
@@ -2552,6 +2630,55 @@ function PostsView({
     }
   }
 
+  async function applyBulkAction() {
+    if (!bulkAction || selectedPostIds.length === 0 || bulkBusy) return;
+
+    const selectedPosts = data!.items.filter((post) => selectedPostIds.includes(post.id));
+    const action = bulkAction === 'restore' ? 'restore' : 'trash';
+    const actionable = selectedPosts.filter((post) =>
+      canManageTrash(post)
+      && (action === 'restore' ? post.status === 'trash' : post.status !== 'trash')
+    );
+
+    if (actionable.length === 0) return;
+
+    if (
+      action === 'trash'
+      && !window.confirm(
+        'Mover ' + actionable.length.toLocaleString('pt-BR')
+        + (actionable.length === 1 ? ' notícia' : ' notícias')
+        + ' para a lixeira?'
+      )
+    ) {
+      return;
+    }
+
+    setBulkBusy(true);
+    setActionError(false);
+
+    try {
+      for (const post of actionable) {
+        const payload = await adminFetch<{
+          ok: boolean;
+          data?: { post: { id: number; status: string } };
+        }>('/api/admin/post-trash.php', {
+          method: 'POST',
+          headers: { 'X-CSRF-Token': csrfToken },
+          body: JSON.stringify({ postId: post.id, action }),
+        });
+
+        if (!payload.ok || !payload.data) {
+          throw new Error('post_bulk_invalid_response');
+        }
+      }
+
+      window.location.reload();
+    } catch {
+      setActionError(true);
+      setBulkBusy(false);
+    }
+  }
+
   return (
     <>
       <div className="admin-page-heading-row">
@@ -2586,20 +2713,21 @@ function PostsView({
 
       <form className="admin-toolbar" method="get" action="/sistema/noticias">
         <div className="admin-filter-tabs" aria-label="Filtrar notícias por status">
-          {[
+          {([
             ['all', 'Todas'],
             ['publish', 'Publicadas'],
             ['draft', 'Rascunhos'],
             ['pending', 'Pendentes'],
             ['future', 'Agendadas'],
+            ['private', 'Privadas'],
             ['trash', 'Lixeira'],
-          ].map(([value, label]) => (
+          ] as const).map(([value, label]) => (
             <a
               key={value}
               className={status === value ? 'active' : ''}
               href={'/sistema/noticias?status=' + value}
             >
-              {label}
+              {label} <span>({data.counts[value].toLocaleString('pt-BR')})</span>
             </a>
           ))}
         </div>
@@ -2617,10 +2745,47 @@ function PostsView({
         </div>
       </form>
 
+      <div className="admin-wp-bulkbar">
+        <div>
+          <select
+            value={bulkAction}
+            aria-label="Ações em massa"
+            disabled={bulkBusy}
+            onChange={(event) => setBulkAction(event.target.value)}
+          >
+            <option value="">Ações em massa</option>
+            {status === 'trash'
+              ? <option value="restore">Restaurar</option>
+              : <option value="trash">Mover para a lixeira</option>}
+          </select>
+          <button
+            type="button"
+            disabled={!bulkAction || selectedPostIds.length === 0 || bulkBusy}
+            onClick={() => void applyBulkAction()}
+          >
+            {bulkBusy ? 'Aplicando…' : 'Aplicar'}
+          </button>
+        </div>
+        <span>
+          {data.pagination.total.toLocaleString('pt-BR')}
+          {data.pagination.total === 1 ? ' item' : ' itens'}
+        </span>
+      </div>
+
       <div className="admin-table-wrap">
-        <table className="admin-table">
+        <table className="admin-table admin-table--wp-list">
           <thead>
             <tr>
+              <th className="admin-table__check">
+                <input
+                  type="checkbox"
+                  aria-label="Selecionar todas as notícias desta página"
+                  checked={data.items.length > 0 && data.items.every((post) => selectedPostIds.includes(post.id))}
+                  onChange={(event) => {
+                    setSelectedPostIds(event.target.checked ? data.items.map((post) => post.id) : []);
+                  }}
+                />
+              </th>
               <th>Título</th>
               <th>Autor</th>
               <th>Categorias</th>
@@ -2631,12 +2796,24 @@ function PostsView({
           <tbody>
             {data.items.map((post) => (
               <tr key={post.id}>
+                <td className="admin-table__check">
+                  <input
+                    type="checkbox"
+                    aria-label={'Selecionar ' + post.title}
+                    checked={selectedPostIds.includes(post.id)}
+                    onChange={(event) => {
+                      setSelectedPostIds((current) => event.target.checked
+                        ? Array.from(new Set([...current, post.id]))
+                        : current.filter((id) => id !== post.id));
+                    }}
+                  />
+                </td>
                 <td className="admin-table__primary">
                   <strong>
                     <a href={'/sistema/noticias/' + post.id}>{post.title}</a>
                   </strong>
                   <div className="admin-row-actions">
-                    <a href={'/sistema/noticias/' + post.id}>Abrir</a>
+                    <a href={'/sistema/noticias/' + post.id}>Editar</a>
                     <span>#{post.id}</span>
                     {post.publicUrl && post.status === 'publish' && (
                       <a href={post.publicUrl} target="_blank" rel="noopener noreferrer">Ver ↗</a>
@@ -5380,12 +5557,20 @@ function PageEditorView({
   );
 }
 
-function CategoriesView() {
+function CategoriesView({ csrfToken }: { csrfToken: string }) {
   const params = useMemo(() => new URLSearchParams(window.location.search), []);
   const query = params.get('q') ?? '';
 
   const [data, setData] = useState<CategoriesPayload['data']>();
   const [error, setError] = useState(false);
+  const [name, setName] = useState('');
+  const [slug, setSlug] = useState('');
+  const [slugTouched, setSlugTouched] = useState(false);
+  const [description, setDescription] = useState('');
+  const [parentId, setParentId] = useState<number | null>(null);
+  const [color, setColor] = useState('#0B57D0');
+  const [busy, setBusy] = useState(false);
+  const [feedback, setFeedback] = useState('');
 
   useEffect(() => {
     const search = new URLSearchParams();
@@ -5402,99 +5587,217 @@ function CategoriesView() {
   if (error) return <AdminError />;
   if (!data) return <AdminLoading />;
 
-  const rootCount = data.items.filter((item) => item.parentId === null).length;
-  const childCount = data.items.length - rootCount;
+  async function createCategory(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (busy || !name.trim()) return;
+
+    setBusy(true);
+    setFeedback('');
+
+    try {
+      const payload = await adminFetch<{
+        ok: boolean;
+        data?: {
+          category: {
+            id: number;
+            name: string;
+            slug: string;
+            description: string;
+            parentId: number | null;
+            count: number;
+            color: string;
+            colorSource: 'termmeta';
+            publicUrl: string;
+            adminUrl: string;
+          };
+        };
+      }>('/api/admin/category-create.php', {
+        method: 'POST',
+        headers: { 'X-CSRF-Token': csrfToken },
+        body: JSON.stringify({
+          name: name.trim(),
+          slug: slugifyAdminValue(slug || name),
+          description: description.trim(),
+          parentId,
+          color,
+        }),
+      });
+
+      if (!payload.ok || !payload.data?.category) {
+        throw new Error('category_create_invalid_response');
+      }
+
+      window.location.href = '/sistema/categorias';
+    } catch (cause) {
+      const code = cause instanceof Error ? cause.message : '';
+      const messages: Record<string, string> = {
+        category_slug_exists: 'Este slug já está sendo usado por outro termo.',
+        invalid_category_parent: 'A categoria superior escolhida não é válida.',
+        invalid_category_color: 'Escolha uma cor editorial válida.',
+        database_write_unavailable: 'O banco está temporariamente sem escrita para este recurso.',
+      };
+
+      setFeedback(messages[code] ?? 'Não foi possível adicionar a categoria.');
+      setBusy(false);
+    }
+  }
 
   return (
-    <>
-      <div className="admin-page-heading-row">
-        <AdminPageHeader
-          eyebrow="Taxonomia"
-          title="Categorias"
-          description="Editorias e municípios usados na organização das notícias."
-        />
-        <a className="admin-create-button" href="/sistema/categorias/nova">+ Nova categoria</a>
+    <section className="admin-wp-screen">
+      <div className="admin-wp-title-row">
+        <h1>Categorias</h1>
       </div>
 
-      <section className="admin-directory-summary" aria-label="Resumo de categorias">
-        <div>
-          <span>Exibidas</span>
-          <strong>{data.count.toLocaleString('pt-BR')}</strong>
-          <small>de {data.total.toLocaleString('pt-BR')} categorias</small>
+      {feedback && (
+        <div className="admin-save-feedback admin-save-feedback--error" role="alert">
+          {feedback}
         </div>
-        <div>
-          <span>Principais</span>
-          <strong>{rootCount.toLocaleString('pt-BR')}</strong>
-          <small>sem categoria superior</small>
-        </div>
-        <div>
-          <span>Subcategorias</span>
-          <strong>{childCount.toLocaleString('pt-BR')}</strong>
-          <small>no resultado atual</small>
-        </div>
-      </section>
+      )}
 
-      <form className="admin-toolbar admin-toolbar--directory" method="get" action="/sistema/categorias">
-        <div className="admin-search">
-          <input
-            type="search"
-            name="q"
-            defaultValue={query}
-            placeholder="Buscar nome, slug, descrição ou categoria superior"
-            aria-label="Buscar categorias"
-          />
-          <button type="submit">Buscar</button>
-          {query && <a className="admin-toolbar__clear" href="/sistema/categorias">Limpar</a>}
-        </div>
-      </form>
+      <div className="admin-wp-taxonomy-layout">
+        <aside className="admin-wp-taxonomy-create">
+          <h2>Adicionar categoria</h2>
 
-      <div className="admin-table-wrap">
-        <table className="admin-table">
-          <thead>
-            <tr>
-              <th>Nome</th>
-              <th>Slug</th>
-              <th>Categoria superior</th>
-              <th>Cor editorial</th>
-              <th>Posts</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.items.map((category) => (
-              <tr key={category.id}>
-                <td className="admin-table__primary">
-                  <strong>
-                    <a href={'/sistema/categorias/' + category.id}>{category.name}</a>
-                  </strong>
-                  <div className="admin-row-actions">
-                    <a href={'/sistema/categorias/' + category.id}>Editar</a>
-                    <span>#{category.id}</span>
-                    <a href={category.publicUrl} target="_blank" rel="noopener noreferrer">Ver ↗</a>
-                  </div>
-                </td>
-                <td><code>{category.slug}</code></td>
-                <td>{category.parentName || '—'}</td>
-                <td>
-                  <span className="admin-color">
-                    <i style={{ background: category.color }} />
-                    <span>{category.color}</span>
-                    <small>{category.colorSource === 'termmeta' ? 'Personalizada' : 'Padrão'}</small>
-                  </span>
-                </td>
-                <td>{category.count.toLocaleString('pt-BR')}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+          <form onSubmit={(event) => void createCategory(event)}>
+            <label>
+              <span>Nome</span>
+              <input
+                value={name}
+                maxLength={200}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setName(value);
+                  if (!slugTouched) setSlug(slugifyAdminValue(value));
+                }}
+              />
+              <small>O nome é como a categoria aparece no portal.</small>
+            </label>
 
-        {data.items.length === 0 && (
-          <div className="admin-empty-state">
-            Nenhuma categoria corresponde a “{query}”.
-            <a href="/sistema/categorias"> Mostrar todas</a>
+            <label>
+              <span>Slug</span>
+              <input
+                value={slug}
+                maxLength={200}
+                onChange={(event) => {
+                  setSlugTouched(true);
+                  setSlug(event.target.value);
+                }}
+                onBlur={() => setSlug((value) => slugifyAdminValue(value))}
+              />
+              <small>Versão amigável do nome usada no endereço público.</small>
+            </label>
+
+            <label>
+              <span>Categoria superior</span>
+              <select
+                value={parentId ?? ''}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setParentId(value === '' ? null : Number.parseInt(value, 10));
+                }}
+              >
+                <option value="">Nenhuma</option>
+                {data.items
+                  .filter((category) => category.parentId === null)
+                  .map((category) => (
+                    <option key={category.id} value={category.id}>{category.name}</option>
+                  ))}
+              </select>
+              <small>Use hierarquia apenas quando a editoria realmente tiver subcategorias.</small>
+            </label>
+
+            <label>
+              <span>Descrição</span>
+              <textarea
+                rows={5}
+                value={description}
+                onChange={(event) => setDescription(event.target.value)}
+              />
+              <small>A descrição pode ser aproveitada em páginas de editoria e metadados.</small>
+            </label>
+
+            <label>
+              <span>Cor editorial</span>
+              <input
+                className="admin-wp-color-input"
+                type="color"
+                value={color}
+                aria-label="Cor editorial da categoria"
+                onChange={(event) => setColor(event.target.value.toUpperCase())}
+              />
+            </label>
+
+            <button className="admin-wp-primary-button" type="submit" disabled={busy || !name.trim()}>
+              {busy ? 'Adicionando…' : 'Adicionar categoria'}
+            </button>
+          </form>
+        </aside>
+
+        <div className="admin-wp-taxonomy-list">
+          <div className="admin-wp-list-toolbar">
+            <span>{data.total.toLocaleString('pt-BR')} itens</span>
+
+            <form method="get" action="/sistema/categorias">
+              <input
+                type="search"
+                name="q"
+                defaultValue={query}
+                aria-label="Pesquisar categorias"
+              />
+              <button type="submit">Pesquisar categorias</button>
+            </form>
           </div>
-        )}
+
+          <div className="admin-wp-table-wrap">
+            <table className="admin-wp-table">
+              <thead>
+                <tr>
+                  <th>Nome</th>
+                  <th>Descrição</th>
+                  <th>Slug</th>
+                  <th>Cor</th>
+                  <th>Contagem</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.items.map((category) => (
+                  <tr key={category.id}>
+                    <td className="admin-wp-primary-column">
+                      <strong>
+                        <a href={'/sistema/categorias/' + category.id}>
+                          {category.parentId ? '— ' : ''}{category.name}
+                        </a>
+                      </strong>
+                      <div className="admin-row-actions">
+                        <a href={'/sistema/categorias/' + category.id}>Editar</a>
+                        <a href={'/sistema/categorias/' + category.id}>Edição rápida</a>
+                        <a href={category.publicUrl} target="_blank" rel="noopener noreferrer">Ver</a>
+                      </div>
+                    </td>
+                    <td>{category.description || '—'}</td>
+                    <td><code>{category.slug}</code></td>
+                    <td>
+                      <span className="admin-color">
+                        <i style={{ background: category.color }} />
+                        <span>{category.color}</span>
+                      </span>
+                    </td>
+                    <td>{category.count.toLocaleString('pt-BR')}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {data.items.length === 0 && (
+              <div className="admin-empty-state">
+                Nenhuma categoria encontrada.
+                {query && <a href="/sistema/categorias"> Mostrar todas</a>}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
-    </>
+    </section>
   );
 }
 
@@ -6074,6 +6377,14 @@ function CommentsView({ csrfToken }: { csrfToken: string }) {
 
   const [data, setData] = useState<CommentsPayload['data']>();
   const [actionId, setActionId] = useState(0);
+  const [editingCommentId, setEditingCommentId] = useState(0);
+  const [replyCommentId, setReplyCommentId] = useState(0);
+  const [editAuthor, setEditAuthor] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [editAuthorUrl, setEditAuthorUrl] = useState('');
+  const [editContent, setEditContent] = useState('');
+  const [replyContent, setReplyContent] = useState('');
+  const [commentMutationBusy, setCommentMutationBusy] = useState(false);
   const [actionError, setActionError] = useState(false);
   const [error, setError] = useState(false);
 
@@ -6166,6 +6477,98 @@ function CommentsView({ csrfToken }: { csrfToken: string }) {
     }
   }
 
+
+  function beginCommentEdit(comment: NonNullable<CommentsPayload['data']>['items'][number]) {
+    setEditingCommentId(comment.id);
+    setReplyCommentId(0);
+    setEditAuthor(comment.author);
+    setEditEmail(comment.email);
+    setEditAuthorUrl(comment.authorUrl);
+    setEditContent(comment.content);
+    setActionError(false);
+  }
+
+  async function saveCommentEdit(commentId: number) {
+    if (commentMutationBusy || !editAuthor.trim() || !editContent.trim()) return;
+
+    setCommentMutationBusy(true);
+    setActionError(false);
+
+    try {
+      const payload = await adminFetch<{
+        ok: boolean;
+        data?: {
+          comment: {
+            id: number;
+            author: string;
+            email: string;
+            authorUrl: string;
+            content: string;
+          };
+        };
+      }>('/api/admin/comment-save.php', {
+        method: 'POST',
+        headers: { 'X-CSRF-Token': csrfToken },
+        body: JSON.stringify({
+          commentId,
+          author: editAuthor.trim(),
+          email: editEmail.trim(),
+          authorUrl: editAuthorUrl.trim(),
+          content: editContent.trim(),
+        }),
+      });
+
+      if (!payload.ok || !payload.data?.comment) {
+        throw new Error('comment_save_invalid');
+      }
+
+      const saved = payload.data.comment;
+      setData((current) => current
+        ? {
+            ...current,
+            items: current.items.map((item) => item.id === commentId
+              ? { ...item, ...saved }
+              : item),
+          }
+        : current);
+      setEditingCommentId(0);
+    } catch {
+      setActionError(true);
+    } finally {
+      setCommentMutationBusy(false);
+    }
+  }
+
+  async function replyToComment(commentId: number) {
+    if (commentMutationBusy || !replyContent.trim()) return;
+
+    setCommentMutationBusy(true);
+    setActionError(false);
+
+    try {
+      const payload = await adminFetch<{
+        ok: boolean;
+        data?: { comment: { id: number; parentId: number } };
+      }>('/api/admin/comment-reply.php', {
+        method: 'POST',
+        headers: { 'X-CSRF-Token': csrfToken },
+        body: JSON.stringify({
+          parentId: commentId,
+          content: replyContent.trim(),
+        }),
+      });
+
+      if (!payload.ok || !payload.data?.comment) {
+        throw new Error('comment_reply_invalid');
+      }
+
+      window.location.reload();
+    } catch {
+      setActionError(true);
+      setCommentMutationBusy(false);
+    }
+  }
+
   const tabs: Array<[string, string, number | null]> = [
     ['all', 'Todos', null],
     ['pending', 'Pendentes', data.counts.pending],
@@ -6238,7 +6641,47 @@ function CommentsView({ csrfToken }: { csrfToken: string }) {
                 </span>
               </header>
 
-              <p>{comment.content}</p>
+              {editingCommentId === comment.id ? (
+                <div className="admin-comment-quick-edit">
+                  <div className="admin-comment-quick-edit__identity">
+                    <label>
+                      <span>Nome</span>
+                      <input value={editAuthor} onChange={(event) => setEditAuthor(event.target.value)} />
+                    </label>
+                    <label>
+                      <span>E-mail</span>
+                      <input type="email" value={editEmail} onChange={(event) => setEditEmail(event.target.value)} />
+                    </label>
+                    <label>
+                      <span>URL</span>
+                      <input type="url" value={editAuthorUrl} onChange={(event) => setEditAuthorUrl(event.target.value)} />
+                    </label>
+                  </div>
+                  <label>
+                    <span>Comentário</span>
+                    <textarea rows={5} value={editContent} onChange={(event) => setEditContent(event.target.value)} />
+                  </label>
+                  <div className="admin-comment-quick-edit__buttons">
+                    <button
+                      type="button"
+                      disabled={commentMutationBusy}
+                      onClick={() => void saveCommentEdit(comment.id)}
+                    >
+                      Atualizar comentário
+                    </button>
+                    <button
+                      type="button"
+                      className="is-secondary"
+                      disabled={commentMutationBusy}
+                      onClick={() => setEditingCommentId(0)}
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <p>{comment.content}</p>
+              )}
 
               <div className="admin-comment-card__meta">
                 <span>{formatAdminDate(comment.createdAt)}</span>
@@ -6250,6 +6693,29 @@ function CommentsView({ csrfToken }: { csrfToken: string }) {
               </div>
 
               <div className="admin-comment-actions">
+                {comment.status !== 'trash' && (
+                  <>
+                    <button
+                      type="button"
+                      disabled={commentMutationBusy}
+                      onClick={() => {
+                        setReplyCommentId(comment.id);
+                        setEditingCommentId(0);
+                        setReplyContent('');
+                      }}
+                    >
+                      Responder
+                    </button>
+                    <button
+                      type="button"
+                      disabled={commentMutationBusy}
+                      onClick={() => beginCommentEdit(comment)}
+                    >
+                      Edição rápida
+                    </button>
+                  </>
+                )}
+
                 {comment.status !== 'approved' && comment.status !== 'trash' && (
                   <button
                     type="button"
@@ -6309,6 +6775,40 @@ function CommentsView({ csrfToken }: { csrfToken: string }) {
                   </button>
                 )}
               </div>
+
+              {replyCommentId === comment.id && (
+                <div className="admin-comment-reply">
+                  <label>
+                    <span>Responder a {comment.author || 'Visitante'}</span>
+                    <textarea
+                      rows={5}
+                      autoFocus
+                      value={replyContent}
+                      onChange={(event) => setReplyContent(event.target.value)}
+                    />
+                  </label>
+                  <div>
+                    <button
+                      type="button"
+                      disabled={commentMutationBusy || !replyContent.trim()}
+                      onClick={() => void replyToComment(comment.id)}
+                    >
+                      {commentMutationBusy ? 'Respondendo…' : 'Responder'}
+                    </button>
+                    <button
+                      type="button"
+                      className="is-secondary"
+                      disabled={commentMutationBusy}
+                      onClick={() => {
+                        setReplyCommentId(0);
+                        setReplyContent('');
+                      }}
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </article>
         ))}
@@ -9971,6 +10471,7 @@ export function AdminApp() {
               : <AdminAccessDenied />
           )}
           {view === 'posts' && <PostsView user={user} csrfToken={csrfToken} />}
+          {view === 'postNew' && <NewPostView user={user} csrfToken={csrfToken} />}
           {view === 'post' && <PostEditorView user={user} csrfToken={csrfToken} />}
           {view === 'pages' && (
             user.permissions.editPages
@@ -9982,9 +10483,14 @@ export function AdminApp() {
               ? <PageEditorView user={user} csrfToken={csrfToken} />
               : <AdminAccessDenied />
           )}
-          {view === 'categories' && <CategoriesView />}
+          {view === 'categories' && <CategoriesView csrfToken={csrfToken} />}
           {view === 'categoryNew' && <NewCategoryView csrfToken={csrfToken} />}
           {view === 'category' && <CategoryEditorView csrfToken={csrfToken} />}
+          {view === 'tags' && (
+            user.permissions.manageCategories
+              ? <AdminTags csrfToken={csrfToken} />
+              : <AdminAccessDenied />
+          )}
           {view === 'media' && <MediaView csrfToken={csrfToken} />}
           {view === 'mediaItem' && <MediaItemView csrfToken={csrfToken} />}
           {view === 'comments' && (
