@@ -117,6 +117,7 @@ Implementado:
 - Notícias
 - Páginas
 - Categorias
+- Tags
 - Mídia
 - Comentários
 
@@ -142,6 +143,7 @@ A sidebar utiliza ícones SVG próprios e mantém o item-pai ativo nas rotas int
 /sistema/categorias
 /sistema/categorias/nova
 /sistema/categorias/:id
+/sistema/tags
 /sistema/midia
 /sistema/midia/:id
 /sistema/comentarios
@@ -2009,3 +2011,18 @@ Trocar de contato enquanto há alterações não salvas pede confirmação. O ca
 Quando telefone e WhatsApp são iguais, a ação `Usar o telefone` preenche o campo sem redigitação.
 
 A listagem também mostra a última atualização de cada fonte e um resumo de quantos cadastros possuem contato direto.
+
+## Paridade operacional com wp-admin
+
+O wp-admin é referência de ergonomia e cobertura funcional, não dependência de runtime.
+
+A primeira camada de paridade nativa adota:
+
+- menu hierárquico de Notícias com `Todas as notícias`, `Adicionar notícia`, `Categorias` e `Tags`;
+- rota direta `/sistema/noticias/nova`, criando rascunho antes de abrir o editor;
+- contadores por status e ações em massa na listagem de notícias;
+- criação de categoria na própria tela de categorias, preservando o editor detalhado existente;
+- administração completa de `post_tag` em `/sistema/tags`, com criação, busca, edição rápida e exclusão;
+- resposta e edição rápida de comentários sem retornar ao wp-admin.
+
+Essas funções continuam usando autenticação, CSRF e capabilities do `/sistema`. Nenhuma tela nova chama `wp-admin`, `wp-load.php`, plugin ou theme.
