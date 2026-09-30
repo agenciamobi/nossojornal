@@ -183,6 +183,7 @@ type PostsPayload = {
     items: AdminPost[];
     query: string;
     status: string;
+    counts: Record<'all' | 'publish' | 'draft' | 'pending' | 'future' | 'private' | 'trash', number>;
     pagination: {
       page: number;
       perPage: number;
@@ -2481,6 +2482,9 @@ function PostsView({
   const [data, setData] = useState<PostsPayload['data']>();
   const [creating, setCreating] = useState(false);
   const [postActionId, setPostActionId] = useState(0);
+  const [selectedPostIds, setSelectedPostIds] = useState<number[]>([]);
+  const [bulkAction, setBulkAction] = useState('');
+  const [bulkBusy, setBulkBusy] = useState(false);
   const [createError, setCreateError] = useState(false);
   const [actionError, setActionError] = useState(false);
   const [error, setError] = useState(false);
@@ -2626,6 +2630,55 @@ function PostsView({
     }
   }
 
+  async function applyBulkAction() {
+    if (!bulkAction || selectedPostIds.length === 0 || bulkBusy) return;
+
+    const selectedPosts = data.items.filter((post) => selectedPostIds.includes(post.id));
+    const action = bulkAction === 'restore' ? 'restore' : 'trash';
+    const actionable = selectedPosts.filter((post) =>
+      canManageTrash(post)
+      && (action === 'restore' ? post.status === 'trash' : post.status !== 'trash')
+    );
+
+    if (actionable.length === 0) return;
+
+    if (
+      action === 'trash'
+      && !window.confirm(
+        'Mover ' + actionable.length.toLocaleString('pt-BR')
+        + (actionable.length === 1 ? ' notícia' : ' notícias')
+        + ' para a lixeira?'
+      )
+    ) {
+      return;
+    }
+
+    setBulkBusy(true);
+    setActionError(false);
+
+    try {
+      for (const post of actionable) {
+        const payload = await adminFetch<{
+          ok: boolean;
+          data?: { post: { id: number; status: string } };
+        }>('/api/admin/post-trash.php', {
+          method: 'POST',
+          headers: { 'X-CSRF-Token': csrfToken },
+          body: JSON.stringify({ postId: post.id, action }),
+        });
+
+        if (!payload.ok || !payload.data) {
+          throw new Error('post_bulk_invalid_response');
+        }
+      }
+
+      window.location.reload();
+    } catch {
+      setActionError(true);
+      setBulkBusy(false);
+    }
+  }
+
   return (
     <>
       <div className="admin-page-heading-row">
@@ -2660,20 +2713,21 @@ function PostsView({
 
       <form className="admin-toolbar" method="get" action="/sistema/noticias">
         <div className="admin-filter-tabs" aria-label="Filtrar notícias por status">
-          {[
+          {([
             ['all', 'Todas'],
             ['publish', 'Publicadas'],
             ['draft', 'Rascunhos'],
             ['pending', 'Pendentes'],
             ['future', 'Agendadas'],
+            ['private', 'Privadas'],
             ['trash', 'Lixeira'],
-          ].map(([value, label]) => (
+          ] as const).map(([value, label]) => (
             <a
               key={value}
               className={status === value ? 'active' : ''}
               href={'/sistema/noticias?status=' + value}
             >
-              {label}
+              {label} <span>({data.counts[value].toLocaleString('pt-BR')})</span>
             </a>
           ))}
         </div>
@@ -2691,10 +2745,47 @@ function PostsView({
         </div>
       </form>
 
+      <div className="admin-wp-bulkbar">
+        <div>
+          <select
+            value={bulkAction}
+            aria-label="Ações em massa"
+            disabled={bulkBusy}
+            onChange={(event) => setBulkAction(event.target.value)}
+          >
+            <option value="">Ações em massa</option>
+            {status === 'trash'
+              ? <option value="restore">Restaurar</option>
+              : <option value="trash">Mover para a lixeira</option>}
+          </select>
+          <button
+            type="button"
+            disabled={!bulkAction || selectedPostIds.length === 0 || bulkBusy}
+            onClick={() => void applyBulkAction()}
+          >
+            {bulkBusy ? 'Aplicando…' : 'Aplicar'}
+          </button>
+        </div>
+        <span>
+          {data.pagination.total.toLocaleString('pt-BR')}
+          {data.pagination.total === 1 ? ' item' : ' itens'}
+        </span>
+      </div>
+
       <div className="admin-table-wrap">
-        <table className="admin-table">
+        <table className="admin-table admin-table--wp-list">
           <thead>
             <tr>
+              <th className="admin-table__check">
+                <input
+                  type="checkbox"
+                  aria-label="Selecionar todas as notícias desta página"
+                  checked={data.items.length > 0 && data.items.every((post) => selectedPostIds.includes(post.id))}
+                  onChange={(event) => {
+                    setSelectedPostIds(event.target.checked ? data.items.map((post) => post.id) : []);
+                  }}
+                />
+              </th>
               <th>Título</th>
               <th>Autor</th>
               <th>Categorias</th>
@@ -2705,12 +2796,24 @@ function PostsView({
           <tbody>
             {data.items.map((post) => (
               <tr key={post.id}>
+                <td className="admin-table__check">
+                  <input
+                    type="checkbox"
+                    aria-label={'Selecionar ' + post.title}
+                    checked={selectedPostIds.includes(post.id)}
+                    onChange={(event) => {
+                      setSelectedPostIds((current) => event.target.checked
+                        ? Array.from(new Set([...current, post.id]))
+                        : current.filter((id) => id !== post.id));
+                    }}
+                  />
+                </td>
                 <td className="admin-table__primary">
                   <strong>
                     <a href={'/sistema/noticias/' + post.id}>{post.title}</a>
                   </strong>
                   <div className="admin-row-actions">
-                    <a href={'/sistema/noticias/' + post.id}>Abrir</a>
+                    <a href={'/sistema/noticias/' + post.id}>Editar</a>
                     <span>#{post.id}</span>
                     {post.publicUrl && post.status === 'publish' && (
                       <a href={post.publicUrl} target="_blank" rel="noopener noreferrer">Ver ↗</a>
