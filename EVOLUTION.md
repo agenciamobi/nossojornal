@@ -3811,4 +3811,65 @@ Depois do merge:
 8. criar um draft canário por pauta;
 9. confirmar que o draft aparece em `/sistema/noticias/:id` e continua sem imagem/publicação;
 10. somente então ativar o agendamento da Ember no ChatGPT.
+## 66. Política única de editoria/localidade no editor humano e na Ember
+
+A política antiga da PR #36 foi portada sobre a `main` atual em vez de reaproveitar a branch histórica, que havia ficado conflitante e com falha de TypeScript.
+
+### Regra
+
+Uma notícia pode receber no máximo:
+
+```text
+1 editoria
++
+1 localidade
+```
+
+Categorias técnicas não podem ser usadas como classificação de matéria:
+
+```text
+capa
+outros
+cobertura-regional
+eleicoes-2024
+```
+
+Localidades são os filhos de `cobertura-regional`. Demais categorias selecionáveis são tratadas como editorias.
+
+A editoria é automaticamente a categoria principal. Quando não houver editoria, a localidade passa a ser principal.
+
+### Fonte única da política
+
+O backend compartilha a regra em:
+
+```text
+public/api/admin/_post_categories.php
+```
+
+Ela é aplicada tanto em:
+
+```text
+/api/admin/post-save.php
+/api/m2m/editorial/draft-upsert-from-pauta.php
+```
+
+Assim o editor humano e a Ember não podem produzir classificações divergentes.
+
+### Taxonomia M2M
+
+`/api/m2m/editorial/taxonomy.php` deixa de apresentar categorias técnicas à Ember. O provider ainda resolve categorias por slug e rejeita qualquer combinação inválida no write, mesmo que um cliente ignore a taxonomia retornada.
+
+### UI
+
+No editor de notícia:
+
+- escolher outra editoria substitui a editoria anterior;
+- escolher outra localidade substitui a localidade anterior;
+- categorias técnicas ficam ocultas;
+- categoria principal deixa de ser uma escolha manual ambígua;
+- editoria/localidade seguem visíveis como duas dimensões editoriais distintas.
+
+### Compatibilidade
+
+A regra continua usando a taxonomia WordPress-backed existente e `_yoast_wpseo_primary_category` como campo compatível de categoria principal. Nenhuma tabela editorial paralela foi criada.
 
