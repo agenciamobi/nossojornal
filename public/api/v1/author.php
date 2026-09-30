@@ -51,7 +51,7 @@ WHERE
                 coauthor_meta.post_id = p.ID
                 AND coauthor_meta.meta_key = '_nj_coauthors'
                 AND FIND_IN_SET(
-                    CAST(:coauthor_id AS CHAR),
+                    CAST(:coauthor_id AS CHAR) COLLATE utf8mb4_unicode_ci,
                     REPLACE(
                         REPLACE(
                             REPLACE(
