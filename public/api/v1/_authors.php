@@ -388,9 +388,12 @@ WHERE
 ORDER BY display_name ASC, user_login ASC
 SQL);
 
+    $rows = $statement->fetchAll();
+    $statement->closeCursor();
+
     $items = [];
 
-    foreach ($statement->fetchAll() as $row) {
+    foreach ($rows as $row) {
         if (!nj_author_is_columnist($pdo, (int) $row['ID'], (string) $row['user_login'])) {
             continue;
         }
