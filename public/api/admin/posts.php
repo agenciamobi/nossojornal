@@ -54,6 +54,36 @@ nj_admin_run(['GET'], static function (): array {
 
     $whereSql = implode(' AND ', $where);
 
+    $statusRows = $pdo->query(<<<SQL
+SELECT post_status, COUNT(*) AS total
+FROM {$posts}
+WHERE post_type = 'post'
+GROUP BY post_status
+SQL)->fetchAll();
+
+    $statusCounts = [
+        'all' => 0,
+        'publish' => 0,
+        'draft' => 0,
+        'pending' => 0,
+        'future' => 0,
+        'private' => 0,
+        'trash' => 0,
+    ];
+
+    foreach ($statusRows as $statusRow) {
+        $statusKey = (string) $statusRow['post_status'];
+        $statusTotal = (int) $statusRow['total'];
+
+        if (array_key_exists($statusKey, $statusCounts)) {
+            $statusCounts[$statusKey] = $statusTotal;
+        }
+
+        if ($statusKey !== 'trash') {
+            $statusCounts['all'] += $statusTotal;
+        }
+    }
+
     $count = $pdo->prepare("SELECT COUNT(*) FROM {$posts} p WHERE {$whereSql}");
     $count->execute($params);
     $total = (int) $count->fetchColumn();
@@ -134,6 +164,7 @@ SQL);
         'items' => $items,
         'query' => $search,
         'status' => $status,
+        'counts' => $statusCounts,
         'pagination' => [
             'page' => $page,
             'perPage' => $perPage,
