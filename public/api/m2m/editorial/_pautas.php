@@ -20,6 +20,7 @@ const NJ_M2M_PAUTA_EXTERNAL_ID = '_nj_pauta_external_id';
 const NJ_M2M_PAUTA_SOURCE_PUBLISHED_AT = '_nj_pauta_source_published_at';
 const NJ_M2M_PAUTA_CAPTURED_AT = '_nj_pauta_captured_at';
 const NJ_M2M_PAUTA_SOURCE_HASH = '_nj_pauta_source_hash';
+const NJ_M2M_PAUTA_DEADLINE = '_nj_pauta_deadline';
 const NJ_M2M_PAUTA_ASSIGNEE = '_nj_pauta_assignee';
 const NJ_M2M_PAUTA_DRAFT_ID = '_nj_pauta_draft_post_id';
 
@@ -69,6 +70,7 @@ function nj_m2m_pauta_select_sql(): string
         nj_m2m_meta_expr($postmeta, NJ_M2M_PAUTA_SOURCE_PUBLISHED_AT, 'source_published_at'),
         nj_m2m_meta_expr($postmeta, NJ_M2M_PAUTA_CAPTURED_AT, 'captured_at'),
         nj_m2m_meta_expr($postmeta, NJ_M2M_PAUTA_SOURCE_HASH, 'source_hash'),
+        nj_m2m_meta_expr($postmeta, NJ_M2M_PAUTA_DEADLINE, 'deadline'),
         nj_m2m_meta_expr($postmeta, NJ_M2M_PAUTA_ASSIGNEE, 'assignee_id', true),
         nj_m2m_meta_expr($postmeta, NJ_M2M_PAUTA_DRAFT_ID, 'draft_post_id', true),
         nj_m2m_meta_expr($postmeta, NJ_M2M_META_STATE, 'mobi_state'),
@@ -135,7 +137,7 @@ function nj_m2m_state_machine(array $row): array
             'state' => $draftId > 0 ? 'drafted' : 'claimed',
             'can_claim' => false,
             'can_resolve' => true,
-            'can_upsert_draft' => $draftId === 0 && preg_match('/^[0-9a-f]{64}$/i', $sourceHash) === 1,
+            'can_upsert_draft' => preg_match('/^[0-9a-f]{64}$/i', $sourceHash) === 1,
             'terminal' => false,
         ];
     }
