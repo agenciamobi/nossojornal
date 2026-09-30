@@ -11,7 +11,8 @@
     "build": "vite build",
     "typecheck": "tsc --noEmit",
     "preview": "vite preview",
-    "quality": "npm run typecheck && npm run build"
+    "validate:m2m": "node scripts/validate-editorial-m2m.mjs",
+    "quality": "npm run validate:m2m && npm run typecheck && npm run build"
   },
   "dependencies": {
     "react": "18.3.1",

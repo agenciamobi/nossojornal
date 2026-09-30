@@ -1,6 +1,6 @@
 # Nosso Jornal - Evolução Canônica
 
-**Última atualização:** 25/09/2026  
+**Última atualização:** 30/09/2026  
 **Repositório:** `agenciamobi/nossojornal`  
 **Domínio:** `nossojornal.com.br`  
 **Estado:** Header e homepage conectados ao legado real; aguardando publicação e validação visual
@@ -3619,3 +3619,196 @@ A arquitetura já permite adicionar sem alterar o contrato central:
 - impressões e cliques;
 - relatórios por anunciante/campanha;
 - futura fonte externa de anúncios usando os mesmos slots.
+
+## 65. Bridge editorial M2M com MOBI Core e Ember
+
+A Mesa de Pautas passa a possuir uma fronteira machine-to-machine dedicada para permitir que a Ember, executada pelo ChatGPT, trabalhe pautas através do MOBI Core sem transformar o Core em CMS, scheduler ou depósito de tarefas editoriais.
+
+### Autoridade
+
+A autoridade permanece no Nosso Jornal:
+
+```text
+RSS/Atom
+→ nj_pauta
+→ claim M2M
+→ draft WordPress-backed
+→ revisão humana
+→ publicação humana
+```
+
+O MOBI Core transporta chamadas autenticadas e mantém apenas ledger técnico. O conteúdo da pauta, matéria, SEO, categorias e tags não é replicado no Core.
+
+Não existe endpoint M2M de publicação neste milestone.
+
+### Endpoints fixos
+
+O receptor implementa exclusivamente:
+
+```text
+GET  /api/m2m/editorial/status.php
+GET  /api/m2m/editorial/pautas.php
+GET  /api/m2m/editorial/pauta.php
+POST /api/m2m/editorial/pauta-claim.php
+POST /api/m2m/editorial/pauta-resolve.php
+GET  /api/m2m/editorial/taxonomy.php
+POST /api/m2m/editorial/draft-upsert-from-pauta.php
+```
+
+Esses caminhos correspondem ao provider `nosso_jornal_editorial` do Integration Hub do MOBI Core.
+
+### Autenticação HMAC
+
+O segredo compartilhado nunca entra no Git, frontend ou bundle Vite.
+
+O runtime lê:
+
+```text
+NJ_EDITORIAL_HMAC_SECRET
+```
+
+ou, como fallback server-side, `editorial_hmac_secret` no arquivo privado já usado pelo runtime:
+
+```text
+~/.mobi/nossojornal-api.php
+```
+
+A derivação e assinatura seguem exatamente o contrato Core:
+
+```text
+context = nosso_jornal_editorial:core_to_provider:v1
+
+manifest =
+timestamp.request_id.method.path+query.sha256(body)
+```
+
+Headers obrigatórios:
+
+```text
+X-Request-ID
+X-MOBI-Editorial-Timestamp
+X-MOBI-Editorial-Signature: v1=<hmac_sha256>
+Idempotency-Key  # somente POST
+```
+
+O provider rejeita assinatura inválida, timestamp fora da janela, replay de request ID e reutilização incompatível de idempotency key.
+
+### Persistência técnica
+
+Replay e idempotência usam somente namespace novo:
+
+```text
+njapp_editorial_m2m_replay
+njapp_editorial_m2m_idempotency
+```
+
+Migration:
+
+```text
+database/editorial-m2m-m1.sql
+```
+
+Essas tabelas não armazenam título, resumo, matéria, SEO, categorias ou tags.
+
+### Claim e state machine
+
+A pauta continua sendo `post_type=nj_pauta`.
+
+O bridge acrescenta apenas metadados operacionais:
+
+```text
+_nj_mobi_state
+_nj_mobi_claim_hash
+_nj_mobi_claimed_at
+_nj_mobi_claim_expires_at
+_nj_mobi_processed_at
+_nj_mobi_last_request_id
+```
+
+O token de claim nunca é persistido em claro; somente SHA-256 é armazenado.
+
+Estados expostos ao Core:
+
+```text
+pending
+claimed
+drafted
+completed
+```
+
+O claim possui lease curto. Uma execução concorrente não pode assumir a mesma pauta enquanto o lease estiver ativo.
+
+### Draft upsert
+
+`draft-upsert-from-pauta.php` exige:
+
+```text
+pauta_id
+claim
+source_hash
+title
+summary
+content
+seo
+category_slugs[]
+tags[]
+```
+
+O `source_hash` recebido deve coincidir com o fingerprint que já pertence à pauta. A proveniência não é aceita como input mutável: o Nosso Jornal copia server-side sua própria origem, feed, external ID, timestamps e pauta ID.
+
+Categorias são resolvidas por slug dentro do provider. Tags podem ser reutilizadas ou criadas seguindo a taxonomia WordPress-backed existente.
+
+O draft recebe também:
+
+```text
+_nj_mobi_generated_by = ember
+_nj_mobi_generated_via = mobi_core
+_nj_mobi_human_review_required = 1
+```
+
+A Ember nunca aparece automaticamente como autora pública. O draft usa o responsável da pauta quando válido; sem responsável, usa o owner editorial `agenciamobi`.
+
+### Segurança editorial
+
+Conteúdo HTML recebido é sanitizado pela mesma camada pública do portal antes de persistir.
+
+O upsert:
+
+- permanece sempre em `post_status=draft`;
+- cria revisão antes de alterar draft existente;
+- valida categorias e tags;
+- grava SEO;
+- preserva proveniência;
+- faz read-back obrigatório;
+- registra atividade sem copiar corpo no log;
+- não define imagem destacada;
+- não publica;
+- exige revisão humana.
+
+### Quality gate
+
+O contrato possui validador estático:
+
+```text
+npm run validate:m2m
+```
+
+e ele integra `npm run quality`.
+
+O CI continua executando também lint de todos os arquivos PHP em PHP 8.4.
+
+### Próximo gate operacional
+
+Depois do merge:
+
+1. aplicar `database/editorial-m2m-m1.sql` no banco ativo;
+2. publicar o release canônico;
+3. configurar o mesmo segredo compartilhado no runtime privado do Nosso Jornal e no Vault da connection do Core;
+4. configurar runtime + binding do projeto Nosso Jornal no Core;
+5. provar `status`;
+6. provar list/get;
+7. provar claim idempotente;
+8. criar um draft canário por pauta;
+9. confirmar que o draft aparece em `/sistema/noticias/:id` e continua sem imagem/publicação;
+10. somente então ativar o agendamento da Ember no ChatGPT.
+
