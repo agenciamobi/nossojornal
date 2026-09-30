@@ -2,9 +2,9 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../../admin/_admin.php';
+require_once __DIR__ . '/_hmac.php';
 
 const NJ_EDITORIAL_M2M_VERSION = 'm2m-editorial@2026-09-30-r1';
-const NJ_EDITORIAL_M2M_DIRECTION_CONTEXT = 'nosso_jornal_editorial:core_to_provider:v1';
 const NJ_EDITORIAL_M2M_MAX_BODY_BYTES = 200704;
 const NJ_EDITORIAL_M2M_TIMESTAMP_WINDOW_SECONDS = 300;
 const NJ_EDITORIAL_M2M_IDEMPOTENCY_STALE_SECONDS = 300;
@@ -363,21 +363,16 @@ function nj_m2m_verify_request(string $expectedMethod, string $operation): array
     }
 
     $pathQuery = nj_m2m_request_path_query();
-    $bodyHash = hash('sha256', $rawBody);
+    $bodyHash = nj_m2m_body_hash($rawBody);
     $secret = nj_m2m_shared_secret();
-    $directionalSecret = hash_hmac(
-        'sha256',
-        NJ_EDITORIAL_M2M_DIRECTION_CONTEXT,
-        $secret
-    );
-    $manifest = implode('.', [
-        (string) $timestamp,
+    $expectedSignature = nj_m2m_expected_signature(
+        $secret,
+        $timestamp,
         $requestId,
         $method,
         $pathQuery,
-        $bodyHash,
-    ]);
-    $expectedSignature = hash_hmac('sha256', $manifest, $directionalSecret);
+        $rawBody
+    );
 
     if (!hash_equals($expectedSignature, strtolower((string) $signatureMatch[1]))) {
         throw new NjApiHttpException(401, 'signature_invalid');
