@@ -6,6 +6,7 @@ const expect = (condition, message) => {
 };
 
 const m2m = read("public/api/m2m/editorial/_m2m.php");
+const hmac = read("public/api/m2m/editorial/_hmac.php");
 const pautas = read("public/api/m2m/editorial/_pautas.php");
 const draft = read("public/api/m2m/editorial/_draft.php");
 const categoryPolicy = read("public/api/admin/_post_categories.php");
@@ -27,9 +28,10 @@ for (const endpoint of endpoints) {
 }
 
 expect(
-  m2m.includes("nosso_jornal_editorial:core_to_provider:v1"),
+  hmac.includes("nosso_jornal_editorial:core_to_provider:v1"),
   "Directional HMAC context must match MOBI Core.",
 );
+expect(m2m.includes("nj_m2m_expected_signature"), "M2M verifier must use the tested HMAC helper.");
 for (const header of [
   "X-Request-ID",
   "X-MOBI-Editorial-Timestamp",
