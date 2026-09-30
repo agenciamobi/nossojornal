@@ -45,6 +45,7 @@ SELECT
     t.name,
     t.slug,
     tt.parent AS parent_id,
+    tt.description,
     COALESCE(parent_t.name, '') AS parent_name,
     tt.count AS legacy_count
 FROM {$terms} t
@@ -84,6 +85,7 @@ SQL);
             'slug' => $slug,
             'parentId' => (int) $row['parent_id'] > 0 ? (int) $row['parent_id'] : null,
             'parentName' => (string) $row['parent_name'],
+            'description' => (string) $row['description'],
             'count' => (int) $row['legacy_count'],
             'color' => nj_category_color_for($id, $slug, $overrides),
             'colorSource' => nj_category_color_source_for($id, $overrides),
