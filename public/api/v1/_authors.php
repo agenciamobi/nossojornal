@@ -60,7 +60,7 @@ SELECT
                         coauthor_meta.post_id = p.ID
                         AND coauthor_meta.meta_key = '_nj_coauthors'
                         AND FIND_IN_SET(
-                            CAST(u.ID AS CHAR),
+                            CAST(u.ID AS CHAR) COLLATE utf8mb4_unicode_ci,
                             REPLACE(
                                 REPLACE(
                                     REPLACE(
@@ -103,7 +103,7 @@ SELECT
                         coauthor_meta.post_id = p.ID
                         AND coauthor_meta.meta_key = '_nj_coauthors'
                         AND FIND_IN_SET(
-                            CAST(u.ID AS CHAR),
+                            CAST(u.ID AS CHAR) COLLATE utf8mb4_unicode_ci,
                             REPLACE(
                                 REPLACE(
                                     REPLACE(
