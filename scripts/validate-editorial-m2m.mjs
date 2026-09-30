@@ -8,6 +8,8 @@ const expect = (condition, message) => {
 const m2m = read("public/api/m2m/editorial/_m2m.php");
 const pautas = read("public/api/m2m/editorial/_pautas.php");
 const draft = read("public/api/m2m/editorial/_draft.php");
+const categoryPolicy = read("public/api/admin/_post_categories.php");
+const taxonomyEndpoint = read("public/api/m2m/editorial/taxonomy.php");
 const migration = read("database/editorial-m2m-m1.sql");
 
 const endpoints = [
@@ -49,6 +51,7 @@ expect(draft.includes("source_hash_mismatch"), "Draft upsert must fail closed on
 expect(draft.includes("NJ_PROVENANCE_META_PAUTA_ID"), "Draft must inherit pauta provenance.");
 expect(draft.includes("_nj_mobi_human_review_required"), "AI draft must require human review.");
 expect(draft.includes("'ember'") && draft.includes("'mobi_core'"), "AI draft audit attribution is required.");
+expect(\n  draft.includes("_post_categories.php") && draft.includes("nj_post_category_policy"),\n  "M2M drafts must use the same post category policy as the human editor.",\n);\nfor (const code of [\n  "technical_category_not_allowed",\n  "multiple_editorial_categories",\n  "multiple_regional_categories",\n]) {\n  expect(categoryPolicy.includes(code), `Missing category policy guard: ${code}`);\n}\nexpect(\n  taxonomyEndpoint.includes("nj_post_selectable_taxonomy"),\n  "M2M taxonomy must expose only selectable post categories.",\n);
 
 const all = [m2m, pautas, draft, ...endpoints.map((name) => read(`public/api/m2m/editorial/${name}`))].join("\n");
 expect(!all.includes("editorial.publish"), "M1 must not expose editorial publishing.");
