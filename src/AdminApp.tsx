@@ -6377,6 +6377,14 @@ function CommentsView({ csrfToken }: { csrfToken: string }) {
 
   const [data, setData] = useState<CommentsPayload['data']>();
   const [actionId, setActionId] = useState(0);
+  const [editingCommentId, setEditingCommentId] = useState(0);
+  const [replyCommentId, setReplyCommentId] = useState(0);
+  const [editAuthor, setEditAuthor] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [editAuthorUrl, setEditAuthorUrl] = useState('');
+  const [editContent, setEditContent] = useState('');
+  const [replyContent, setReplyContent] = useState('');
+  const [commentMutationBusy, setCommentMutationBusy] = useState(false);
   const [actionError, setActionError] = useState(false);
   const [error, setError] = useState(false);
 
@@ -6469,6 +6477,98 @@ function CommentsView({ csrfToken }: { csrfToken: string }) {
     }
   }
 
+
+  function beginCommentEdit(comment: NonNullable<CommentsPayload['data']>['items'][number]) {
+    setEditingCommentId(comment.id);
+    setReplyCommentId(0);
+    setEditAuthor(comment.author);
+    setEditEmail(comment.email);
+    setEditAuthorUrl(comment.authorUrl);
+    setEditContent(comment.content);
+    setActionError(false);
+  }
+
+  async function saveCommentEdit(commentId: number) {
+    if (commentMutationBusy || !editAuthor.trim() || !editContent.trim()) return;
+
+    setCommentMutationBusy(true);
+    setActionError(false);
+
+    try {
+      const payload = await adminFetch<{
+        ok: boolean;
+        data?: {
+          comment: {
+            id: number;
+            author: string;
+            email: string;
+            authorUrl: string;
+            content: string;
+          };
+        };
+      }>('/api/admin/comment-save.php', {
+        method: 'POST',
+        headers: { 'X-CSRF-Token': csrfToken },
+        body: JSON.stringify({
+          commentId,
+          author: editAuthor.trim(),
+          email: editEmail.trim(),
+          authorUrl: editAuthorUrl.trim(),
+          content: editContent.trim(),
+        }),
+      });
+
+      if (!payload.ok || !payload.data?.comment) {
+        throw new Error('comment_save_invalid');
+      }
+
+      const saved = payload.data.comment;
+      setData((current) => current
+        ? {
+            ...current,
+            items: current.items.map((item) => item.id === commentId
+              ? { ...item, ...saved }
+              : item),
+          }
+        : current);
+      setEditingCommentId(0);
+    } catch {
+      setActionError(true);
+    } finally {
+      setCommentMutationBusy(false);
+    }
+  }
+
+  async function replyToComment(commentId: number) {
+    if (commentMutationBusy || !replyContent.trim()) return;
+
+    setCommentMutationBusy(true);
+    setActionError(false);
+
+    try {
+      const payload = await adminFetch<{
+        ok: boolean;
+        data?: { comment: { id: number; parentId: number } };
+      }>('/api/admin/comment-reply.php', {
+        method: 'POST',
+        headers: { 'X-CSRF-Token': csrfToken },
+        body: JSON.stringify({
+          parentId: commentId,
+          content: replyContent.trim(),
+        }),
+      });
+
+      if (!payload.ok || !payload.data?.comment) {
+        throw new Error('comment_reply_invalid');
+      }
+
+      window.location.reload();
+    } catch {
+      setActionError(true);
+      setCommentMutationBusy(false);
+    }
+  }
+
   const tabs: Array<[string, string, number | null]> = [
     ['all', 'Todos', null],
     ['pending', 'Pendentes', data.counts.pending],
@@ -6541,7 +6641,47 @@ function CommentsView({ csrfToken }: { csrfToken: string }) {
                 </span>
               </header>
 
-              <p>{comment.content}</p>
+              {editingCommentId === comment.id ? (
+                <div className="admin-comment-quick-edit">
+                  <div className="admin-comment-quick-edit__identity">
+                    <label>
+                      <span>Nome</span>
+                      <input value={editAuthor} onChange={(event) => setEditAuthor(event.target.value)} />
+                    </label>
+                    <label>
+                      <span>E-mail</span>
+                      <input type="email" value={editEmail} onChange={(event) => setEditEmail(event.target.value)} />
+                    </label>
+                    <label>
+                      <span>URL</span>
+                      <input type="url" value={editAuthorUrl} onChange={(event) => setEditAuthorUrl(event.target.value)} />
+                    </label>
+                  </div>
+                  <label>
+                    <span>Comentário</span>
+                    <textarea rows={5} value={editContent} onChange={(event) => setEditContent(event.target.value)} />
+                  </label>
+                  <div className="admin-comment-quick-edit__buttons">
+                    <button
+                      type="button"
+                      disabled={commentMutationBusy}
+                      onClick={() => void saveCommentEdit(comment.id)}
+                    >
+                      Atualizar comentário
+                    </button>
+                    <button
+                      type="button"
+                      className="is-secondary"
+                      disabled={commentMutationBusy}
+                      onClick={() => setEditingCommentId(0)}
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <p>{comment.content}</p>
+              )}
 
               <div className="admin-comment-card__meta">
                 <span>{formatAdminDate(comment.createdAt)}</span>
@@ -6553,6 +6693,29 @@ function CommentsView({ csrfToken }: { csrfToken: string }) {
               </div>
 
               <div className="admin-comment-actions">
+                {comment.status !== 'trash' && (
+                  <>
+                    <button
+                      type="button"
+                      disabled={commentMutationBusy}
+                      onClick={() => {
+                        setReplyCommentId(comment.id);
+                        setEditingCommentId(0);
+                        setReplyContent('');
+                      }}
+                    >
+                      Responder
+                    </button>
+                    <button
+                      type="button"
+                      disabled={commentMutationBusy}
+                      onClick={() => beginCommentEdit(comment)}
+                    >
+                      Edição rápida
+                    </button>
+                  </>
+                )}
+
                 {comment.status !== 'approved' && comment.status !== 'trash' && (
                   <button
                     type="button"
@@ -6612,6 +6775,40 @@ function CommentsView({ csrfToken }: { csrfToken: string }) {
                   </button>
                 )}
               </div>
+
+              {replyCommentId === comment.id && (
+                <div className="admin-comment-reply">
+                  <label>
+                    <span>Responder a {comment.author || 'Visitante'}</span>
+                    <textarea
+                      rows={5}
+                      autoFocus
+                      value={replyContent}
+                      onChange={(event) => setReplyContent(event.target.value)}
+                    />
+                  </label>
+                  <div>
+                    <button
+                      type="button"
+                      disabled={commentMutationBusy || !replyContent.trim()}
+                      onClick={() => void replyToComment(comment.id)}
+                    >
+                      {commentMutationBusy ? 'Respondendo…' : 'Responder'}
+                    </button>
+                    <button
+                      type="button"
+                      className="is-secondary"
+                      disabled={commentMutationBusy}
+                      onClick={() => {
+                        setReplyCommentId(0);
+                        setReplyContent('');
+                      }}
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </article>
         ))}
