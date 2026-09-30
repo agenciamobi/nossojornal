@@ -4903,90 +4903,90 @@ function PostEditorView({
 
           {user.permissions.publishPosts && user.capabilities.includes('edit_others_posts') && (
             <AdminMetabox title="Capa do site" eyebrow="Página inicial" defaultOpen={false}>
-            <section className="admin-editor-card">
-              <div className="admin-editor-card__head">
-                <span>Página inicial</span>
-                <strong>Capa do site</strong>
-              </div>
+              <section className="admin-editor-card">
+                <div className="admin-editor-card__head">
+                  <span>Página inicial</span>
+                  <strong>Capa do site</strong>
+                </div>
 
-              <div className="admin-editorial-workflow">
-                <label>
-                  <span>Posição</span>
-                  <select
-                    value={editorial.home.slot}
-                    disabled={!canEdit}
-                    onChange={(event) => patchEditorial({
-                      home: {
-                        ...editorial.home,
-                        slot: event.target.value as EditorialWorkflow['home']['slot'],
-                      },
-                    })}
-                  >
-                    <option value="automatic">Automática</option>
-                    <option value="hero">Manchete principal</option>
-                    <option value="featured">Destaque</option>
-                  </select>
-                </label>
+                <div className="admin-editorial-workflow">
+                  <label>
+                    <span>Posição</span>
+                    <select
+                      value={editorial.home.slot}
+                      disabled={!canEdit}
+                      onChange={(event) => patchEditorial({
+                        home: {
+                          ...editorial.home,
+                          slot: event.target.value as EditorialWorkflow['home']['slot'],
+                        },
+                      })}
+                    >
+                      <option value="automatic">Automática</option>
+                      <option value="hero">Manchete principal</option>
+                      <option value="featured">Destaque</option>
+                    </select>
+                  </label>
 
-                {editorial.home.slot !== 'automatic' && (
-                  <>
-                    <label>
-                      <span>Ordem</span>
-                      <input
-                        type="number"
-                        min="0"
-                        max="99"
-                        value={editorial.home.rank}
-                        disabled={!canEdit}
-                        onChange={(event) => patchEditorial({
-                          home: {
-                            ...editorial.home,
-                            rank: Math.max(0, Math.min(99, Number(event.target.value) || 0)),
-                          },
-                        })}
-                      />
-                    </label>
-                    <label>
-                      <span>Fixar até</span>
-                      <input
-                        type="datetime-local"
-                        value={editorial.home.until}
-                        disabled={!canEdit}
-                        onChange={(event) => patchEditorial({
-                          home: {
-                            ...editorial.home,
-                            until: event.target.value,
-                          },
-                        })}
-                      />
-                    </label>
-                    <label>
-                      <span>Chamada alternativa</span>
-                      <input
-                        type="text"
-                        maxLength={280}
-                        value={editorial.home.headline}
-                        placeholder={title}
-                        disabled={!canEdit}
-                        onChange={(event) => patchEditorial({
-                          home: {
-                            ...editorial.home,
-                            headline: event.target.value,
-                          },
-                        })}
-                      />
-                    </label>
-                  </>
-      
+                  {editorial.home.slot !== 'automatic' && (
+                    <>
+                      <label>
+                        <span>Ordem</span>
+                        <input
+                          type="number"
+                          min="0"
+                          max="99"
+                          value={editorial.home.rank}
+                          disabled={!canEdit}
+                          onChange={(event) => patchEditorial({
+                            home: {
+                              ...editorial.home,
+                              rank: Math.max(0, Math.min(99, Number(event.target.value) || 0)),
+                            },
+                          })}
+                        />
+                      </label>
+                      <label>
+                        <span>Fixar até</span>
+                        <input
+                          type="datetime-local"
+                          value={editorial.home.until}
+                          disabled={!canEdit}
+                          onChange={(event) => patchEditorial({
+                            home: {
+                              ...editorial.home,
+                              until: event.target.value,
+                            },
+                          })}
+                        />
+                      </label>
+                      <label>
+                        <span>Chamada alternativa</span>
+                        <input
+                          type="text"
+                          maxLength={280}
+                          value={editorial.home.headline}
+                          placeholder={title}
+                          disabled={!canEdit}
+                          onChange={(event) => patchEditorial({
+                            home: {
+                              ...editorial.home,
+                              headline: event.target.value,
+                            },
+                          })}
+                        />
+                      </label>
+                    </>
+                  )}
+
+                  <a className="admin-editorial-home-link" href="/sistema/capa">
+                    Organizar toda a capa →
+                  </a>
+                </div>
+              </section>
             </AdminMetabox>
           )}
 
-                <a className="admin-editorial-home-link" href="/sistema/capa">
-                  Organizar toda a capa →
-                </a>
-              </div>
-            </section>
-          )}
           <AdminMetabox title="Atividade da matéria" eyebrow="Histórico" defaultOpen={false}>
           <section className="admin-editor-card admin-activity-card">
             <div className="admin-editor-card__head">
