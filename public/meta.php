@@ -134,7 +134,10 @@ function nj_meta_author_by_slug(string $slug): ?array
         return null;
     }
 
-    return nj_author_profile(nj_db(), $slug);
+    $pdo = nj_db();
+    $profile = nj_author_profile($pdo, $slug);
+
+    return $profile ?? nj_columnist_profile_by_slug($pdo, $slug);
 }
 
 function nj_meta_category_by_slug(string $slug): ?array
@@ -354,6 +357,10 @@ try {
         $meta['description'] = 'Administração editorial do Nosso Jornal.';
         $meta['canonical'] = '/sistema';
         $meta['robots'] = 'noindex,nofollow';
+    } elseif ($path === '/colunistas') {
+        $meta['title'] = 'Colunistas';
+        $meta['description'] = 'Conheça os colunistas do Nosso Jornal, seus perfis, áreas de interesse e publicações.';
+        $meta['canonical'] = '/colunistas';
     } elseif ($path === '/ultimas' || $path === '/noticias') {
         $meta['title'] = 'Últimas notícias';
         $meta['description'] = 'As notícias mais recentes publicadas pelo Nosso Jornal.';

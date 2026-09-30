@@ -27,7 +27,7 @@ function nj_author_external_url(string $value, array $allowedHosts = []): string
     return $value;
 }
 
-function nj_author_profile(PDO $pdo, string $slug): ?array
+function nj_author_profile(PDO $pdo, string $slug, bool $allowWithoutPublications = false): ?array
 {
     $slug = trim($slug);
 
@@ -44,6 +44,7 @@ function nj_author_profile(PDO $pdo, string $slug): ?array
 SELECT
     u.ID AS id,
     u.user_nicename AS slug,
+    u.user_login,
     u.display_name,
     u.user_url,
     (
@@ -141,7 +142,7 @@ SQL);
     $statement->execute(['slug' => $slug]);
     $row = $statement->fetch();
 
-    if (!$row || (int) $row['published_count'] < 1) {
+    if (!$row || (!$allowWithoutPublications && (int) $row['published_count'] < 1)) {
         return null;
     }
 
@@ -185,6 +186,9 @@ SQL);
         : (string) ($meta['description'] ?? '');
     $bio = nj_content_clean_text_source($bioSource);
     $role = nj_content_clean_text_source((string) ($meta['_nj_public_role'] ?? ''));
+    if ($role === '' && nj_author_is_columnist($pdo, (int) $row['id'], (string) $row['user_login'])) {
+        $role = 'Colunista';
+    }
 
     $avatar = null;
     $avatarId = max(0, (int) ($meta['_nj_public_avatar_id'] ?? 0));
@@ -293,3 +297,111 @@ SQL);
             : '',
     ];
 }
+
+function nj_author_unserialize_array(string $value): array
+{
+    if ($value === '') {
+        return [];
+    }
+
+    $decoded = @unserialize($value, ['allowed_classes' => false]);
+
+    return is_array($decoded) ? $decoded : [];
+}
+
+function nj_author_user_roles(PDO $pdo, int $userId): array
+{
+    $usermeta = nj_table('usermeta');
+    $prefix = (string) nj_db_config()['table_prefix'];
+
+    $statement = $pdo->prepare(<<<SQL
+SELECT meta_value
+FROM {$usermeta}
+WHERE
+    user_id = :user_id
+    AND meta_key = :capability_key
+ORDER BY umeta_id DESC
+LIMIT 1
+SQL);
+    $statement->execute([
+        'user_id' => $userId,
+        'capability_key' => $prefix . 'capabilities',
+    ]);
+
+    $direct = nj_author_unserialize_array((string) ($statement->fetchColumn() ?: ''));
+    $roles = [];
+
+    foreach ($direct as $name => $enabled) {
+        if ($enabled === true || $enabled === 1) {
+            $roles[] = (string) $name;
+        }
+    }
+
+    return array_values(array_unique($roles));
+}
+
+function nj_author_is_columnist(PDO $pdo, int $userId, string $login): bool
+{
+    if (in_array($login, ['agenciamobi', 'joanes'], true)) {
+        return true;
+    }
+
+    return in_array('author', nj_author_user_roles($pdo, $userId), true);
+}
+
+function nj_columnist_profile_by_slug(PDO $pdo, string $slug): ?array
+{
+    $slug = trim($slug);
+
+    if ($slug === '' || !preg_match('/^[a-z0-9-]+$/', $slug)) {
+        return null;
+    }
+
+    $users = nj_table('users');
+    $statement = $pdo->prepare(<<<SQL
+SELECT ID, user_login
+FROM {$users}
+WHERE
+    user_nicename = :slug
+    AND user_status = 0
+LIMIT 1
+SQL);
+    $statement->execute(['slug' => $slug]);
+    $row = $statement->fetch();
+
+    if (!$row || !nj_author_is_columnist($pdo, (int) $row['ID'], (string) $row['user_login'])) {
+        return null;
+    }
+
+    return nj_author_profile($pdo, $slug, true);
+}
+
+function nj_columnist_profiles(PDO $pdo): array
+{
+    $users = nj_table('users');
+    $statement = $pdo->query(<<<SQL
+SELECT ID, user_login, user_nicename, display_name
+FROM {$users}
+WHERE
+    user_status = 0
+    AND user_nicename <> ''
+ORDER BY display_name ASC, user_login ASC
+SQL);
+
+    $items = [];
+
+    foreach ($statement->fetchAll() as $row) {
+        if (!nj_author_is_columnist($pdo, (int) $row['ID'], (string) $row['user_login'])) {
+            continue;
+        }
+
+        $profile = nj_author_profile($pdo, (string) $row['user_nicename'], true);
+
+        if ($profile !== null) {
+            $items[] = $profile;
+        }
+    }
+
+    return $items;
+}
+

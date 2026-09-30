@@ -186,6 +186,14 @@ type AuthorPayload = {
   };
 };
 
+type ColumnistsPayload = {
+  ok: boolean;
+  data?: {
+    items: PublicAuthor[];
+    count: number;
+  };
+};
+
 
 type StaticPagePayload = {
   ok: boolean;
@@ -214,6 +222,7 @@ export type PublicRoute =
   | { kind: 'category'; slug: string }
   | { kind: 'tag'; slug: string }
   | { kind: 'series'; slug: string }
+  | { kind: 'columnists' }
   | { kind: 'author'; slug: string }
   | { kind: 'latest' }
   | { kind: 'search' }
@@ -226,6 +235,7 @@ export function resolvePublicRoute(pathname: string): PublicRoute {
 
   if (clean === '/') return { kind: 'home' };
   if (clean === '/ultimas') return { kind: 'latest' };
+  if (clean === '/colunistas') return { kind: 'columnists' };
   if (clean === '/busca') return { kind: 'search' };
   if (clean === '/sobre' || clean === '/quem-somos') return { kind: 'static', slug: 'sobre' };
   if (clean === '/contato') return { kind: 'static', slug: 'contato' };
@@ -1304,6 +1314,161 @@ function ArchivePage({
   );
 }
 
+
+function ColumnistsPage() {
+  const [payload, setPayload] = useState<ColumnistsPayload['data']>();
+  const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    fetch('/api/v1/columnists.php', {
+      headers: { Accept: 'application/json' },
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) throw new Error('columnists_request_failed');
+        return response.json() as Promise<ColumnistsPayload>;
+      })
+      .then((response) => {
+        if (!response.ok || !response.data) throw new Error('columnists_invalid_payload');
+        setPayload(response.data);
+        setState('ready');
+      })
+      .catch((error) => {
+        if (error instanceof DOMException && error.name === 'AbortError') return;
+        setState('error');
+      });
+
+    return () => controller.abort();
+  }, []);
+
+  usePageMeta(
+    'Colunistas',
+    'Conheça os colunistas do Nosso Jornal, seus perfis, áreas de interesse e publicações.',
+    '/colunistas',
+  );
+
+  const jsonLd = useMemo(() => {
+    if (!payload) return '';
+
+    const pageUrl = new URL('/colunistas', window.location.origin).toString();
+
+    return JSON.stringify({
+      '@context': 'https://schema.org',
+      '@type': 'CollectionPage',
+      '@id': `${pageUrl}#page`,
+      url: pageUrl,
+      name: 'Colunistas | Nosso Jornal',
+      description: 'Conheça os colunistas do Nosso Jornal, seus perfis, áreas de interesse e publicações.',
+      mainEntity: {
+        '@type': 'ItemList',
+        itemListElement: payload.items.map((author, index) => ({
+          '@type': 'ListItem',
+          position: index + 1,
+          item: {
+            '@type': 'Person',
+            name: author.name,
+            url: new URL(author.url, window.location.origin).toString(),
+            jobTitle: author.role || 'Colunista',
+            image: author.avatar
+              ? new URL(author.avatar.url, window.location.origin).toString()
+              : undefined,
+          },
+        })),
+      },
+    });
+  }, [payload]);
+
+  if (state === 'loading') return <LoadingState label="Carregando colunistas" />;
+  if (state === 'error' || !payload) {
+    return <ErrorState title="Colunistas indisponíveis" description="Não foi possível carregar os perfis agora." />;
+  }
+
+  return (
+    <main className="internal-main archive-page columnists-page">
+      {jsonLd && (
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd }} />
+      )}
+
+      <div className="container">
+        <Breadcrumbs
+          items={[
+            { label: 'Capa', href: '/' },
+            { label: 'Colunistas' },
+          ]}
+        />
+
+        <header className="columnists-header">
+          <span className="internal-kicker">Quem escreve</span>
+          <h1>Colunistas</h1>
+          <p>
+            Conheça as pessoas que assinam análises, opiniões, reportagens e conteúdos especiais no Nosso Jornal.
+          </p>
+          <span className="columnists-header__count">
+            {payload.count.toLocaleString('pt-BR')} {payload.count === 1 ? 'colunista' : 'colunistas'}
+          </span>
+        </header>
+
+        {payload.items.length > 0 ? (
+          <section className="columnists-grid" aria-label="Colunistas do Nosso Jornal">
+            {payload.items.map((author) => (
+              <article className="columnist-card" key={author.id}>
+                <a
+                  className="columnist-card__link"
+                  href={author.url}
+                  aria-label={`Ver perfil de ${author.name}`}
+                >
+                  <div className="columnist-card__avatar-wrap">
+                    {author.avatar ? (
+                      <img
+                        className="columnist-card__avatar"
+                        src={author.avatar.url}
+                        srcSet={author.avatar.srcSet || undefined}
+                        sizes={author.avatar.srcSet ? '(max-width: 640px) 88px, 112px' : undefined}
+                        width={author.avatar.width ?? undefined}
+                        height={author.avatar.height ?? undefined}
+                        alt={author.avatar.alt || `Foto de ${author.name}`}
+                        loading="lazy"
+                      />
+                    ) : (
+                      <span className="columnist-card__avatar columnist-card__avatar--fallback" aria-hidden="true">
+                        {author.name.charAt(0).toUpperCase()}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="columnist-card__body">
+                    <span className="internal-kicker">{author.role || 'Colunista'}</span>
+                    <h2>{author.name}</h2>
+                    <p>
+                      {author.bio || `Veja o perfil editorial e as publicações de ${author.name} no Nosso Jornal.`}
+                    </p>
+
+                    <div className="columnist-card__meta">
+                      <span>
+                        <strong>{author.publishedCount.toLocaleString('pt-BR')}</strong>
+                        {' '}
+                        {author.publishedCount === 1 ? 'publicação' : 'publicações'}
+                      </span>
+                      <span className="columnist-card__cta">Ver perfil →</span>
+                    </div>
+                  </div>
+                </a>
+              </article>
+            ))}
+          </section>
+        ) : (
+          <div className="archive-empty">
+            <strong>Nenhum colunista disponível.</strong>
+            <p>Os perfis editoriais aparecerão aqui assim que forem cadastrados.</p>
+          </div>
+        )}
+      </div>
+    </main>
+  );
+}
+
 function AuthorPage({ slug }: { slug: string }) {
   const params = new URLSearchParams(window.location.search);
   const currentPage = Math.max(1, Number.parseInt(params.get('page') ?? '1', 10) || 1);
@@ -1345,6 +1510,7 @@ function AuthorPage({ slug }: { slug: string }) {
   }, [currentPage, slug]);
 
   const author = payload?.author;
+  const isColumnist = author?.role.trim().toLocaleLowerCase('pt-BR').includes('colunista') ?? false;
   const description = author
     ? author.bio || `Notícias e reportagens assinadas por ${author.name} no Nosso Jornal.`
     : '';
@@ -1394,6 +1560,7 @@ function AuthorPage({ slug }: { slug: string }) {
         <Breadcrumbs
           items={[
             { label: 'Capa', href: '/' },
+            ...(isColumnist ? [{ label: 'Colunistas', href: '/colunistas' }] : []),
             { label: author.name },
           ]}
         />
@@ -1417,7 +1584,7 @@ function AuthorPage({ slug }: { slug: string }) {
             )}
 
             <div>
-              <span className="internal-kicker">Autor</span>
+              <span className="internal-kicker">{isColumnist ? 'Colunista' : 'Autor'}</span>
               <h1>{author.name}</h1>
               {author.role && <strong>{author.role}</strong>}
               {author.bio && <p>{author.bio}</p>}
@@ -1796,6 +1963,7 @@ export function InternalPage({ route }: { route: Exclude<PublicRoute, { kind: 'h
   if (route.kind === 'category') return <ArchivePage mode="category" categorySlug={route.slug} />;
   if (route.kind === 'tag') return <ArchivePage mode="tag" tagSlug={route.slug} />;
   if (route.kind === 'series') return <SeriesPage slug={route.slug} />;
+  if (route.kind === 'columnists') return <ColumnistsPage />;
   if (route.kind === 'author') return <AuthorPage slug={route.slug} />;
   if (route.kind === 'latest') return <ArchivePage mode="latest" />;
   if (route.kind === 'search') {

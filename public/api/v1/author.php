@@ -27,6 +27,10 @@ nj_run(static function (): array {
     $profile = nj_author_profile($pdo, $slug);
 
     if ($profile === null) {
+        $profile = nj_columnist_profile_by_slug($pdo, $slug);
+    }
+
+    if ($profile === null) {
         throw new NjApiHttpException(404, 'author_not_found');
     }
 
