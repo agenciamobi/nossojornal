@@ -7,8 +7,10 @@ import {
 } from './AdminEditorialConnections';
 import { AdminWordPressTools } from './AdminWordPressTools';
 import { AdminAds } from './AdminAds';
+import { AdminTags } from './AdminTags';
 import { useAdminEditorGuard } from './admin/useAdminEditorGuard';
 import './admin.css';
+import './admin-wp-parity.css';
 
 type AdminUser = {
   id: number;
@@ -775,7 +777,7 @@ type AgendaPayload = {
   };
 };
 
-type AdminView = 'dashboard' | 'homeLayout' | 'agenda' | 'sources' | 'posts' | 'post' | 'pages' | 'page' | 'categories' | 'category' | 'categoryNew' | 'media' | 'mediaItem' | 'comments' | 'users' | 'user' | 'userNew' | 'ads' | 'settings' | 'wordpress' | 'pautas';
+type AdminView = 'dashboard' | 'homeLayout' | 'agenda' | 'sources' | 'posts' | 'postNew' | 'post' | 'pages' | 'page' | 'categories' | 'category' | 'categoryNew' | 'tags' | 'media' | 'mediaItem' | 'comments' | 'users' | 'user' | 'userNew' | 'ads' | 'settings' | 'wordpress' | 'pautas';
 
 function resolveAdminView(pathname: string): AdminView {
   const clean = pathname.replace(/\/+$/, '');
@@ -784,12 +786,14 @@ function resolveAdminView(pathname: string): AdminView {
   if (clean === '/sistema/agenda') return 'agenda';
   if (clean === '/sistema/fontes') return 'sources';
   if (clean === '/sistema/noticias') return 'posts';
+  if (clean === '/sistema/noticias/nova') return 'postNew';
   if (/^\/sistema\/noticias\/\d+$/.test(clean)) return 'post';
   if (clean === '/sistema/paginas') return 'pages';
   if (/^\/sistema\/paginas\/\d+$/.test(clean)) return 'page';
   if (clean === '/sistema/categorias') return 'categories';
   if (clean === '/sistema/categorias/nova') return 'categoryNew';
   if (/^\/sistema\/categorias\/\d+$/.test(clean)) return 'category';
+  if (clean === '/sistema/tags') return 'tags';
   if (clean === '/sistema/midia') return 'media';
   if (/^\/sistema\/midia\/\d+$/.test(clean)) return 'mediaItem';
   if (clean === '/sistema/comentarios') return 'comments';
@@ -1243,9 +1247,6 @@ function AdminNav({ user, view }: { user: AdminUser; view: AdminView }) {
     ...(user.permissions.editPages
       ? [{ key: 'pages' as const, label: 'Páginas', href: '/sistema/paginas', icon: 'pages' as const, group: 'content' as const }]
       : []),
-    ...(user.permissions.manageCategories
-      ? [{ key: 'categories' as const, label: 'Categorias', href: '/sistema/categorias', icon: 'categories' as const, group: 'content' as const }]
-      : []),
     ...(user.permissions.uploadFiles
       ? [{ key: 'media' as const, label: 'Mídia', href: '/sistema/midia', icon: 'media' as const, group: 'content' as const }]
       : []),
@@ -1276,6 +1277,16 @@ function AdminNav({ user, view }: { user: AdminUser; view: AdminView }) {
     { key: 'system' as const, label: 'Sistema' },
   ];
 
+  const postsFamily = [
+    'posts',
+    'postNew',
+    'post',
+    'categories',
+    'category',
+    'categoryNew',
+    'tags',
+  ].includes(view);
+
   return (
     <aside className="admin-sidebar">
       <a className="admin-sidebar__brand" href="/sistema" aria-label="Painel Nosso Jornal">
@@ -1292,37 +1303,53 @@ function AdminNav({ user, view }: { user: AdminUser; view: AdminView }) {
             <section className="admin-nav__group" key={group.key}>
               <span className="admin-nav__group-label">{group.label}</span>
 
-              {items.map((entry) => (
-                <a
-                  key={entry.key}
-                  href={entry.href}
-                  className={
-                    view === entry.key
-                      || (view === 'post' && entry.key === 'posts')
-                      || (view === 'page' && entry.key === 'pages')
-                      || ((view === 'category' || view === 'categoryNew') && entry.key === 'categories')
-                      || (view === 'mediaItem' && entry.key === 'media')
-                      || ((view === 'user' || view === 'userNew') && entry.key === 'users')
-                      ? 'admin-nav__item admin-nav__item--active'
-                      : 'admin-nav__item'
-                  }
-                  aria-current={
-                    view === entry.key
-                      || (view === 'post' && entry.key === 'posts')
-                      || (view === 'page' && entry.key === 'pages')
-                      || ((view === 'category' || view === 'categoryNew') && entry.key === 'categories')
-                      || (view === 'mediaItem' && entry.key === 'media')
-                      || ((view === 'user' || view === 'userNew') && entry.key === 'users')
-                      ? 'page'
-                      : undefined
-                  }
-                >
-                  <span className="admin-nav__icon">
-                    <AdminIcon name={entry.icon} />
-                  </span>
-                  <span>{entry.label}</span>
-                </a>
-              ))}
+              {items.map((entry) => {
+                const active =
+                  (entry.key === 'posts' && postsFamily)
+                  || view === entry.key
+                  || (view === 'page' && entry.key === 'pages')
+                  || (view === 'mediaItem' && entry.key === 'media')
+                  || ((view === 'user' || view === 'userNew') && entry.key === 'users');
+
+                return (
+                  <div className="admin-nav__cluster" key={entry.key}>
+                    <a
+                      href={entry.href}
+                      className={active ? 'admin-nav__item admin-nav__item--active' : 'admin-nav__item'}
+                      aria-current={active ? 'page' : undefined}
+                    >
+                      <span className="admin-nav__icon">
+                        <AdminIcon name={entry.icon} />
+                      </span>
+                      <span>{entry.label}</span>
+                    </a>
+
+                    {entry.key === 'posts' && postsFamily && (
+                      <div className="admin-nav__submenu" aria-label="Submenu de notícias">
+                        <a href="/sistema/noticias" aria-current={view === 'posts' ? 'page' : undefined}>
+                          Todas as notícias
+                        </a>
+                        <a href="/sistema/noticias/nova" aria-current={view === 'postNew' ? 'page' : undefined}>
+                          Adicionar notícia
+                        </a>
+                        {user.permissions.manageCategories && (
+                          <>
+                            <a
+                              href="/sistema/categorias"
+                              aria-current={['categories', 'category', 'categoryNew'].includes(view) ? 'page' : undefined}
+                            >
+                              Categorias
+                            </a>
+                            <a href="/sistema/tags" aria-current={view === 'tags' ? 'page' : undefined}>
+                              Tags
+                            </a>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </section>
           );
         })}
@@ -2391,6 +2418,52 @@ function AgendaView({ csrfToken }: { csrfToken: string }) {
     </>
   );
 }
+
+function NewPostView({
+  user,
+  csrfToken,
+}: {
+  user: AdminUser;
+  csrfToken: string;
+}) {
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    if (!user.permissions.editPosts) {
+      setError(true);
+      return;
+    }
+
+    void adminFetch<{
+      ok: boolean;
+      data?: { post: { id: number; adminUrl: string } };
+    }>('/api/admin/post-create-draft.php', {
+      method: 'POST',
+      headers: { 'X-CSRF-Token': csrfToken },
+      body: JSON.stringify({ title: 'Nova notícia' }),
+    })
+      .then((payload) => {
+        if (!payload.ok || !payload.data?.post.adminUrl) {
+          throw new Error('draft_create_invalid_response');
+        }
+
+        window.location.replace(payload.data.post.adminUrl);
+      })
+      .catch(() => setError(true));
+  }, [csrfToken, user.permissions.editPosts]);
+
+  if (error) {
+    return (
+      <div className="admin-error" role="alert">
+        <strong>Não foi possível criar a notícia.</strong>
+        <p>Volte para Todas as notícias e tente novamente.</p>
+      </div>
+    );
+  }
+
+  return <AdminLoading />;
+}
+
 
 function PostsView({
   user,
@@ -9971,6 +10044,7 @@ export function AdminApp() {
               : <AdminAccessDenied />
           )}
           {view === 'posts' && <PostsView user={user} csrfToken={csrfToken} />}
+          {view === 'postNew' && <NewPostView user={user} csrfToken={csrfToken} />}
           {view === 'post' && <PostEditorView user={user} csrfToken={csrfToken} />}
           {view === 'pages' && (
             user.permissions.editPages
@@ -9985,6 +10059,11 @@ export function AdminApp() {
           {view === 'categories' && <CategoriesView />}
           {view === 'categoryNew' && <NewCategoryView csrfToken={csrfToken} />}
           {view === 'category' && <CategoryEditorView csrfToken={csrfToken} />}
+          {view === 'tags' && (
+            user.permissions.manageCategories
+              ? <AdminTags csrfToken={csrfToken} />
+              : <AdminAccessDenied />
+          )}
           {view === 'media' && <MediaView csrfToken={csrfToken} />}
           {view === 'mediaItem' && <MediaItemView csrfToken={csrfToken} />}
           {view === 'comments' && (
