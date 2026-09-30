@@ -3872,4 +3872,40 @@ No editor de notícia:
 ### Compatibilidade
 
 A regra continua usando a taxonomia WordPress-backed existente e `_yoast_wpseo_primary_category` como campo compatível de categoria principal. Nenhuma tabela editorial paralela foi criada.
+## 67. Hardening do bridge editorial M2M
+
+A integração Ember → MOBI Core → Nosso Jornal recebe duas proteções adicionais antes do primeiro tráfego real.
+
+### Fila acionável
+
+`editorial.pautas.list` passa a projetar somente pautas que podem ser efetivamente reivindicadas naquele momento.
+
+Pautas que já possuem draft, foram concluídas ou ainda estão sob claim ativo deixam de ocupar repetidamente o lote entregue à Ember.
+
+A paginação continua bounded. O provider pode varrer internamente até 100 registros por página para pular itens não acionáveis, mas continua devolvendo no máximo 20 pautas ao Core.
+
+Quando a janela varrida não contém pautas acionáveis mas existem registros mais antigos, `next_cursor` continua disponível para a próxima página.
+
+### Vetor criptográfico
+
+A derivação HMAC foi extraída para:
+
+```text
+public/api/m2m/editorial/_hmac.php
+```
+
+O CI executa um vetor fixo compatível com o contrato do Core:
+
+```text
+shared secret
+→ directional HMAC SHA-256
+→ manifest timestamp.request_id.method.path+query.sha256(body)
+→ signature HMAC SHA-256
+```
+
+O teste falha se qualquer alteração futura mudar contexto, derivação, hash do corpo, composição do manifest ou assinatura.
+
+### Observação operacional
+
+O primeiro smoke pelo MCP live em 30/09/2026 parou antes do provider com `query_not_allowed` no transporte Core r47. Nenhuma mudança no `agenciamobi/mobimarketinginteligente` foi feita nesta rodada. O Nosso Jornal permanece preparado para retomar o smoke assim que o binding/transporte do Core estiver disponível.
 
