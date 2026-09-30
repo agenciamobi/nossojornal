@@ -2042,3 +2042,7 @@ A primeira camada de paridade nativa adota:
 - resposta e edição rápida de comentários sem retornar ao wp-admin.
 
 Essas funções continuam usando autenticação, CSRF e capabilities do `/sistema`. Nenhuma tela nova chama `wp-admin`, `wp-load.php`, plugin ou theme.
+
+### Paridade visual
+
+A shell autenticada também segue a gramática visual do wp-admin: toolbar escura global, sidebar compacta, menu ativo azul com ponteiro, conteúdo mais denso, headings de 23px, links/filtros/tabelas no padrão administrativo e metaboxes compactos. A identidade visual do Nosso Jornal aparece no conteúdo e na marca, não por meio de um dashboard SaaS paralelo.
