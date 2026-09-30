@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/_pautas.php';
+require_once __DIR__ . '/../../admin/_post_categories.php';
 
 const NJ_M2M_META_GENERATED_BY = '_nj_mobi_generated_by';
 const NJ_M2M_META_GENERATED_VIA = '_nj_mobi_generated_via';
@@ -233,6 +234,11 @@ function nj_m2m_replace_categories(PDO $pdo, int $postId, array $slugs): int
     $taxonomy = nj_table('term_taxonomy');
     $relationships = nj_table('term_relationships');
     $map = nj_m2m_category_map($pdo, $slugs);
+    $categoryIds = array_map(
+        static fn (string $slug): int => (int) $map[$slug]['term_id'],
+        $slugs
+    );
+    $policy = nj_post_category_policy($pdo, $categoryIds);
 
     $oldStatement = $pdo->prepare(
         "SELECT tr.term_taxonomy_id
@@ -256,17 +262,18 @@ function nj_m2m_replace_categories(PDO $pdo, int $postId, array $slugs): int
     $delete->execute(['post_id' => $postId]);
 
     $newIds = [];
-    if ($map !== []) {
+    if ($policy['taxonomyIds'] !== []) {
         $insert = $pdo->prepare(
             "INSERT INTO {$relationships} (object_id, term_taxonomy_id, term_order)
              VALUES (:post_id, :taxonomy_id, 0)"
         );
 
-        foreach ($slugs as $slug) {
-            $taxonomyId = (int) $map[$slug]['taxonomy_id'];
+        foreach ($policy['categoryIds'] as $categoryId) {
+            $taxonomyId = (int) $policy['taxonomyIds'][$categoryId];
             if (in_array($taxonomyId, $newIds, true)) {
                 continue;
             }
+
             $newIds[] = $taxonomyId;
             $insert->execute([
                 'post_id' => $postId,
@@ -277,11 +284,7 @@ function nj_m2m_replace_categories(PDO $pdo, int $postId, array $slugs): int
 
     nj_admin_recount_categories($pdo, array_merge($oldIds, $newIds));
 
-    if ($slugs === []) {
-        return 0;
-    }
-
-    return (int) $map[$slugs[0]]['term_id'];
+    return (int) $policy['primaryCategoryId'];
 }
 
 function nj_m2m_replace_tags(PDO $pdo, int $postId, array $tagNames): void
