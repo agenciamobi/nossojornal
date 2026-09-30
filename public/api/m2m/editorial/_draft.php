@@ -395,7 +395,9 @@ function nj_m2m_validate_draft_input(array $body): array
     $title = trim((string) ($body['title'] ?? ''));
     $summary = trim((string) ($body['summary'] ?? ''));
     $content = (string) ($body['content'] ?? '');
-    $seo = is_array($body['seo'] ?? null) ? $body['seo'] : [];
+    $seo = is_array($body['seo'] ?? null) && !array_is_list($body['seo'])
+        ? $body['seo']
+        : [];
     $categorySlugs = is_array($body['category_slugs'] ?? null)
         ? array_values($body['category_slugs'])
         : [];
@@ -404,8 +406,28 @@ function nj_m2m_validate_draft_input(array $body): array
     if ($title === '' || strlen($title) > 500 || trim($content) === '') {
         throw new NjApiHttpException(422, 'draft_payload_invalid');
     }
-    if (strlen($summary) > 5000 || strlen($content) > 120000) {
+    if (
+        strlen($summary) > 5000
+        || strlen($content) > 120000
+        || count($categorySlugs) > 20
+        || count($tags) > 30
+    ) {
         throw new NjApiHttpException(422, 'draft_payload_too_large');
+    }
+
+    foreach (array_keys($seo) as $key) {
+        if (!in_array($key, ['title', 'description', 'focus_keyword', 'slug'], true)) {
+            throw new NjApiHttpException(422, 'seo_field_not_allowed');
+        }
+    }
+
+    if (
+        strlen((string) ($seo['title'] ?? '')) > 300
+        || strlen((string) ($seo['description'] ?? '')) > 1000
+        || strlen((string) ($seo['focus_keyword'] ?? '')) > 200
+        || strlen((string) ($seo['slug'] ?? '')) > 220
+    ) {
+        throw new NjApiHttpException(422, 'seo_payload_too_large');
     }
 
     foreach ($categorySlugs as $slug) {
@@ -423,10 +445,17 @@ function nj_m2m_validate_draft_input(array $body): array
         $normalizedTags[strtolower($value)] = $value;
     }
 
+    $cleanTitle = nj_content_clean_text_source($title);
+    $cleanContent = nj_content_sanitize_html($content);
+
+    if ($cleanTitle === '' || trim(nj_content_clean_text_source($cleanContent)) === '') {
+        throw new NjApiHttpException(422, 'draft_payload_invalid');
+    }
+
     return [
-        'title' => nj_content_clean_text_source($title),
+        'title' => $cleanTitle,
         'summary' => nj_content_clean_text_source($summary),
-        'content' => nj_content_sanitize_html($content),
+        'content' => $cleanContent,
         'seo' => [
             'title' => nj_content_clean_text_source((string) ($seo['title'] ?? '')),
             'description' => nj_content_clean_text_source((string) ($seo['description'] ?? '')),
