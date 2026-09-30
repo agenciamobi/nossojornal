@@ -230,6 +230,7 @@ function nj_m2m_list_pautas(PDO $pdo, int $limit, string $cursor): array
 {
     $limit = max(1, min(20, $limit));
     $cursorData = nj_m2m_cursor_decode($cursor);
+    $scanLimit = min(100, max($limit * 5, $limit + 1));
     $sql = nj_m2m_pauta_select_sql()
         . " WHERE p.post_type = 'nj_pauta' AND p.post_status = 'private'";
     $params = [];
@@ -240,28 +241,54 @@ function nj_m2m_list_pautas(PDO $pdo, int $limit, string $cursor): array
         $params['cursor_id'] = $cursorData['id'];
     }
 
-    $sql .= ' ORDER BY p.post_date DESC, p.ID DESC LIMIT ' . (int) ($limit + 1);
+    $sql .= ' ORDER BY p.post_date DESC, p.ID DESC LIMIT ' . (int) ($scanLimit + 1);
     $statement = $pdo->prepare($sql);
     $statement->execute($params);
     $rows = $statement->fetchAll();
 
-    $hasMore = count($rows) > $limit;
-    if ($hasMore) {
-        $rows = array_slice($rows, 0, $limit);
+    $rawHasMore = count($rows) > $scanLimit;
+    if ($rawHasMore) {
+        $rows = array_slice($rows, 0, $scanLimit);
     }
 
-    $items = array_map(
-        static fn (array $row): array => nj_m2m_pauta_projection($row),
-        $rows
-    );
+    $items = [];
+    $lastScanned = null;
+    $hasMore = false;
+    $rowCount = count($rows);
+
+    foreach ($rows as $index => $row) {
+        $lastScanned = $row;
+        $projection = nj_m2m_pauta_projection($row);
+        $machine = $projection['state_machine'] ?? [];
+
+        if (($machine['can_claim'] ?? false) !== true) {
+            continue;
+        }
+
+        $items[] = $projection;
+
+        if (count($items) >= $limit) {
+            $hasMore = $rawHasMore || $index < ($rowCount - 1);
+            break;
+        }
+    }
+
+    if (count($items) < $limit) {
+        $hasMore = $rawHasMore;
+    }
 
     $nextCursor = null;
-    if ($hasMore && $rows !== []) {
-        $last = $rows[count($rows) - 1];
-        $nextCursor = nj_m2m_cursor_encode((string) $last['created_at'], (int) $last['id']);
+    if ($hasMore && is_array($lastScanned)) {
+        $nextCursor = nj_m2m_cursor_encode(
+            (string) $lastScanned['created_at'],
+            (int) $lastScanned['id']
+        );
     }
 
-    return ['items' => $items, 'next_cursor' => $nextCursor];
+    return [
+        'items' => $items,
+        'next_cursor' => $nextCursor,
+    ];
 }
 
 function nj_m2m_claim_token(): string
