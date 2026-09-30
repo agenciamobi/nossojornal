@@ -2633,7 +2633,7 @@ function PostsView({
   async function applyBulkAction() {
     if (!bulkAction || selectedPostIds.length === 0 || bulkBusy) return;
 
-    const selectedPosts = data.items.filter((post) => selectedPostIds.includes(post.id));
+    const selectedPosts = data!.items.filter((post) => selectedPostIds.includes(post.id));
     const action = bulkAction === 'restore' ? 'restore' : 'trash';
     const actionable = selectedPosts.filter((post) =>
       canManageTrash(post)
