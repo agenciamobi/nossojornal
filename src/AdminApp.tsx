@@ -1,4 +1,4 @@
-import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { AdminRichEditor, type RichEditorMediaItem } from './AdminRichEditor';
 import { AdminEditorialDiagnostics } from './AdminEditorialDiagnostics';
 import {
@@ -1440,7 +1440,7 @@ function AdminPageHeader({
     <header className="admin-page-header">
       <span>{eyebrow}</span>
       <h1>{title}</h1>
-      <p>{description}</p>
+      {description && <p>{description}</p>}
     </header>
   );
 }
@@ -2702,7 +2702,7 @@ function PostsView({
         <AdminPageHeader
           eyebrow="Conteúdo"
           title="Notícias"
-          description="Gerencie notícias, rascunhos e publicações do site."
+          description=""
         />
 
         <button
@@ -2788,6 +2788,17 @@ function PostsView({
           {data.pagination.total === 1 ? ' item' : ' itens'}
         </span>
       </div>
+
+      {data.pagination.totalPages > 1 && (
+        <div className="admin-pagination-top">
+          <AdminPagination
+            page={data.pagination.page}
+            totalPages={data.pagination.totalPages}
+            base="/sistema/noticias"
+            params={{ status, q: query }}
+          />
+        </div>
+      )}
 
       <div className="admin-table-wrap">
         <table className="admin-table admin-table--wp-list">
@@ -2885,6 +2896,41 @@ function PostsView({
         params={{ status, q: query }}
       />
     </>
+  );
+}
+
+function AdminMetabox({
+  title,
+  eyebrow,
+  defaultOpen = false,
+  children,
+  className = '',
+}: {
+  title: string;
+  eyebrow?: string;
+  defaultOpen?: boolean;
+  children: ReactNode;
+  className?: string;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+
+  return (
+    <details
+      className={'admin-editor-card admin-metabox ' + className}
+      open={open}
+      onToggle={(event) => setOpen(event.currentTarget.open)}
+    >
+      <summary className="admin-metabox__summary">
+        <span>
+          {eyebrow && <small>{eyebrow}</small>}
+          <strong>{title}</strong>
+        </span>
+        <i aria-hidden="true" />
+      </summary>
+      <div className="admin-metabox__content">
+        {children}
+      </div>
+    </details>
   );
 }
 
@@ -3806,47 +3852,18 @@ function PostEditorView({
         <div>
           <a href="/sistema/noticias" className="admin-editor-header__back">← Notícias</a>
           <div className="admin-editor-header__title">
-            <span className={'admin-status admin-status--' + post.status}>
-              {statusLabel(post.status)}
-            </span>
-            <h1>{post.status === 'draft' ? 'Editar rascunho' : 'Editar notícia'}</h1>
+            <h1>Editar notícia</h1>
           </div>
           <p>Última alteração {formatAdminDate(post.modifiedAt)}</p>
         </div>
 
         <div className="admin-editor-header__actions">
           <AdminEditorSaveIndicator dirty={changed} state={saveState} />
+          <a href="/sistema/noticias/nova">Adicionar notícia</a>
           {post.publicUrl && post.status === 'publish' && (
             <a href={post.publicUrl} target="_blank" rel="noopener noreferrer">
-              Ver no site ↗
+              Ver notícia ↗
             </a>
-          )}
-
-          <button
-            type="button"
-            disabled={!canEdit || !changed || saveState === 'saving'}
-            onClick={() => void savePost()}
-          >
-            {saveState === 'saving' ? 'Salvando…' : 'Salvar'}
-          </button>
-
-          {post.status === 'publish' ? (
-            <button
-              type="button"
-              disabled={publicationActionDisabled}
-              onClick={() => void changeStatus('draft')}
-            >
-              Mover para rascunho
-            </button>
-          ) : (
-            <button
-              type="button"
-              className="admin-button--primary"
-              disabled={publicationActionDisabled || !user.permissions.publishPosts}
-              onClick={() => void changeStatus('publish')}
-            >
-              {statusState === 'working' ? 'Publicando…' : 'Publicar'}
-            </button>
           )}
         </div>
       </header>
@@ -3933,6 +3950,21 @@ function PostEditorView({
             />
           </label>
 
+          <AdminRichEditor
+            label="Conteúdo da notícia"
+            value={content}
+            disabled={!canEdit}
+            minHeight={620}
+            loadMedia={loadAdminEditorMedia}
+            canSave={canEdit && changed && saveState !== 'saving'}
+            onSave={() => void savePost()}
+            onChange={(html) => {
+              setContent(html);
+              setSaveState('idle');
+            }}
+          />
+
+          <AdminMetabox title="Identidade da matéria" eyebrow="Apresentação" defaultOpen={false}>
           <section className="admin-editor-card admin-magazine-fields">
             <div className="admin-editor-card__head">
               <span>Apresentação</span>
@@ -3996,6 +4028,10 @@ function PostEditorView({
             </div>
           </section>
 
+
+          </AdminMetabox>
+
+          <AdminMetabox title="Análise editorial" eyebrow="Diagnóstico" defaultOpen={false}>
           <AdminEditorialDiagnostics
             title={title}
             slug={slug}
@@ -4019,20 +4055,10 @@ function PostEditorView({
             }}
           />
 
-          <AdminRichEditor
-            label="Conteúdo da notícia"
-            value={content}
-            disabled={!canEdit}
-            minHeight={620}
-            loadMedia={loadAdminEditorMedia}
-            canSave={canEdit && changed && saveState !== 'saving'}
-            onSave={() => void savePost()}
-            onChange={(html) => {
-              setContent(html);
-              setSaveState('idle');
-            }}
-          />
 
+          </AdminMetabox>
+
+          <AdminMetabox title="Histórico e autosave" eyebrow="Segurança editorial" defaultOpen={false}>
           <section className="admin-editor-card admin-history-card">
             <div className="admin-editor-card__head">
               <span>Segurança editorial</span>
@@ -4098,6 +4124,10 @@ function PostEditorView({
             </div>
           </section>
 
+
+          </AdminMetabox>
+
+          <AdminMetabox title="Caderno da matéria" eyebrow="Apuração" defaultOpen={false}>
           <section className="admin-editor-card admin-editorial-notebook">
             <div className="admin-editor-card__head">
               <span>Apuração</span>
@@ -4196,6 +4226,10 @@ function PostEditorView({
             </div>
           </section>
 
+
+          </AdminMetabox>
+
+          <AdminMetabox title="Comentários internos" eyebrow="Redação" defaultOpen={false}>
           <section className="admin-editor-card admin-collaboration-card">
             <div className="admin-editor-card__head">
               <span>Redação</span>
@@ -4247,6 +4281,10 @@ function PostEditorView({
             </div>
           </section>
 
+
+          </AdminMetabox>
+
+          <AdminMetabox title="Correções e atualizações" eyebrow="Transparência" defaultOpen={false}>
           <section className="admin-editor-card admin-corrections-card">
             <div className="admin-editor-card__head">
               <span>Transparência</span>
@@ -4315,6 +4353,10 @@ function PostEditorView({
             </div>
           </section>
 
+
+          </AdminMetabox>
+
+          <AdminMetabox title="SEO" eyebrow="Busca e compartilhamento" defaultOpen={false}>
           <section className="admin-editor-card">
             <div className="admin-editor-card__head">
               <span>Busca e compartilhamento</span>
@@ -4351,6 +4393,10 @@ function PostEditorView({
             </div>
           </section>
           
+
+          </AdminMetabox>
+
+          <AdminMetabox title="Origem, canonical e redes sociais" eyebrow="Distribuição" defaultOpen={false}>
           <section className="admin-editor-card">
             <div className="admin-editor-card__head">
               <span>Distribuição</span>
@@ -4529,6 +4575,10 @@ function PostEditorView({
             </div>
           </section>
 
+
+          </AdminMetabox>
+
+          <AdminMetabox title="Tags, relacionados e série" eyebrow="Conexões editoriais" defaultOpen={false}>
           <AdminEditorialConnections
             postId={post.id}
             disabled={!canEdit}
@@ -4543,20 +4593,23 @@ function PostEditorView({
             onRelatedChange={(items) => patchConnections({ related: items })}
             onSeriesChange={(series) => patchConnections({ series })}
           />
+
+          </AdminMetabox>
+
         </section>
 
         <aside className="admin-editor-sidebar">
-          <section className="admin-editor-card">
+          <section className="admin-editor-card admin-publish-box">
             <div className="admin-editor-card__head">
-              <span>Publicação</span>
-              <strong>{statusLabel(post.status)}</strong>
+              <strong>Publicação</strong>
             </div>
 
-            <dl className="admin-editor-meta">
-              <div><dt>Autor</dt><dd>{post.author.name}</dd></div>
-              <div><dt>Publicação</dt><dd>{formatAdminDate(post.publishedAt)}</dd></div>
-              <div><dt>Atualização</dt><dd>{formatAdminDate(post.modifiedAt)}</dd></div>
-            </dl>
+            <div className="admin-publish-box__meta">
+              <p><strong>Status:</strong> <span>{statusLabel(post.status)}</span></p>
+              <p><strong>Visibilidade:</strong> <span>{post.status === 'private' ? 'Privada' : 'Pública'}</span></p>
+              <p><strong>Publicar em:</strong> <span>{post.publishedAt ? formatAdminDate(post.publishedAt) : 'Imediatamente'}</span></p>
+              <p><strong>Autor:</strong> <span>{post.author.name}</span></p>
+            </div>
 
             {post.status !== 'publish' && user.permissions.publishPosts && (
               <div className="admin-schedule">
@@ -4578,8 +4631,44 @@ function PostEditorView({
                 </button>
               </div>
             )}
+
+            <div className="admin-publish-box__footer">
+              <button
+                type="button"
+                className="is-secondary"
+                disabled={!canEdit || !changed || saveState === 'saving'}
+                onClick={() => void savePost()}
+              >
+                {saveState === 'saving'
+                  ? 'Salvando…'
+                  : post.status === 'publish'
+                    ? 'Atualizar'
+                    : 'Salvar rascunho'}
+              </button>
+
+              {post.status === 'publish' ? (
+                <button
+                  type="button"
+                  className="is-link-danger"
+                  disabled={publicationActionDisabled}
+                  onClick={() => void changeStatus('draft')}
+                >
+                  Mover para rascunho
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="is-primary"
+                  disabled={publicationActionDisabled || !user.permissions.publishPosts}
+                  onClick={() => void changeStatus('publish')}
+                >
+                  {statusState === 'working' ? 'Publicando…' : 'Publicar'}
+                </button>
+              )}
+            </div>
           </section>
 
+          <AdminMetabox title="Workflow editorial" eyebrow="Redação" defaultOpen={false}>
           <section className="admin-editor-card">
             <div className="admin-editor-card__head">
               <span>Redação</span>
@@ -4663,6 +4752,9 @@ function PostEditorView({
               </div>
             </div>
           </section>
+
+
+          </AdminMetabox>
 
           <section className="admin-editor-card">
             <div className="admin-editor-card__head">
@@ -4775,6 +4867,7 @@ function PostEditorView({
             </div>
           </section>
 
+          <AdminMetabox title="Checklist de publicação" eyebrow="Antes de publicar" defaultOpen={false}>
           <section className="admin-editor-card">
             <div className="admin-editor-card__head">
               <span>Antes de publicar</span>
@@ -4805,89 +4898,96 @@ function PostEditorView({
             </div>
           </section>
 
+
+          </AdminMetabox>
+
           {user.permissions.publishPosts && user.capabilities.includes('edit_others_posts') && (
-            <section className="admin-editor-card">
-              <div className="admin-editor-card__head">
-                <span>Página inicial</span>
-                <strong>Capa do site</strong>
-              </div>
+            <AdminMetabox title="Capa do site" eyebrow="Página inicial" defaultOpen={false}>
+              <section className="admin-editor-card">
+                <div className="admin-editor-card__head">
+                  <span>Página inicial</span>
+                  <strong>Capa do site</strong>
+                </div>
 
-              <div className="admin-editorial-workflow">
-                <label>
-                  <span>Posição</span>
-                  <select
-                    value={editorial.home.slot}
-                    disabled={!canEdit}
-                    onChange={(event) => patchEditorial({
-                      home: {
-                        ...editorial.home,
-                        slot: event.target.value as EditorialWorkflow['home']['slot'],
-                      },
-                    })}
-                  >
-                    <option value="automatic">Automática</option>
-                    <option value="hero">Manchete principal</option>
-                    <option value="featured">Destaque</option>
-                  </select>
-                </label>
+                <div className="admin-editorial-workflow">
+                  <label>
+                    <span>Posição</span>
+                    <select
+                      value={editorial.home.slot}
+                      disabled={!canEdit}
+                      onChange={(event) => patchEditorial({
+                        home: {
+                          ...editorial.home,
+                          slot: event.target.value as EditorialWorkflow['home']['slot'],
+                        },
+                      })}
+                    >
+                      <option value="automatic">Automática</option>
+                      <option value="hero">Manchete principal</option>
+                      <option value="featured">Destaque</option>
+                    </select>
+                  </label>
 
-                {editorial.home.slot !== 'automatic' && (
-                  <>
-                    <label>
-                      <span>Ordem</span>
-                      <input
-                        type="number"
-                        min="0"
-                        max="99"
-                        value={editorial.home.rank}
-                        disabled={!canEdit}
-                        onChange={(event) => patchEditorial({
-                          home: {
-                            ...editorial.home,
-                            rank: Math.max(0, Math.min(99, Number(event.target.value) || 0)),
-                          },
-                        })}
-                      />
-                    </label>
-                    <label>
-                      <span>Fixar até</span>
-                      <input
-                        type="datetime-local"
-                        value={editorial.home.until}
-                        disabled={!canEdit}
-                        onChange={(event) => patchEditorial({
-                          home: {
-                            ...editorial.home,
-                            until: event.target.value,
-                          },
-                        })}
-                      />
-                    </label>
-                    <label>
-                      <span>Chamada alternativa</span>
-                      <input
-                        type="text"
-                        maxLength={280}
-                        value={editorial.home.headline}
-                        placeholder={title}
-                        disabled={!canEdit}
-                        onChange={(event) => patchEditorial({
-                          home: {
-                            ...editorial.home,
-                            headline: event.target.value,
-                          },
-                        })}
-                      />
-                    </label>
-                  </>
-                )}
+                  {editorial.home.slot !== 'automatic' && (
+                    <>
+                      <label>
+                        <span>Ordem</span>
+                        <input
+                          type="number"
+                          min="0"
+                          max="99"
+                          value={editorial.home.rank}
+                          disabled={!canEdit}
+                          onChange={(event) => patchEditorial({
+                            home: {
+                              ...editorial.home,
+                              rank: Math.max(0, Math.min(99, Number(event.target.value) || 0)),
+                            },
+                          })}
+                        />
+                      </label>
+                      <label>
+                        <span>Fixar até</span>
+                        <input
+                          type="datetime-local"
+                          value={editorial.home.until}
+                          disabled={!canEdit}
+                          onChange={(event) => patchEditorial({
+                            home: {
+                              ...editorial.home,
+                              until: event.target.value,
+                            },
+                          })}
+                        />
+                      </label>
+                      <label>
+                        <span>Chamada alternativa</span>
+                        <input
+                          type="text"
+                          maxLength={280}
+                          value={editorial.home.headline}
+                          placeholder={title}
+                          disabled={!canEdit}
+                          onChange={(event) => patchEditorial({
+                            home: {
+                              ...editorial.home,
+                              headline: event.target.value,
+                            },
+                          })}
+                        />
+                      </label>
+                    </>
+                  )}
 
-                <a className="admin-editorial-home-link" href="/sistema/capa">
-                  Organizar toda a capa →
-                </a>
-              </div>
-            </section>
+                  <a className="admin-editorial-home-link" href="/sistema/capa">
+                    Organizar toda a capa →
+                  </a>
+                </div>
+              </section>
+            </AdminMetabox>
           )}
+
+          <AdminMetabox title="Atividade da matéria" eyebrow="Histórico" defaultOpen={false}>
           <section className="admin-editor-card admin-activity-card">
             <div className="admin-editor-card__head">
               <span>Histórico</span>
@@ -4925,6 +5025,8 @@ function PostEditorView({
               )}
             </div>
           </section>
+
+          </AdminMetabox>
 
         </aside>
       </div>
