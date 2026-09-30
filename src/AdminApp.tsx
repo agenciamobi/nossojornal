@@ -2883,8 +2883,21 @@ function PostEditorView({
   if (!data || !editorialData || !editorial) return <AdminLoading />;
 
   const post = data.post;
+  const categories = data.categories;
+  const technicalPostCategorySlugs = new Set([
+    'capa',
+    'outros',
+    'cobertura-regional',
+    'eleicoes-2024',
+  ]);
+  const regionalRootId = categories.find(
+    (category) => category.slug === 'cobertura-regional',
+  )?.id ?? 0;
+  const selectableCategories = categories.filter(
+    (category) => !technicalPostCategorySlugs.has(category.slug),
+  );
   const selectedSet = new Set(categoryIds);
-  const selectedCategories = data.categories.filter((category) => selectedSet.has(category.id));
+  const selectedCategories = categories.filter((category) => selectedSet.has(category.id));
   const originalCategoryIds = post.categories.map((category) => category.id).sort((a, b) => a - b);
   const normalizedCategoryIds = [...categoryIds].sort((a, b) => a - b);
   const originalTagNames = post.tags.map((tag) => tag.name.toLocaleLowerCase('pt-BR')).sort();
@@ -3485,18 +3498,62 @@ function PostEditorView({
   }
 
   function toggleCategory(categoryId: number) {
+    const category = categories.find((item) => item.id === categoryId);
+    if (!category || technicalPostCategorySlugs.has(category.slug)) return;
+
+    const isRegional = regionalRootId > 0 && category.parentId === regionalRootId;
+
     setCategoryIds((current) => {
       const exists = current.includes(categoryId);
-      const next = exists
-        ? current.filter((id) => id !== categoryId)
-        : [...current, categoryId];
 
-      if (exists && primaryCategoryId === categoryId) {
-        setPrimaryCategoryId(0);
+      if (exists) {
+        const next = current.filter((id) => id !== categoryId);
+        const nextEditorial = next
+          .map((id) => categories.find((item) => item.id === id))
+          .find(
+            (item) =>
+              item
+              && !technicalPostCategorySlugs.has(item.slug)
+              && !(regionalRootId > 0 && item.parentId === regionalRootId),
+          );
+        const nextRegional = next
+          .map((id) => categories.find((item) => item.id === id))
+          .find((item) => item && regionalRootId > 0 && item.parentId === regionalRootId);
+
+        setPrimaryCategoryId(nextEditorial?.id ?? nextRegional?.id ?? 0);
+        return next;
       }
 
+      const next = current.filter((id) => {
+        const currentCategory = categories.find((item) => item.id === id);
+        if (!currentCategory || technicalPostCategorySlugs.has(currentCategory.slug)) {
+          return false;
+        }
+
+        const currentIsRegional =
+          regionalRootId > 0 && currentCategory.parentId === regionalRootId;
+
+        return currentIsRegional !== isRegional;
+      });
+
+      next.push(categoryId);
+
+      const editorial = next
+        .map((id) => categories.find((item) => item.id === id))
+        .find(
+          (item) =>
+            item
+            && !technicalPostCategorySlugs.has(item.slug)
+            && !(regionalRootId > 0 && item.parentId === regionalRootId),
+        );
+      const regional = next
+        .map((id) => categories.find((item) => item.id === id))
+        .find((item) => item && regionalRootId > 0 && item.parentId === regionalRootId);
+
+      setPrimaryCategoryId(editorial?.id ?? regional?.id ?? 0);
       return next;
     });
+
     setSaveState('idle');
   }
 
@@ -4419,8 +4476,13 @@ function PostEditorView({
               <strong>Categorias</strong>
             </div>
 
+            <p className="admin-field-help">
+              Use no máximo uma editoria e uma localidade. Ao escolher outra da mesma classe,
+              a seleção anterior é substituída.
+            </p>
+
             <div className="admin-editor-categories">
-              {data.categories.map((category) => (
+              {selectableCategories.map((category) => (
                 <label key={category.id}>
                   <input
                     type="checkbox"
@@ -4437,19 +4499,14 @@ function PostEditorView({
             {selectedCategories.length > 0 && (
               <label className="admin-editor-primary-category">
                 <span>Categoria principal</span>
-                <select
-                  value={primaryCategoryId || ''}
-                  disabled={!canEdit}
-                  onChange={(event) => {
-                    setPrimaryCategoryId(Number(event.target.value) || 0);
-                    setSaveState('idle');
-                  }}
-                >
-                  <option value="">Automática</option>
+                <select value={primaryCategoryId || ''} disabled>
                   {selectedCategories.map((category) => (
                     <option value={category.id} key={category.id}>{category.name}</option>
                   ))}
                 </select>
+                <small className="admin-field-help">
+                  A editoria é principal automaticamente; a localidade funciona como contexto.
+                </small>
               </label>
             )}
           </section>
