@@ -1438,3 +1438,238 @@
     grid-template-columns: 1fr;
   }
 }
+
+
+/* M2 editor polish: preserve editorial power, hide complexity until needed. */
+
+.admin-pagination-top > .admin-pagination {
+  margin: 0 0 8px;
+}
+
+.admin-table--wp-list th,
+.admin-table--wp-list td {
+  padding-top: 7px;
+  padding-bottom: 7px;
+}
+
+.admin-table--wp-list tbody tr {
+  min-height: 38px;
+}
+
+.admin-metabox {
+  margin: 0 0 10px;
+  overflow: hidden;
+}
+
+.admin-metabox__summary {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.admin-metabox__summary::-webkit-details-marker {
+  display: none;
+}
+
+.admin-metabox__summary > span {
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+}
+
+.admin-metabox__summary small {
+  color: #787c82;
+  font-size: 10px;
+  font-weight: 400;
+}
+
+.admin-metabox__summary strong {
+  color: #1d2327;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.admin-metabox__summary i {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 9px;
+  border-right: 2px solid #646970;
+  border-bottom: 2px solid #646970;
+  transform: rotate(45deg) translateY(-2px);
+  transition: transform .15s ease;
+}
+
+.admin-metabox[open] > .admin-metabox__summary {
+  border-bottom: 1px solid #dcdcde;
+}
+
+.admin-metabox[open] > .admin-metabox__summary i {
+  transform: rotate(225deg) translate(-1px, -1px);
+}
+
+.admin-metabox__summary:hover,
+.admin-metabox__summary:focus-visible {
+  background: #f6f7f7;
+  outline: 0;
+}
+
+.admin-metabox__content > .admin-editor-card {
+  margin: 0;
+  border: 0;
+  box-shadow: none;
+}
+
+.admin-metabox__content > .admin-editor-card > .admin-editor-card__head {
+  display: none;
+}
+
+.admin-metabox__content > .admin-editor-card + .admin-editor-card {
+  border-top: 1px solid #dcdcde;
+}
+
+.admin-editor-main > .admin-metabox {
+  margin-top: 10px;
+}
+
+.admin-editor-sidebar > .admin-metabox {
+  margin-bottom: 10px;
+}
+
+.admin-publish-box .admin-editor-card__head {
+  min-height: 40px;
+}
+
+.admin-publish-box .admin-editor-card__head > strong {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.admin-publish-box__meta {
+  display: grid;
+  gap: 6px;
+  padding: 11px 12px 9px;
+}
+
+.admin-publish-box__meta p {
+  margin: 0;
+  color: #50575e;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.admin-publish-box__meta strong {
+  color: #1d2327;
+  font-weight: 600;
+}
+
+.admin-publish-box__meta span {
+  color: #50575e;
+}
+
+.admin-publish-box__footer {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 10px;
+  border-top: 1px solid #dcdcde;
+  background: #f6f7f7;
+}
+
+.admin-publish-box__footer button {
+  min-height: 30px;
+  border: 1px solid #2271b1;
+  border-radius: 3px;
+  padding: 0 10px;
+  background: #fff;
+  color: #2271b1;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.admin-publish-box__footer button:hover,
+.admin-publish-box__footer button:focus-visible {
+  border-color: #0a4b78;
+  color: #0a4b78;
+}
+
+.admin-publish-box__footer button.is-primary {
+  margin-left: auto;
+  background: #2271b1;
+  color: #fff;
+}
+
+.admin-publish-box__footer button.is-primary:hover,
+.admin-publish-box__footer button.is-primary:focus-visible {
+  background: #135e96;
+  color: #fff;
+}
+
+.admin-publish-box__footer button.is-link-danger {
+  border-color: transparent;
+  background: transparent;
+  color: #b32d2e;
+  font-weight: 400;
+}
+
+.admin-publish-box__footer button.is-link-danger:hover,
+.admin-publish-box__footer button.is-link-danger:focus-visible {
+  color: #8a2424;
+  text-decoration: underline;
+}
+
+.admin-publish-box__footer button:disabled {
+  opacity: .55;
+  cursor: default;
+}
+
+.admin-editor-header__actions > a {
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #2271b1;
+  border-radius: 3px;
+  padding: 0 10px;
+  background: #f6f7f7;
+  color: #2271b1;
+  text-decoration: none;
+}
+
+.admin-editor-header__actions > a:hover,
+.admin-editor-header__actions > a:focus-visible {
+  border-color: #0a4b78;
+  background: #f0f6fc;
+  color: #0a4b78;
+}
+
+.admin-editor-main > .admin-editor-field--title + .admin-editor-field,
+.admin-editor-main > .admin-editor-field + .admin-editor-field {
+  margin-top: 8px;
+}
+
+.admin-editor-main > .admin-editor-field + .admin-metabox,
+.admin-editor-main > .admin-rich-editor + .admin-metabox {
+  margin-top: 10px;
+}
+
+@media (max-width: 782px) {
+  .admin-publish-box__footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .admin-publish-box__footer button,
+  .admin-publish-box__footer button.is-primary {
+    width: 100%;
+    margin-left: 0;
+  }
+}
