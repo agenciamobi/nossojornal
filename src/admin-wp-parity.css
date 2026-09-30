@@ -317,3 +317,158 @@
     min-width: 720px;
   }
 }
+
+
+.admin-wp-bulkbar {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 10px;
+  padding: 5px 0;
+  color: #646970;
+  font-size: 11px;
+}
+
+.admin-wp-bulkbar > div {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.admin-wp-bulkbar select {
+  min-width: 150px;
+  min-height: 32px;
+  border: 1px solid #8c8f94;
+  border-radius: 3px;
+  padding: 0 24px 0 8px;
+  background: #fff;
+}
+
+.admin-wp-bulkbar button {
+  min-height: 32px;
+  border: 1px solid #2271b1;
+  border-radius: 3px;
+  padding: 0 10px;
+  background: #f6f7f7;
+  color: #2271b1;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.admin-wp-bulkbar button:disabled {
+  opacity: .55;
+  cursor: default;
+}
+
+.admin-table--wp-list .admin-table__check {
+  width: 34px;
+  padding-left: 10px;
+  padding-right: 4px;
+  text-align: center;
+}
+
+.admin-table--wp-list .admin-table__check input {
+  width: 16px;
+  height: 16px;
+}
+
+.admin-filter-tabs a span {
+  color: #646970;
+  font-weight: 400;
+}
+
+.admin-comment-quick-edit,
+.admin-comment-reply {
+  display: grid;
+  gap: 10px;
+  margin: 10px 0 12px;
+  padding: 12px;
+  border: 1px solid #c3c4c7;
+  background: #f6f7f7;
+}
+
+.admin-comment-quick-edit__identity {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.admin-comment-quick-edit label,
+.admin-comment-reply label {
+  display: grid;
+  gap: 5px;
+  color: #2c3338;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.admin-comment-quick-edit input,
+.admin-comment-quick-edit textarea,
+.admin-comment-reply textarea {
+  width: 100%;
+  border: 1px solid #8c8f94;
+  border-radius: 3px;
+  padding: 7px 8px;
+  background: #fff;
+  color: #2c3338;
+  font: inherit;
+}
+
+.admin-comment-quick-edit textarea,
+.admin-comment-reply textarea {
+  resize: vertical;
+}
+
+.admin-comment-quick-edit input:focus,
+.admin-comment-quick-edit textarea:focus,
+.admin-comment-reply textarea:focus {
+  border-color: #2271b1;
+  box-shadow: 0 0 0 1px #2271b1;
+  outline: 0;
+}
+
+.admin-comment-quick-edit__buttons,
+.admin-comment-reply > div {
+  display: flex;
+  gap: 8px;
+}
+
+.admin-comment-quick-edit__buttons button,
+.admin-comment-reply button {
+  min-height: 30px;
+  border: 1px solid #2271b1;
+  border-radius: 3px;
+  padding: 0 10px;
+  background: #2271b1;
+  color: #fff;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.admin-comment-quick-edit__buttons .is-secondary,
+.admin-comment-reply .is-secondary {
+  border-color: #8c8f94;
+  background: #fff;
+  color: #2c3338;
+}
+
+.admin-wp-color-input {
+  width: 74px !important;
+  padding: 2px !important;
+}
+
+@media (max-width: 760px) {
+  .admin-wp-bulkbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .admin-comment-quick-edit__identity {
+    grid-template-columns: 1fr;
+  }
+}
