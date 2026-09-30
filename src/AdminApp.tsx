@@ -1393,16 +1393,33 @@ function AdminTopbar({
 
   return (
     <header className="admin-topbar">
-      <div>
-        <strong>Nosso Jornal</strong>
-        <span>Administração</span>
+      <div className="admin-topbar__left">
+        <a className="admin-topbar__mark" href="/sistema" aria-label="Nosso Jornal">NJ</a>
+        <a className="admin-topbar__site" href="/" target="_blank" rel="noopener noreferrer">
+          Nosso Jornal
+        </a>
+        {user.permissions.moderateComments && (
+          <a className="admin-topbar__shortcut" href="/sistema/comentarios">
+            Comentários
+          </a>
+        )}
+        {user.permissions.editPosts && (
+          <a className="admin-topbar__shortcut" href="/sistema/noticias/nova">
+            + Novo
+          </a>
+        )}
       </div>
 
       <div className="admin-topbar__user">
-        <span className="admin-avatar" aria-hidden="true">{initials(user.displayName)}</span>
-        <span>
-          <strong>{user.displayName}</strong>
-          <small>{user.roles.map(roleLabel).join(', ') || user.login}</small>
+        <span className="admin-topbar__hello">
+          Olá, <strong>{user.displayName}</strong>
+        </span>
+        <span
+          className="admin-avatar"
+          aria-hidden="true"
+          title={user.roles.map(roleLabel).join(', ') || user.login}
+        >
+          {initials(user.displayName)}
         </span>
         <button type="button" onClick={() => void logout()} disabled={busy}>Sair</button>
       </div>

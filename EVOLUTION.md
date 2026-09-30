@@ -3934,3 +3934,7 @@ A moderação passa a incluir edição rápida de autor, e-mail, URL e conteúdo
 ### Regra arquitetural
 
 Paridade não significa clonagem de código nem dependência do WordPress. O `/sistema` continua React/Vite, os endpoints continuam PHP próprios em `/api/admin/*`, e o MariaDB existente permanece a autoridade durante a transição. Recursos próprios do Nosso Jornal, como Capa, Agenda, Fontes, Mesa de Pautas e Publicidade, continuam adicionais ao modelo do wp-admin.
+
+### Paridade visual
+
+A primeira onda também corrige a shell visual. Desktop passa a usar toolbar global escura de 32px, sidebar administrativa de 160px, itens compactos, submenu escuro, estado ativo azul, conteúdo com margens e densidade próximas ao wp-admin, tabelas listradas, ações de linha discretas, metaboxes compactos e editor em duas colunas com sidebar de 280px. Em viewport reduzida o menu colapsa e no mobile vira navegação horizontal compacta.
