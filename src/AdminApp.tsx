@@ -284,6 +284,7 @@ type CategoriesPayload = {
       slug: string;
       parentId: number | null;
       parentName: string;
+      description: string;
       count: number;
       color: string;
       colorSource: 'palette' | 'termmeta';
@@ -5453,12 +5454,20 @@ function PageEditorView({
   );
 }
 
-function CategoriesView() {
+function CategoriesView({ csrfToken }: { csrfToken: string }) {
   const params = useMemo(() => new URLSearchParams(window.location.search), []);
   const query = params.get('q') ?? '';
 
   const [data, setData] = useState<CategoriesPayload['data']>();
   const [error, setError] = useState(false);
+  const [name, setName] = useState('');
+  const [slug, setSlug] = useState('');
+  const [slugTouched, setSlugTouched] = useState(false);
+  const [description, setDescription] = useState('');
+  const [parentId, setParentId] = useState<number | null>(null);
+  const [color, setColor] = useState('#0B57D0');
+  const [busy, setBusy] = useState(false);
+  const [feedback, setFeedback] = useState('');
 
   useEffect(() => {
     const search = new URLSearchParams();
@@ -5475,99 +5484,217 @@ function CategoriesView() {
   if (error) return <AdminError />;
   if (!data) return <AdminLoading />;
 
-  const rootCount = data.items.filter((item) => item.parentId === null).length;
-  const childCount = data.items.length - rootCount;
+  async function createCategory(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (busy || !name.trim()) return;
+
+    setBusy(true);
+    setFeedback('');
+
+    try {
+      const payload = await adminFetch<{
+        ok: boolean;
+        data?: {
+          category: {
+            id: number;
+            name: string;
+            slug: string;
+            description: string;
+            parentId: number | null;
+            count: number;
+            color: string;
+            colorSource: 'termmeta';
+            publicUrl: string;
+            adminUrl: string;
+          };
+        };
+      }>('/api/admin/category-create.php', {
+        method: 'POST',
+        headers: { 'X-CSRF-Token': csrfToken },
+        body: JSON.stringify({
+          name: name.trim(),
+          slug: slugifyAdminValue(slug || name),
+          description: description.trim(),
+          parentId,
+          color,
+        }),
+      });
+
+      if (!payload.ok || !payload.data?.category) {
+        throw new Error('category_create_invalid_response');
+      }
+
+      window.location.href = '/sistema/categorias';
+    } catch (cause) {
+      const code = cause instanceof Error ? cause.message : '';
+      const messages: Record<string, string> = {
+        category_slug_exists: 'Este slug já está sendo usado por outro termo.',
+        invalid_category_parent: 'A categoria superior escolhida não é válida.',
+        invalid_category_color: 'Escolha uma cor editorial válida.',
+        database_write_unavailable: 'O banco está temporariamente sem escrita para este recurso.',
+      };
+
+      setFeedback(messages[code] ?? 'Não foi possível adicionar a categoria.');
+      setBusy(false);
+    }
+  }
 
   return (
-    <>
-      <div className="admin-page-heading-row">
-        <AdminPageHeader
-          eyebrow="Taxonomia"
-          title="Categorias"
-          description="Editorias e municípios usados na organização das notícias."
-        />
-        <a className="admin-create-button" href="/sistema/categorias/nova">+ Nova categoria</a>
+    <section className="admin-wp-screen">
+      <div className="admin-wp-title-row">
+        <h1>Categorias</h1>
       </div>
 
-      <section className="admin-directory-summary" aria-label="Resumo de categorias">
-        <div>
-          <span>Exibidas</span>
-          <strong>{data.count.toLocaleString('pt-BR')}</strong>
-          <small>de {data.total.toLocaleString('pt-BR')} categorias</small>
+      {feedback && (
+        <div className="admin-save-feedback admin-save-feedback--error" role="alert">
+          {feedback}
         </div>
-        <div>
-          <span>Principais</span>
-          <strong>{rootCount.toLocaleString('pt-BR')}</strong>
-          <small>sem categoria superior</small>
-        </div>
-        <div>
-          <span>Subcategorias</span>
-          <strong>{childCount.toLocaleString('pt-BR')}</strong>
-          <small>no resultado atual</small>
-        </div>
-      </section>
+      )}
 
-      <form className="admin-toolbar admin-toolbar--directory" method="get" action="/sistema/categorias">
-        <div className="admin-search">
-          <input
-            type="search"
-            name="q"
-            defaultValue={query}
-            placeholder="Buscar nome, slug, descrição ou categoria superior"
-            aria-label="Buscar categorias"
-          />
-          <button type="submit">Buscar</button>
-          {query && <a className="admin-toolbar__clear" href="/sistema/categorias">Limpar</a>}
-        </div>
-      </form>
+      <div className="admin-wp-taxonomy-layout">
+        <aside className="admin-wp-taxonomy-create">
+          <h2>Adicionar categoria</h2>
 
-      <div className="admin-table-wrap">
-        <table className="admin-table">
-          <thead>
-            <tr>
-              <th>Nome</th>
-              <th>Slug</th>
-              <th>Categoria superior</th>
-              <th>Cor editorial</th>
-              <th>Posts</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.items.map((category) => (
-              <tr key={category.id}>
-                <td className="admin-table__primary">
-                  <strong>
-                    <a href={'/sistema/categorias/' + category.id}>{category.name}</a>
-                  </strong>
-                  <div className="admin-row-actions">
-                    <a href={'/sistema/categorias/' + category.id}>Editar</a>
-                    <span>#{category.id}</span>
-                    <a href={category.publicUrl} target="_blank" rel="noopener noreferrer">Ver ↗</a>
-                  </div>
-                </td>
-                <td><code>{category.slug}</code></td>
-                <td>{category.parentName || '—'}</td>
-                <td>
-                  <span className="admin-color">
-                    <i style={{ background: category.color }} />
-                    <span>{category.color}</span>
-                    <small>{category.colorSource === 'termmeta' ? 'Personalizada' : 'Padrão'}</small>
-                  </span>
-                </td>
-                <td>{category.count.toLocaleString('pt-BR')}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+          <form onSubmit={(event) => void createCategory(event)}>
+            <label>
+              <span>Nome</span>
+              <input
+                value={name}
+                maxLength={200}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setName(value);
+                  if (!slugTouched) setSlug(slugifyAdminValue(value));
+                }}
+              />
+              <small>O nome é como a categoria aparece no portal.</small>
+            </label>
 
-        {data.items.length === 0 && (
-          <div className="admin-empty-state">
-            Nenhuma categoria corresponde a “{query}”.
-            <a href="/sistema/categorias"> Mostrar todas</a>
+            <label>
+              <span>Slug</span>
+              <input
+                value={slug}
+                maxLength={200}
+                onChange={(event) => {
+                  setSlugTouched(true);
+                  setSlug(event.target.value);
+                }}
+                onBlur={() => setSlug((value) => slugifyAdminValue(value))}
+              />
+              <small>Versão amigável do nome usada no endereço público.</small>
+            </label>
+
+            <label>
+              <span>Categoria superior</span>
+              <select
+                value={parentId ?? ''}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setParentId(value === '' ? null : Number.parseInt(value, 10));
+                }}
+              >
+                <option value="">Nenhuma</option>
+                {data.items
+                  .filter((category) => category.parentId === null)
+                  .map((category) => (
+                    <option key={category.id} value={category.id}>{category.name}</option>
+                  ))}
+              </select>
+              <small>Use hierarquia apenas quando a editoria realmente tiver subcategorias.</small>
+            </label>
+
+            <label>
+              <span>Descrição</span>
+              <textarea
+                rows={5}
+                value={description}
+                onChange={(event) => setDescription(event.target.value)}
+              />
+              <small>A descrição pode ser aproveitada em páginas de editoria e metadados.</small>
+            </label>
+
+            <label>
+              <span>Cor editorial</span>
+              <input
+                className="admin-wp-color-input"
+                type="color"
+                value={color}
+                aria-label="Cor editorial da categoria"
+                onChange={(event) => setColor(event.target.value.toUpperCase())}
+              />
+            </label>
+
+            <button className="admin-wp-primary-button" type="submit" disabled={busy || !name.trim()}>
+              {busy ? 'Adicionando…' : 'Adicionar categoria'}
+            </button>
+          </form>
+        </aside>
+
+        <div className="admin-wp-taxonomy-list">
+          <div className="admin-wp-list-toolbar">
+            <span>{data.total.toLocaleString('pt-BR')} itens</span>
+
+            <form method="get" action="/sistema/categorias">
+              <input
+                type="search"
+                name="q"
+                defaultValue={query}
+                aria-label="Pesquisar categorias"
+              />
+              <button type="submit">Pesquisar categorias</button>
+            </form>
           </div>
-        )}
+
+          <div className="admin-wp-table-wrap">
+            <table className="admin-wp-table">
+              <thead>
+                <tr>
+                  <th>Nome</th>
+                  <th>Descrição</th>
+                  <th>Slug</th>
+                  <th>Cor</th>
+                  <th>Contagem</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.items.map((category) => (
+                  <tr key={category.id}>
+                    <td className="admin-wp-primary-column">
+                      <strong>
+                        <a href={'/sistema/categorias/' + category.id}>
+                          {category.parentId ? '— ' : ''}{category.name}
+                        </a>
+                      </strong>
+                      <div className="admin-row-actions">
+                        <a href={'/sistema/categorias/' + category.id}>Editar</a>
+                        <a href={'/sistema/categorias/' + category.id}>Edição rápida</a>
+                        <a href={category.publicUrl} target="_blank" rel="noopener noreferrer">Ver</a>
+                      </div>
+                    </td>
+                    <td>{category.description || '—'}</td>
+                    <td><code>{category.slug}</code></td>
+                    <td>
+                      <span className="admin-color">
+                        <i style={{ background: category.color }} />
+                        <span>{category.color}</span>
+                      </span>
+                    </td>
+                    <td>{category.count.toLocaleString('pt-BR')}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {data.items.length === 0 && (
+              <div className="admin-empty-state">
+                Nenhuma categoria encontrada.
+                {query && <a href="/sistema/categorias"> Mostrar todas</a>}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
-    </>
+    </section>
   );
 }
 
@@ -10056,7 +10183,7 @@ export function AdminApp() {
               ? <PageEditorView user={user} csrfToken={csrfToken} />
               : <AdminAccessDenied />
           )}
-          {view === 'categories' && <CategoriesView />}
+          {view === 'categories' && <CategoriesView csrfToken={csrfToken} />}
           {view === 'categoryNew' && <NewCategoryView csrfToken={csrfToken} />}
           {view === 'category' && <CategoryEditorView csrfToken={csrfToken} />}
           {view === 'tags' && (
