@@ -41,8 +41,8 @@ SQL);
         throw new NjApiHttpException(404, 'comment_not_found');
     }
 
-    $authorName = trim((string) ($user['display_name'] ?? $user['user_login'] ?? 'Redação'));
-    $authorEmail = trim((string) ($user['user_email'] ?? ''));
+    $authorName = trim((string) ($user['displayName'] ?? $user['login'] ?? 'Redação'));
+    $authorEmail = trim((string) ($user['email'] ?? ''));
     $userId = (int) ($user['id'] ?? 0);
 
     $insert = $pdo->prepare(<<<SQL
