@@ -1440,7 +1440,7 @@ function AdminPageHeader({
     <header className="admin-page-header">
       <span>{eyebrow}</span>
       <h1>{title}</h1>
-      <p>{description}</p>
+      {description && <p>{description}</p>}
     </header>
   );
 }
@@ -2790,7 +2790,7 @@ function PostsView({
       </div>
 
       {data.pagination.totalPages > 1 && (
-        <div className="admin-pagination admin-pagination--top">
+        <div className="admin-pagination-top">
           <AdminPagination
             page={data.pagination.page}
             totalPages={data.pagination.totalPages}
