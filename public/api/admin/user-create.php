@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require __DIR__ . '/_admin.php';
+require_once __DIR__ . '/../v1/_authors.php';
 
 function nj_admin_new_user_login(string $value): string
 {
@@ -20,6 +21,27 @@ nj_admin_run(['POST'], static function (): array {
 
     $login = nj_admin_new_user_login((string) ($body['login'] ?? ''));
     $displayName = trim((string) ($body['displayName'] ?? ''));
+    $publicSlug = strtolower(trim((string) ($body['publicSlug'] ?? '')));
+    $firstName = trim((string) ($body['firstName'] ?? ''));
+    $lastName = trim((string) ($body['lastName'] ?? ''));
+    $publicBio = trim((string) ($body['publicBio'] ?? ''));
+    $publicRole = trim((string) ($body['publicRole'] ?? ''));
+    $avatarId = filter_var($body['avatarId'] ?? 0, FILTER_VALIDATE_INT);
+    $urlFields = [
+        'website' => [],
+        'instagram' => ['instagram.com', 'www.instagram.com'],
+        'facebook' => ['facebook.com', 'www.facebook.com'],
+        'linkedin' => ['linkedin.com', 'www.linkedin.com'],
+        'x' => ['x.com', 'www.x.com', 'twitter.com', 'www.twitter.com'],
+    ];
+    $urls = [];
+    foreach ($urlFields as $key => $allowedHosts) {
+        $rawUrl = trim((string) ($body[$key] ?? ''));
+        $urls[$key] = nj_author_external_url($rawUrl, $allowedHosts);
+        if ($rawUrl !== '' && $urls[$key] === '') {
+            throw new NjApiHttpException(422, 'invalid_public_' . $key);
+        }
+    }
     $email = trim((string) ($body['email'] ?? ''));
     $password = (string) ($body['password'] ?? '');
     $role = trim((string) ($body['role'] ?? 'author'));
@@ -39,6 +61,26 @@ nj_admin_run(['POST'], static function (): array {
 
     if ($displayName === '' || $displayLength > 250) {
         throw new NjApiHttpException(422, 'invalid_display_name');
+    }
+
+    if (!preg_match('/^[a-z0-9](?:[a-z0-9-]{0,78}[a-z0-9])?$/', $publicSlug)) {
+        throw new NjApiHttpException(422, 'invalid_public_slug');
+    }
+    if (
+        (function_exists('mb_strlen') ? mb_strlen($firstName, 'UTF-8') : strlen($firstName)) > 100
+        || (function_exists('mb_strlen') ? mb_strlen($lastName, 'UTF-8') : strlen($lastName)) > 100
+    ) {
+        throw new NjApiHttpException(422, 'invalid_public_name');
+    }
+    if ($avatarId === false || $avatarId < 0) {
+        throw new NjApiHttpException(422, 'invalid_public_avatar');
+    }
+
+    if ((function_exists('mb_strlen') ? mb_strlen($publicBio, 'UTF-8') : strlen($publicBio)) > 3000) {
+        throw new NjApiHttpException(422, 'public_bio_too_large');
+    }
+    if ((function_exists('mb_strlen') ? mb_strlen($publicRole, 'UTF-8') : strlen($publicRole)) > 160) {
+        throw new NjApiHttpException(422, 'public_role_too_large');
     }
 
     if (!filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($email) > 100) {
@@ -64,6 +106,22 @@ nj_admin_run(['POST'], static function (): array {
     }
 
     $users = nj_table('users');
+
+    $duplicateSlug = $pdo->prepare("SELECT ID FROM {$users} WHERE user_nicename = :slug LIMIT 1");
+    $duplicateSlug->execute(['slug' => $publicSlug]);
+    if ($duplicateSlug->fetchColumn()) {
+        throw new NjApiHttpException(409, 'public_slug_exists');
+    }
+    if ($avatarId > 0) {
+        $attachments = nj_table('posts');
+        $avatarCheck = $pdo->prepare(
+            "SELECT ID FROM {$attachments} WHERE ID = :id AND post_type = 'attachment' AND post_mime_type LIKE 'image/%' LIMIT 1"
+        );
+        $avatarCheck->execute(['id' => $avatarId]);
+        if (!$avatarCheck->fetchColumn()) {
+            throw new NjApiHttpException(422, 'invalid_public_avatar');
+        }
+    }
 
     $duplicate = $pdo->prepare(<<<SQL
 SELECT ID
@@ -101,7 +159,7 @@ INSERT INTO {$users} (
     :password_hash,
     :nicename,
     :email,
-    '',
+    :user_url,
     UTC_TIMESTAMP(),
     '',
     0,
@@ -111,9 +169,10 @@ SQL);
         $insert->execute([
             'login' => $login,
             'password_hash' => $passwordHash,
-            'nicename' => $login,
+            'nicename' => $publicSlug,
             'email' => $email,
             'display_name' => $displayName,
+            'user_url' => $urls['website'],
         ]);
 
         $userId = (int) $pdo->lastInsertId();
@@ -123,8 +182,14 @@ SQL);
 
         nj_admin_set_user_role($pdo, $userId, $role);
         nj_admin_upsert_usermeta($pdo, $userId, 'nickname', $displayName);
-        nj_admin_upsert_usermeta($pdo, $userId, 'first_name', '');
-        nj_admin_upsert_usermeta($pdo, $userId, 'last_name', '');
+        nj_admin_upsert_usermeta($pdo, $userId, 'first_name', $firstName);
+        nj_admin_upsert_usermeta($pdo, $userId, 'last_name', $lastName);
+        nj_admin_upsert_usermeta($pdo, $userId, '_nj_public_bio', $publicBio);
+        nj_admin_upsert_usermeta($pdo, $userId, '_nj_public_role', $publicRole);
+        nj_admin_upsert_usermeta($pdo, $userId, '_nj_public_avatar_id', (string) $avatarId);
+        foreach (['instagram', 'facebook', 'linkedin', 'x'] as $socialKey) {
+            nj_admin_upsert_usermeta($pdo, $userId, '_nj_public_' . $socialKey, $urls[$socialKey]);
+        }
 
         $readBack = $pdo->prepare(<<<SQL
 SELECT
@@ -148,6 +213,7 @@ SQL);
             || (string) $persisted['user_login'] !== $login
             || (string) $persisted['user_email'] !== $email
             || (string) $persisted['display_name'] !== $displayName
+            || (string) $persisted['user_nicename'] !== $publicSlug
         ) {
             throw new RuntimeException('user_create_readback_mismatch');
         }

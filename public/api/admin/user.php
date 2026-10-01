@@ -59,6 +59,9 @@ SQL);
     $postmeta = nj_table('postmeta');
     $profileKeys = [
         'description',
+        'first_name',
+        'last_name',
+        '_nj_public_avatar_id',
         '_nj_public_bio',
         '_nj_public_role',
         '_nj_public_instagram',
@@ -131,11 +134,16 @@ SQL);
     ]);
     $publishedCount = (int) $publishedStatement->fetchColumn();
     $publicSlug = trim((string) ($row['user_nicename'] ?? ''));
+    $publicPreview = $publicSlug !== '' ? nj_author_profile($pdo, $publicSlug, true) : null;
 
     return [
         'user' => nj_admin_user_payload($pdo, $row),
         'publicProfile' => [
             'slug' => $publicSlug,
+            'firstName' => (string) ($profileMeta['first_name'] ?? ''),
+            'lastName' => (string) ($profileMeta['last_name'] ?? ''),
+            'avatarId' => max(0, (int) ($profileMeta['_nj_public_avatar_id'] ?? 0)),
+            'avatar' => $publicPreview['avatar'] ?? null,
             'url' => $publicSlug !== '' && $publishedCount > 0
                 ? '/autor/' . rawurlencode($publicSlug)
                 : null,
