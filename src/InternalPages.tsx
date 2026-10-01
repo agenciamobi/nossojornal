@@ -385,6 +385,34 @@ function formatDate(value: string, includeTime = true) {
   }).format(date);
 }
 
+type PublicArticleEditorial = NonNullable<ArticlePayload['data']>['editorial'];
+
+function publicMeteorologicalSource(editorial?: PublicArticleEditorial | null) {
+  if (!editorial) return null;
+
+  const sourceUrl = (editorial.originalSourceUrl || editorial.provenance.sourceUrl || '').trim();
+  const fingerprint = (editorial.provenance.sourceName + ' ' + sourceUrl)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLocaleLowerCase('pt-BR');
+
+  const isInmet =
+    fingerprint.includes('inmet')
+    || fingerprint.includes('instituto nacional de meteorologia');
+
+  const isCppmet =
+    fingerprint.includes('cppmet')
+    || (fingerprint.includes('ufpel') && fingerprint.includes('meteorolog'));
+
+  if (!isInmet && !isCppmet) return null;
+
+  return {
+    label: isInmet ? 'INMET' : 'CPPMET/UFPel',
+    url: sourceUrl,
+    publishedAt: editorial.provenance.sourcePublishedAt,
+  };
+}
+
 function estimateReadingMinutes(html: string) {
   const text = html
     .replace(/<[^>]+>/g, ' ')
@@ -821,6 +849,7 @@ function ArticlePage({ slug }: { slug: string }) {
   const shareUrl = new URL(article.url, window.location.origin).toString();
   const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(`${article.title} ${shareUrl}`)}`;
   const readingMinutes = estimateReadingMinutes(article.contentHtml ?? '');
+  const publicSource = publicMeteorologicalSource(payload?.editorial);
 
   async function copyShareLink() {
     try {
@@ -1072,29 +1101,23 @@ function ArticlePage({ slug }: { slug: string }) {
                 </div>
               )}
 
-              {(payload?.editorial.originalSourceUrl || payload?.editorial.provenance.sourceUrl) && (
+              {publicSource && (
                 <div className="article-detail__aside-section article-provenance">
-                  <span className="internal-kicker">
-                    {payload.editorial.provenance.mode === 'republished'
-                      ? 'Publicado originalmente por'
-                      : payload.editorial.provenance.mode === 'adapted'
-                        ? 'Origem da pauta'
-                        : 'Referência'}
-                  </span>
-                  {payload.editorial.provenance.sourceName && (
-                    <strong>{payload.editorial.provenance.sourceName}</strong>
+                  <span className="internal-kicker">Dados meteorológicos</span>
+                  <strong>{publicSource.label}</strong>
+                  {publicSource.url && (
+                    <a
+                      className="article-original-source"
+                      href={publicSource.url}
+                      target="_blank"
+                      rel="noopener noreferrer external"
+                    >
+                      Consultar fonte oficial ↗
+                    </a>
                   )}
-                  <a
-                    className="article-original-source"
-                    href={payload.editorial.originalSourceUrl || payload.editorial.provenance.sourceUrl}
-                    target="_blank"
-                    rel="noopener noreferrer external"
-                  >
-                    Consultar fonte original ↗
-                  </a>
-                  {payload.editorial.provenance.sourcePublishedAt && (
+                  {publicSource.publishedAt && (
                     <small>
-                      Publicado na origem em {formatDate(payload.editorial.provenance.sourcePublishedAt)}
+                      Publicado pela fonte em {formatDate(publicSource.publishedAt)}
                     </small>
                   )}
                 </div>
