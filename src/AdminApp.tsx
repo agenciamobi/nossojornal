@@ -8434,6 +8434,11 @@ function UserEditorView({
 
   const [data, setData] = useState<UserDetailPayload['data']>();
   const [displayName, setDisplayName] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [publicSlug, setPublicSlug] = useState('');
+  const [avatarId, setAvatarId] = useState(0);
+  const [saveError, setSaveError] = useState('');
   const [email, setEmail] = useState('');
   const [role, setRole] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -8461,6 +8466,10 @@ function UserEditorView({
 
         setData(payload.data);
         setDisplayName(payload.data.user.displayName);
+        setFirstName(payload.data.publicProfile.firstName);
+        setLastName(payload.data.publicProfile.lastName);
+        setPublicSlug(payload.data.publicProfile.slug);
+        setAvatarId(payload.data.publicProfile.avatarId);
         setEmail(payload.data.user.email);
         setRole(payload.data.user.roles[0] ?? '');
         setPublicBio(payload.data.publicProfile.bio);
@@ -8478,6 +8487,7 @@ function UserEditorView({
   if (!data) return <AdminLoading />;
 
   const profileCanSave = user.permissions.editUsers;
+  const publicSlugValid = /^[a-z0-9](?:[a-z0-9-]{0,78}[a-z0-9])?$/.test(publicSlug);
   const roleCanSave = user.permissions.editUsers && data.canChangeRole;
   const originalRole = data.user.roles[0] ?? '';
   const passwordChangeValid =
@@ -8485,6 +8495,10 @@ function UserEditorView({
     || (newPassword.length >= 12 && newPassword === newPasswordConfirm);
   const changed =
     displayName !== data.user.displayName
+    || firstName !== data.publicProfile.firstName
+    || lastName !== data.publicProfile.lastName
+    || publicSlug !== data.publicProfile.slug
+    || avatarId !== data.publicProfile.avatarId
     || email !== data.user.email
     || role !== originalRole
     || newPassword !== ''
@@ -8499,9 +8513,10 @@ function UserEditorView({
   async function saveUser() {
     if (!profileCanSave || !changed || saveState === 'saving') return;
     if (role !== originalRole && !roleCanSave) return;
-    if (!passwordChangeValid) return;
+    if (!passwordChangeValid || !publicSlugValid || !displayName.trim()) return;
 
     setSaveState('saving');
+    setSaveError('');
 
     try {
       const payload = await adminFetch<{
@@ -8515,7 +8530,7 @@ function UserEditorView({
         headers: { 'X-CSRF-Token': csrfToken },
         body: JSON.stringify({
           userId: data?.user.id,
-          displayName,
+          displayName, firstName, lastName, publicSlug, avatarId,
           email,
           role,
           password: newPassword,
@@ -8542,6 +8557,10 @@ function UserEditorView({
         : current
       );
       setDisplayName(payload.data.user.displayName);
+      setFirstName(payload.data.publicProfile.firstName);
+      setLastName(payload.data.publicProfile.lastName);
+      setPublicSlug(payload.data.publicProfile.slug);
+      setAvatarId(payload.data.publicProfile.avatarId);
       setEmail(payload.data.user.email);
       setRole(payload.data.user.roles[0] ?? role);
       setNewPassword('');
@@ -8555,7 +8574,14 @@ function UserEditorView({
       setLinkedin(payload.data.publicProfile.linkedin);
       setXProfile(payload.data.publicProfile.x);
       setSaveState('saved');
-    } catch {
+    } catch (cause) {
+      const code = cause instanceof Error ? cause.message : '';
+      setSaveError(({
+        public_slug_exists: 'Esse endereço público já pertence a outro autor.',
+        public_slug_redirect_conflict: 'Existe redirecionamento manual para o endereço anterior. Resolva antes de mudar o slug.',
+        invalid_public_slug: 'O endereço público aceita apenas letras minúsculas, números e hífens.',
+        invalid_public_avatar: 'Selecione uma foto válida da biblioteca.',
+      } as Record<string, string>)[code] ?? 'Não foi possível salvar o usuário. Revise os campos e tente novamente.');
       setSaveState('error');
     }
   }
@@ -8586,6 +8612,8 @@ function UserEditorView({
               !profileCanSave
               || !changed
               || !passwordChangeValid
+              || !publicSlugValid
+              || !displayName.trim()
               || saveState === 'saving'
               || (role !== originalRole && !roleCanSave)
             }
@@ -8604,7 +8632,7 @@ function UserEditorView({
 
       {saveState === 'error' && (
         <div className="admin-save-feedback admin-save-feedback--error" role="alert">
-          Não foi possível salvar o usuário. Verifique os dados e tente novamente.
+          {saveError}
         </div>
       )}
 
@@ -8618,7 +8646,7 @@ function UserEditorView({
 
           <div className="admin-editor-card__body admin-editor-card__body--fields">
             <label className="admin-editor-field">
-              <span>Nome de exibição</span>
+              <span>Nome público (exibido nas matérias)</span>
               <input
                 value={displayName}
                 readOnly={!profileCanSave}
@@ -8769,10 +8797,33 @@ function UserEditorView({
 
           <div className="admin-editor-card__body admin-editor-card__body--fields">
             <label className="admin-editor-field">
-              <span>Slug público</span>
-              <input value={data.publicProfile.slug} readOnly />
+              <span>Endereço público do perfil</span>
+              <div className="admin-author-profile-url">
+                <span>nossojornal.com.br/autor/</span>
+                <input value={publicSlug} readOnly={!profileCanSave} maxLength={80} aria-invalid={!publicSlugValid}
+                  onChange={(event) => {
+                    setPublicSlug(event.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''));
+                    setSaveState('idle');
+                  }} />
+              </div>
+              <small>Independente do login. O endereço anterior recebe redirecionamento 301.</small>
             </label>
 
+            <label className="admin-editor-field">
+              <span>Primeiro nome</span>
+              <input value={firstName} maxLength={100} readOnly={!profileCanSave}
+                onChange={(event) => { setFirstName(event.target.value); setSaveState('idle'); }} />
+            </label>
+            <label className="admin-editor-field">
+              <span>Sobrenome</span>
+              <input value={lastName} maxLength={100} readOnly={!profileCanSave}
+                onChange={(event) => { setLastName(event.target.value); setSaveState('idle'); }} />
+            </label>
+            <div className="admin-editor-field admin-editor-field--wide">
+              <AdminAuthorAvatar selectedId={avatarId} initialAvatar={data.publicProfile.avatar}
+                csrfToken={csrfToken} canUpload={user.permissions.uploadFiles} disabled={!profileCanSave}
+                onChange={(id) => { setAvatarId(id); setSaveState('idle'); }} />
+            </div>
             <label className="admin-editor-field">
               <span>Função editorial pública</span>
               <input
