@@ -2959,6 +2959,9 @@ function PostEditorView({
   const [scheduledAt, setScheduledAt] = useState('');
   const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
   const [mediaPickerOpen, setMediaPickerOpen] = useState(false);
+  const [mediaPickerSelectedId, setMediaPickerSelectedId] = useState(0);
+  const [mediaPickerQuery, setMediaPickerQuery] = useState('');
+  const [mediaUploadState, setMediaUploadState] = useState<'idle' | 'uploading' | 'error'>('idle');
   const [sourcePickerOpen, setSourcePickerOpen] = useState(false);
   const [sourceDirectory, setSourceDirectory] = useState<EditorialSourceContact[]>([]);
   const [sourceDirectoryQuery, setSourceDirectoryQuery] = useState('');
@@ -3676,6 +3679,9 @@ function PostEditorView({
   }
 
   async function openMediaPicker() {
+    setMediaPickerSelectedId(post.featuredImage?.id ?? 0);
+    setMediaPickerQuery('');
+    setMediaUploadState('idle');
     setMediaPickerOpen(true);
 
     if (mediaItems.length > 0) return;
@@ -3687,6 +3693,49 @@ function PostEditorView({
       }
     } catch {
       setImageState('error');
+    }
+  }
+
+  async function uploadFeaturedMedia(file: File) {
+    if (!user.permissions.uploadFiles || mediaUploadState === 'uploading') return;
+
+    setMediaUploadState('uploading');
+
+    try {
+      const body = new FormData();
+      body.append('file', file);
+
+      const response = await fetch('/api/admin/media-upload.php', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          Accept: 'application/json',
+          'X-CSRF-Token': csrfToken,
+        },
+        body,
+      });
+
+      const payload = (await response.json()) as {
+        ok: boolean;
+        data?: {
+          media: MediaItem;
+        };
+      };
+
+      if (!response.ok || !payload.ok || !payload.data?.media) {
+        throw new Error('media_upload_failed');
+      }
+
+      const uploaded = payload.data.media;
+      setMediaItems((current) => [
+        uploaded,
+        ...current.filter((item) => item.id !== uploaded.id),
+      ]);
+      setMediaPickerSelectedId(uploaded.id);
+      setMediaPickerQuery('');
+      setMediaUploadState('idle');
+    } catch {
+      setMediaUploadState('error');
     }
   }
 
@@ -5208,40 +5257,169 @@ function PostEditorView({
         </div>
       )}
 
-      {mediaPickerOpen && (
-        <div className="admin-media-picker" role="dialog" aria-modal="true" aria-label="Escolher imagem destacada">
-          <div className="admin-media-picker__panel">
-            <header>
-              <div>
-                <span>Biblioteca de mídia</span>
-                <h2>Escolher imagem destacada</h2>
-              </div>
-              <button type="button" onClick={() => setMediaPickerOpen(false)} aria-label="Fechar">×</button>
-            </header>
+      {mediaPickerOpen && (() => {
+        const normalizedQuery = mediaPickerQuery.trim().toLocaleLowerCase('pt-BR');
+        const visibleMedia = normalizedQuery === ''
+          ? mediaItems
+          : mediaItems.filter((item) =>
+              item.title.toLocaleLowerCase('pt-BR').includes(normalizedQuery)
+              || item.alt.toLocaleLowerCase('pt-BR').includes(normalizedQuery)
+            );
+        const selectedMedia = mediaItems.find((item) => item.id === mediaPickerSelectedId) ?? null;
 
-            <div className="admin-media-picker__grid">
-              {mediaItems.map((item) => (
-                <button
-                  type="button"
-                  key={item.id}
-                  disabled={imageState === 'working'}
-                  onClick={() => void setFeaturedImage(item)}
-                >
-                  <img
-                  src={item.url}
-                  srcSet={item.srcSet || undefined}
-                  sizes="(max-width: 720px) 50vw, 240px"
-                  width={item.width ?? undefined}
-                  height={item.height ?? undefined}
-                  alt={item.alt || item.title}
-                  loading="lazy"
-                />
-                  <span>{item.title}</span>
-                </button>
-              ))}
+        return (
+          <div
+            className="admin-media-picker"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Escolher imagem destacada"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) setMediaPickerOpen(false);
+            }}
+          >
+            <div className="admin-media-picker__panel">
+              <header>
+                <div>
+                  <span>Biblioteca de mídia</span>
+                  <h2>Escolher imagem destacada</h2>
+                </div>
+                <button type="button" onClick={() => setMediaPickerOpen(false)} aria-label="Fechar">×</button>
+              </header>
+
+              <div className="admin-media-picker__toolbar">
+                {user.permissions.uploadFiles && (
+                  <label className="admin-media-picker__upload">
+                    {mediaUploadState === 'uploading' ? 'Enviando…' : 'Enviar arquivo'}
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,image/gif"
+                      disabled={mediaUploadState === 'uploading'}
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        if (file) void uploadFeaturedMedia(file);
+                        event.currentTarget.value = '';
+                      }}
+                    />
+                  </label>
+                )}
+
+                <label className="admin-media-picker__search">
+                  <span>Buscar mídia</span>
+                  <input
+                    type="search"
+                    value={mediaPickerQuery}
+                    placeholder="Buscar imagens"
+                    onChange={(event) => setMediaPickerQuery(event.target.value)}
+                  />
+                </label>
+              </div>
+
+              {mediaUploadState === 'error' && (
+                <div className="admin-media-picker__error" role="alert">
+                  Não foi possível enviar a imagem. Use JPG, PNG, WebP ou GIF com até 12 MB.
+                </div>
+              )}
+
+              <div className="admin-media-picker__body">
+                <div className="admin-media-picker__grid" aria-label="Imagens disponíveis">
+                  {visibleMedia.map((item) => {
+                    const selected = item.id === mediaPickerSelectedId;
+
+                    return (
+                      <button
+                        type="button"
+                        key={item.id}
+                        className={selected ? 'is-selected' : ''}
+                        aria-pressed={selected}
+                        disabled={imageState === 'working'}
+                        onClick={() => setMediaPickerSelectedId(item.id)}
+                      >
+                        <span className="admin-media-picker__thumb">
+                          <img
+                            src={item.url}
+                            srcSet={item.srcSet || undefined}
+                            sizes="(max-width: 720px) 44vw, 160px"
+                            alt={item.alt || item.title}
+                            loading="lazy"
+                          />
+                        </span>
+                        <span className="admin-media-picker__title">{item.title || 'Sem título'}</span>
+                      </button>
+                    );
+                  })}
+
+                  {visibleMedia.length === 0 && (
+                    <div className="admin-media-picker__empty">
+                      Nenhuma imagem encontrada.
+                    </div>
+                  )}
+                </div>
+
+                <aside className="admin-media-picker__details">
+                  {selectedMedia ? (
+                    <>
+                      <div className="admin-media-picker__details-preview">
+                        <img src={selectedMedia.url} alt={selectedMedia.alt || selectedMedia.title} />
+                      </div>
+                      <strong>{selectedMedia.title || 'Sem título'}</strong>
+                      <dl>
+                        <div>
+                          <dt>Dimensões</dt>
+                          <dd>
+                            {selectedMedia.width && selectedMedia.height
+                              ? selectedMedia.width + ' × ' + selectedMedia.height
+                              : 'Não informadas'}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>Texto alternativo</dt>
+                          <dd>{selectedMedia.alt || 'Não informado'}</dd>
+                        </div>
+                      </dl>
+                      <a href={'/sistema/midia/' + selectedMedia.id} target="_blank" rel="noopener noreferrer">
+                        Editar detalhes da mídia ↗
+                      </a>
+                    </>
+                  ) : (
+                    <p>Selecione uma imagem da biblioteca ou envie um novo arquivo.</p>
+                  )}
+                </aside>
+              </div>
+
+              <footer className="admin-media-picker__footer">
+                <span>
+                  {visibleMedia.length.toLocaleString('pt-BR')}
+                  {visibleMedia.length === 1 ? ' imagem' : ' imagens'}
+                </span>
+
+                <div>
+                  {post.featuredImage && (
+                    <button
+                      type="button"
+                      className="is-danger"
+                      disabled={imageState === 'working'}
+                      onClick={() => void setFeaturedImage(null)}
+                    >
+                      Remover imagem
+                    </button>
+                  )}
+                  <button type="button" onClick={() => setMediaPickerOpen(false)}>
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    className="is-primary"
+                    disabled={!selectedMedia || imageState === 'working'}
+                    onClick={() => void setFeaturedImage(selectedMedia)}
+                  >
+                    {imageState === 'working' ? 'Definindo…' : 'Definir imagem destacada'}
+                  </button>
+                </div>
+              </footer>
             </div>
           </div>
-        </div>
+        );
+      })()}
       )}
     </>
   );
