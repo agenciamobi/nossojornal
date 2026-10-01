@@ -120,11 +120,24 @@ VALUES (
   '970x90,728x90,468x60,300x100,300x50',
   'header_message',
   1
+),
+(
+  'home-inline',
+  'Capa / Entre destaques e últimas',
+  'Capa, abaixo das notícias de destaque',
+  'Publicidade separada dos cards editoriais da capa.',
+  '728x90,468x60,300x250,250x250,300x100',
+  'hide',
+  1
+),
+(
+  'article-inline',
+  'Matéria / Após o conteúdo',
+  'Matérias, após o texto e antes dos assuntos',
+  'Publicidade após o conteúdo editorial, sem interromper a leitura.',
+  '728x90,468x60,300x250,250x250,300x100',
+  'hide',
+  1
 )
 ON DUPLICATE KEY UPDATE
-  name = VALUES(name),
-  location = VALUES(location),
-  description = VALUES(description),
-  allowed_sizes = VALUES(allowed_sizes),
-  fallback_strategy = VALUES(fallback_strategy),
-  enabled = VALUES(enabled);
+  code = VALUES(code); -- preserve administrator changes to existing slots
