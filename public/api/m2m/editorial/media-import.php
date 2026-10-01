@@ -163,7 +163,7 @@ function nj_remote_existing_attachment(PDO $pdo, string $urlHash): ?array
 
 nj_m2m_run('POST', 'editorial.media.import', static function (array $context): array {
     $body = nj_m2m_body($context);
-    $allowed = ['post_id', 'asset_url', 'source_url', 'title', 'alt', 'caption', 'credit', 'set_featured'];
+    $allowed = ['post_id', 'asset_url', 'source_url', 'title', 'alt', 'caption', 'credit', 'license', 'seo_title', 'seo_description', 'set_featured'];
     if (array_diff(array_keys($body), $allowed) !== []) {
         throw new NjApiHttpException(422, 'body_field_not_allowed');
     }
@@ -173,11 +173,16 @@ nj_m2m_run('POST', 'editorial.media.import', static function (array $context): a
     $alt = trim((string) ($body['alt'] ?? ''));
     $caption = trim((string) ($body['caption'] ?? ''));
     $credit = trim((string) ($body['credit'] ?? ''));
+    $license = trim((string) ($body['license'] ?? 'CC BY 4.0'));
+    $seoTitle = trim((string) ($body['seo_title'] ?? ''));
+    $seoDescription = trim((string) ($body['seo_description'] ?? ''));
     if (!is_int($postId) || $postId <= 0
         || $title === '' || nj_remote_length($title) > 160
         || $alt === '' || nj_remote_length($alt) > 500
         || nj_remote_length($caption) > 1000
         || $credit === '' || nj_remote_length($credit) > 1000
+        || nj_remote_length($license) > 200 || nj_remote_length($seoTitle) > 180
+        || nj_remote_length($seoDescription) > 400
         || !is_bool($body['set_featured'] ?? true)
     ) {
         throw new NjApiHttpException(422, 'media_import_payload_invalid');
@@ -323,6 +328,13 @@ nj_m2m_run('POST', 'editorial.media.import', static function (array $context): a
             nj_admin_upsert_postmeta($pdo, $attachmentId, '_nj_remote_media_file_sha256', $download['hash']);
         }
 
+        // Store editorial metadata on the attachment, the library's source of truth.
+        // A reused asset keeps the original binary while its credited metadata
+        // can be curated for the currently attached draft.
+        nj_admin_upsert_postmeta($pdo, $attachmentId, '_nj_media_credit', $credit);
+        nj_admin_upsert_postmeta($pdo, $attachmentId, '_nj_media_license', $license);
+        nj_admin_upsert_postmeta($pdo, $attachmentId, '_nj_media_seo_title', $seoTitle);
+        nj_admin_upsert_postmeta($pdo, $attachmentId, '_nj_media_seo_description', $seoDescription);
         if ($featured) {
             nj_admin_upsert_postmeta($pdo, $postId, '_thumbnail_id', (string) $attachmentId);
             nj_admin_upsert_postmeta($pdo, $postId, '_nj_image_credit', $credit);

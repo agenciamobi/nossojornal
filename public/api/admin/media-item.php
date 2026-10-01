@@ -79,6 +79,21 @@ SQL);
         ? (string) $image['url']
         : nj_media_local_url((string) $row['guid']);
 
+    $extraStatement = $pdo->prepare(
+        "SELECT meta_key, meta_value FROM {$postmeta} WHERE post_id = :id
+         AND meta_key IN ('_nj_media_credit', '_nj_media_license', '_nj_media_seo_title',
+                          '_nj_media_seo_description', '_nj_remote_media_source_url',
+                          '_nj_remote_media_source_page', '_nj_embed_youtube_id')
+         ORDER BY meta_id DESC"
+    );
+    $extraStatement->execute(['id' => $id]);
+    $extras = [];
+    foreach ($extraStatement->fetchAll() as $entry) {
+        if (!array_key_exists((string) $entry['meta_key'], $extras)) {
+            $extras[(string) $entry['meta_key']] = (string) $entry['meta_value'];
+        }
+    }
+
     $usageStatement = $pdo->prepare(<<<SQL
 SELECT
     p.ID AS id,
@@ -133,6 +148,13 @@ SQL);
             'createdAt' => nj_content_iso8601((string) $row['created_at']),
             'modifiedAt' => nj_content_iso8601((string) $row['modified_at']),
             'parentId' => (int) $row['parent_id'],
+            'credit' => (string) ($extras['_nj_media_credit'] ?? ''),
+            'license' => (string) ($extras['_nj_media_license'] ?? ''),
+            'seoTitle' => (string) ($extras['_nj_media_seo_title'] ?? ''),
+            'seoDescription' => (string) ($extras['_nj_media_seo_description'] ?? ''),
+            'sourceUrl' => (string) ($extras['_nj_remote_media_source_url'] ?? ''),
+            'sourcePage' => (string) ($extras['_nj_remote_media_source_page'] ?? ''),
+            'videoId' => (string) ($extras['_nj_embed_youtube_id'] ?? ''),
             'usedBy' => $usedBy,
         ],
     ];
