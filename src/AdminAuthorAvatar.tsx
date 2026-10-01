@@ -123,15 +123,18 @@ export function AdminAuthorAvatar({
               <h2>Foto do colunista</h2>
               <button type="button" onClick={() => setOpen(false)} aria-label="Fechar seletor">Fechar</button>
             </header>
-            <form className="admin-author-avatar__search" onSubmit={(event) => {
-              event.preventDefault();
-              void searchMedia(query.trim(), 1);
-            }}>
+            <div className="admin-author-avatar__search">
               <label>
                 <span>Buscar na biblioteca</span>
-                <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} />
+                <input type="search" value={query} onChange={(event) => setQuery(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault();
+                      void searchMedia(query.trim(), 1);
+                    }
+                  }} />
               </label>
-              <button type="submit" disabled={loading}>Buscar</button>
+              <button type="button" disabled={loading} onClick={() => void searchMedia(query.trim(), 1)}>Buscar</button>
               {canUpload && (
                 <label className="admin-author-avatar__upload">
                   <span>{uploading ? 'Enviando…' : 'Enviar foto'}</span>
@@ -144,7 +147,7 @@ export function AdminAuthorAvatar({
                     }} />
                 </label>
               )}
-            </form>
+            </div>
             {error && <p role="alert" className="admin-field-error">{error}</p>}
             {loading ? <p>Consultando imagens…</p> : (
               <div className="admin-author-avatar__grid">
