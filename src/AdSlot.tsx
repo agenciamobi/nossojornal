@@ -187,6 +187,7 @@ export function AdSlot({
           ad.clickUrl ? (
             <a href={'/api/v1/ad-click.php?t=' + encodeURIComponent(ad.token)} target="_blank" rel="sponsored noopener noreferrer">
               <img
+              key={ad.token}
                 src={ad.imageUrl}
                 width={ad.width}
                 height={ad.height}
@@ -196,6 +197,7 @@ export function AdSlot({
             </a>
           ) : (
             <img
+              key={ad.token}
               src={ad.imageUrl}
               width={ad.width}
               height={ad.height}
@@ -206,6 +208,7 @@ export function AdSlot({
         ) : (
           <>
             <iframe
+              key={ad.token}
               title={ad.name}
               sandbox=""
               scrolling="no"
