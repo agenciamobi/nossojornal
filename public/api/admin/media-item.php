@@ -79,6 +79,21 @@ SQL);
         ? (string) $image['url']
         : nj_media_local_url((string) $row['guid']);
 
+    $extraStatement = $pdo->prepare(
+        "SELECT meta_key, meta_value FROM {$postmeta} WHERE post_id = :id
+         AND meta_key IN ('_nj_media_credit', '_nj_media_license', '_nj_media_seo_title',
+                          '_nj_media_seo_description', '_nj_remote_media_source_url',
+                          '_nj_remote_media_source_page', '_nj_embed_youtube_id')
+         ORDER BY meta_id DESC"
+    );
+    $extraStatement->execute(['id' => $id]);
+    $extras = [];
+    foreach ($extraStatement->fetchAll() as $entry) {
+        if (!array_key_exists((string) $entry['meta_key'], $extras)) {
+            $extras[(string) $entry['meta_key']] = (string) $entry['meta_value'];
+        }
+    }
+
     $usageStatement = $pdo->prepare(<<<SQL
 SELECT
     p.ID AS id,
@@ -113,6 +128,31 @@ SQL);
         ];
     }
 
+    if ((string) $row['mime_type'] === 'video/x-embed') {
+        $videoUsage = $pdo->prepare(
+            "SELECT p.ID AS id, p.post_title AS title, p.post_name AS slug, p.post_status AS status
+             FROM {$postmeta} pm
+             INNER JOIN {$posts} p ON p.ID = pm.post_id AND p.post_type = 'post'
+             WHERE pm.meta_key = '_nj_editorial_video_attachment_ids'
+               AND JSON_CONTAINS(
+                   IF(JSON_VALID(pm.meta_value), pm.meta_value, '[]'),
+                   :needle, '$'
+               ) = 1
+             ORDER BY p.post_modified DESC LIMIT 30"
+        );
+        $videoUsage->execute(['needle' => json_encode($id, JSON_THROW_ON_ERROR)]);
+        foreach ($videoUsage->fetchAll() as $linkedPost) {
+            $usedBy[] = [
+                'id' => (int) $linkedPost['id'],
+                'title' => (string) $linkedPost['title'] ?: '(sem título)',
+                'status' => (string) $linkedPost['status'],
+                'adminUrl' => '/sistema/noticias/' . (int) $linkedPost['id'],
+                'publicUrl' => (string) $linkedPost['slug'] !== ''
+                    ? '/noticia/' . rawurlencode((string) $linkedPost['slug']) : null,
+            ];
+        }
+    }
+
     return [
         'media' => [
             'id' => (int) $row['id'],
@@ -133,6 +173,13 @@ SQL);
             'createdAt' => nj_content_iso8601((string) $row['created_at']),
             'modifiedAt' => nj_content_iso8601((string) $row['modified_at']),
             'parentId' => (int) $row['parent_id'],
+            'credit' => (string) ($extras['_nj_media_credit'] ?? ''),
+            'license' => (string) ($extras['_nj_media_license'] ?? ''),
+            'seoTitle' => (string) ($extras['_nj_media_seo_title'] ?? ''),
+            'seoDescription' => (string) ($extras['_nj_media_seo_description'] ?? ''),
+            'sourceUrl' => (string) ($extras['_nj_remote_media_source_url'] ?? ''),
+            'sourcePage' => (string) ($extras['_nj_remote_media_source_page'] ?? ''),
+            'videoId' => (string) ($extras['_nj_embed_youtube_id'] ?? ''),
             'usedBy' => $usedBy,
         ],
     ];

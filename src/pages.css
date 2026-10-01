@@ -2395,3 +2395,17 @@
   .columnist-card__link:hover .columnist-card__avatar,
   .columnist-card__link:hover .columnist-card__cta span { transform: none; }
 }
+
+.article-video__caption {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 5px 13px;
+  margin: 11px 4px 0;
+  color: #526074;
+  font-size: 12px;
+  line-height: 1.65;
+}
+.article-video__caption small { font-size: 11px; color: #64748b; }
+.article-video__caption a { color: #0a3284; font-weight: 700; }
+.article-video__caption a:focus-visible { outline: 2px solid #6597f8; outline-offset: 3px; }

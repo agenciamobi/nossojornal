@@ -412,6 +412,13 @@ type MediaDetailPayload = {
         adminUrl: string;
         publicUrl: string | null;
       }>;
+      credit: string;
+      license: string;
+      seoTitle: string;
+      seoDescription: string;
+      sourceUrl: string;
+      sourcePage: string;
+      videoId: string;
     };
   };
 };
@@ -9116,6 +9123,10 @@ function MediaItemView({ csrfToken }: { csrfToken: string }) {
   const [alt, setAlt] = useState('');
   const [caption, setCaption] = useState('');
   const [description, setDescription] = useState('');
+  const [credit, setCredit] = useState('');
+  const [license, setLicense] = useState('');
+  const [seoTitle, setSeoTitle] = useState('');
+  const [seoDescription, setSeoDescription] = useState('');
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [error, setError] = useState(false);
 
@@ -9134,6 +9145,10 @@ function MediaItemView({ csrfToken }: { csrfToken: string }) {
         setAlt(payload.data.media.alt);
         setCaption(payload.data.media.caption);
         setDescription(payload.data.media.description);
+        setCredit(payload.data.media.credit);
+        setLicense(payload.data.media.license);
+        setSeoTitle(payload.data.media.seoTitle);
+        setSeoDescription(payload.data.media.seoDescription);
       })
       .catch(() => setError(true));
   }, [mediaId]);
@@ -9147,7 +9162,11 @@ function MediaItemView({ csrfToken }: { csrfToken: string }) {
     title !== media.title
     || alt !== media.alt
     || caption !== media.caption
-    || description !== media.description;
+    || description !== media.description
+    || credit !== media.credit
+    || license !== media.license
+    || seoTitle !== media.seoTitle
+    || seoDescription !== media.seoDescription;
 
   async function saveMedia() {
     if (!canEdit || !changed || saveState === 'saving') return;
@@ -9164,6 +9183,10 @@ function MediaItemView({ csrfToken }: { csrfToken: string }) {
             alt: string;
             caption: string;
             description: string;
+            credit: string;
+            license: string;
+            seoTitle: string;
+            seoDescription: string;
             modifiedAt: string;
           };
         };
@@ -9176,6 +9199,10 @@ function MediaItemView({ csrfToken }: { csrfToken: string }) {
           alt,
           caption,
           description,
+          credit,
+          license,
+          seoTitle,
+          seoDescription,
         }),
       });
 
@@ -9193,6 +9220,10 @@ function MediaItemView({ csrfToken }: { csrfToken: string }) {
               alt: saved.alt,
               caption: saved.caption,
               description: saved.description,
+              credit: saved.credit,
+              license: saved.license,
+              seoTitle: saved.seoTitle,
+              seoDescription: saved.seoDescription,
               modifiedAt: saved.modifiedAt,
             },
           }
@@ -9202,6 +9233,10 @@ function MediaItemView({ csrfToken }: { csrfToken: string }) {
       setAlt(saved.alt);
       setCaption(saved.caption);
       setDescription(saved.description);
+      setCredit(saved.credit);
+      setLicense(saved.license);
+      setSeoTitle(saved.seoTitle);
+      setSeoDescription(saved.seoDescription);
       setSaveState('saved');
     } catch {
       setSaveState('error');
@@ -9262,6 +9297,17 @@ function MediaItemView({ csrfToken }: { csrfToken: string }) {
                 height={media.height ?? undefined}
                 alt={alt || title}
               />
+            ) : media.mimeType === 'video/x-embed' && /^[A-Za-z0-9_-]{11}$/.test(media.videoId) ? (
+              <div className="admin-media-video-preview">
+                <iframe
+                  src={`https://www.youtube-nocookie.com/embed/${media.videoId}`}
+                  title={title || 'Vídeo incorporado'}
+                  loading="lazy"
+                  allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
+                  referrerPolicy="strict-origin-when-cross-origin"
+                  allowFullScreen
+                />
+              </div>
             ) : (
               <div>{media.mimeType || 'Arquivo'}</div>
             )}
@@ -9286,6 +9332,7 @@ function MediaItemView({ csrfToken }: { csrfToken: string }) {
                 />
               </label>
 
+              {media.mimeType.startsWith('image/') && (
               <label className="admin-editor-field">
                 <span>Texto alternativo</span>
                 <input
@@ -9299,6 +9346,7 @@ function MediaItemView({ csrfToken }: { csrfToken: string }) {
                 />
               </label>
 
+              )}
               <label className="admin-editor-field">
                 <span>Legenda</span>
                 <textarea
@@ -9326,6 +9374,63 @@ function MediaItemView({ csrfToken }: { csrfToken: string }) {
               </label>
             </div>
           </section>
+
+          <section className="admin-editor-card">
+            <div className="admin-editor-card__head">
+              <span>Identificação</span>
+              <strong>SEO e direitos de uso</strong>
+            </div>
+            <div className="admin-editor-card__body admin-editor-card__body--fields">
+              <label className="admin-editor-field">
+                <span>Título para SEO</span>
+                <input
+                  value={seoTitle}
+                  maxLength={180}
+                  placeholder={title}
+                  onChange={(event) => { setSeoTitle(event.target.value); setSaveState('idle'); }}
+                />
+              </label>
+              <label className="admin-editor-field">
+                <span>Descrição para SEO</span>
+                <textarea
+                  value={seoDescription}
+                  maxLength={400}
+                  rows={3}
+                  placeholder="Descreva esta mídia de forma objetiva"
+                  onChange={(event) => { setSeoDescription(event.target.value); setSaveState('idle'); }}
+                />
+              </label>
+              <label className="admin-editor-field">
+                <span>Crédito obrigatório</span>
+                <textarea
+                  value={credit}
+                  maxLength={1000}
+                  rows={3}
+                  placeholder="Organização, autores e colaboradores"
+                  onChange={(event) => { setCredit(event.target.value); setSaveState('idle'); }}
+                />
+              </label>
+              <label className="admin-editor-field">
+                <span>Licença</span>
+                <input
+                  value={license}
+                  maxLength={200}
+                  placeholder="Ex.: CC BY 4.0"
+                  onChange={(event) => { setLicense(event.target.value); setSaveState('idle'); }}
+                />
+              </label>
+              {media.sourcePage && (
+                <p className="admin-field-help">
+                  Fonte original: <a href={media.sourcePage} target="_blank" rel="noopener noreferrer">{media.sourcePage}</a>
+                </p>
+              )}
+              {media.sourceUrl && media.sourceUrl !== media.sourcePage && (
+                <p className="admin-field-help">
+                  Arquivo de origem: <a href={media.sourceUrl} target="_blank" rel="noopener noreferrer">Consultar original ↗</a>
+                </p>
+              )}
+            </div>
+          </section>
         </section>
 
         <aside className="admin-editor-sidebar">
@@ -9348,7 +9453,7 @@ function MediaItemView({ csrfToken }: { csrfToken: string }) {
               <div><dt>Derivados</dt><dd>{media.variants.length.toLocaleString('pt-BR')}</dd></div>
               <div><dt>Atualizado</dt><dd>{formatAdminDate(media.modifiedAt)}</dd></div>
               <div><dt>ID</dt><dd>#{media.id}</dd></div>
-              <div><dt>Arquivo</dt><dd>{media.attachedFile || '—'}</dd></div>
+              <div><dt>Arquivo</dt><dd>{media.attachedFile || (media.videoId ? 'Vídeo externo (sem cópia local)' : '—')}</dd></div>
             </dl>
           </section>
 
@@ -9387,7 +9492,9 @@ function MediaItemView({ csrfToken }: { csrfToken: string }) {
 
             <div className="admin-media-usage">
               {media.usedBy.length === 0 ? (
-                <p>Esta imagem não está definida como destaque de nenhuma notícia.</p>
+                <p>{media.videoId
+                  ? 'Este vídeo ainda não está associado a notícias.'
+                  : 'Esta imagem não está definida como destaque de nenhuma notícia.'}</p>
               ) : (
                 media.usedBy.map((post) => (
                   <article key={post.id}>
