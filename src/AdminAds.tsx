@@ -426,10 +426,14 @@ function AdMediaPicker({
         <div><strong>Biblioteca de Mídias</strong><small>Selecione uma imagem. Formato desejado: {size}</small></div>
         <button type="button" onClick={onClose}>Fechar</button>
       </div>
-      <form onSubmit={(event) => { event.preventDefault(); setPage(1); setQuery(input.trim()); }}>
-        <input value={input} placeholder="Pesquisar imagens" aria-label="Pesquisar imagens" onChange={(event) => setInput(event.target.value)} />
-        <button type="submit">Buscar</button>
-      </form>
+      <div className="ads-media-picker__search">
+        <input value={input} placeholder="Pesquisar imagens" aria-label="Pesquisar imagens"
+          onChange={(event) => setInput(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') { event.preventDefault(); setPage(1); setQuery(input.trim()); }
+          }} />
+        <button type="button" onClick={() => { setPage(1); setQuery(input.trim()); }}>Buscar</button>
+      </div>
       {csrfToken && (
         <label className="ads-media-picker__upload">
           <span>{uploading ? 'Enviando imagem…' : '+ Enviar nova imagem (JPG, PNG, WebP ou GIF)'}</span>
