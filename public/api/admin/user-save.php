@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/_admin.php';
 require_once __DIR__ . '/../v1/_authors.php';
+require_once __DIR__ . '/_redirects.php';
 
 nj_admin_run(['POST'], static function (): array {
     $currentUser = nj_admin_current_user(true);
@@ -16,6 +17,10 @@ nj_admin_run(['POST'], static function (): array {
         ['options' => ['min_range' => 1]]
     );
     $displayName = trim((string) ($body['displayName'] ?? ''));
+    $publicSlug = strtolower(trim((string) ($body['publicSlug'] ?? '')));
+    $firstName = trim((string) ($body['firstName'] ?? ''));
+    $lastName = trim((string) ($body['lastName'] ?? ''));
+    $avatarId = filter_var($body['avatarId'] ?? 0, FILTER_VALIDATE_INT);
     $email = trim((string) ($body['email'] ?? ''));
     $requestedRole = trim((string) ($body['role'] ?? ''));
     $newPassword = (string) ($body['password'] ?? '');
@@ -33,6 +38,19 @@ nj_admin_run(['POST'], static function (): array {
 
     if ($displayName === '' || (function_exists('mb_strlen') ? mb_strlen($displayName, 'UTF-8') : strlen($displayName)) > 250) {
         throw new NjApiHttpException(422, 'invalid_display_name');
+    }
+
+    if (!preg_match('/^[a-z0-9](?:[a-z0-9-]{0,78}[a-z0-9])?$/', $publicSlug)) {
+        throw new NjApiHttpException(422, 'invalid_public_slug');
+    }
+    if (
+        (function_exists('mb_strlen') ? mb_strlen($firstName, 'UTF-8') : strlen($firstName)) > 100
+        || (function_exists('mb_strlen') ? mb_strlen($lastName, 'UTF-8') : strlen($lastName)) > 100
+    ) {
+        throw new NjApiHttpException(422, 'invalid_public_name');
+    }
+    if ($avatarId === false || $avatarId < 0) {
+        throw new NjApiHttpException(422, 'invalid_public_avatar');
     }
 
     if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
@@ -113,6 +131,22 @@ SQL);
         throw new NjApiHttpException(404, 'user_not_found');
     }
 
+    $duplicateSlug = $pdo->prepare("SELECT ID FROM {$users} WHERE user_nicename = :slug AND ID <> :id LIMIT 1");
+    $duplicateSlug->execute(['slug' => $publicSlug, 'id' => $id]);
+    if ($duplicateSlug->fetchColumn()) {
+        throw new NjApiHttpException(409, 'public_slug_exists');
+    }
+    if ($avatarId > 0) {
+        $attachments = nj_table('posts');
+        $avatarCheck = $pdo->prepare(
+            "SELECT ID FROM {$attachments} WHERE ID = :id AND post_type = 'attachment' AND post_mime_type LIKE 'image/%' LIMIT 1"
+        );
+        $avatarCheck->execute(['id' => $avatarId]);
+        if (!$avatarCheck->fetchColumn()) {
+            throw new NjApiHttpException(422, 'invalid_public_avatar');
+        }
+    }
+    $oldPublicSlug = trim((string) ($row['user_nicename'] ?? ''));
     $duplicateEmail = $pdo->prepare(<<<SQL
 SELECT ID
 FROM {$users}
@@ -160,6 +194,7 @@ UPDATE {$users}
 SET
     display_name = :display_name,
     user_email = :email,
+    user_nicename = :public_slug,
     user_url = :user_url
 WHERE ID = :id
 LIMIT 1
@@ -167,6 +202,7 @@ SQL);
         $updateUser->execute([
             'display_name' => $displayName,
             'email' => $email,
+            'public_slug' => $publicSlug,
             'user_url' => $website,
             'id' => $id,
         ]);
@@ -184,12 +220,29 @@ SQL);
             ]);
         }
 
+        nj_admin_upsert_usermeta($pdo, $id, 'first_name', $firstName);
+        nj_admin_upsert_usermeta($pdo, $id, 'last_name', $lastName);
+        nj_admin_upsert_usermeta($pdo, $id, '_nj_public_avatar_id', (string) $avatarId);
         nj_admin_upsert_usermeta($pdo, $id, '_nj_public_bio', $publicBio);
         nj_admin_upsert_usermeta($pdo, $id, '_nj_public_role', $publicRole);
         nj_admin_upsert_usermeta($pdo, $id, '_nj_public_instagram', $socialUrls['instagram']);
         nj_admin_upsert_usermeta($pdo, $id, '_nj_public_facebook', $socialUrls['facebook']);
         nj_admin_upsert_usermeta($pdo, $id, '_nj_public_linkedin', $socialUrls['linkedin']);
         nj_admin_upsert_usermeta($pdo, $id, '_nj_public_x', $socialUrls['x']);
+
+        if ($oldPublicSlug !== '' && $oldPublicSlug !== $publicSlug) {
+            $redirect = nj_redirect_ensure_slug_change(
+                $pdo,
+                (int) $currentUser['id'],
+                '/autor/' . $oldPublicSlug,
+                '/autor/' . $publicSlug,
+                'author',
+                $id
+            );
+            if ($redirect['state'] === 'manual_conflict') {
+                throw new NjApiHttpException(409, 'public_slug_redirect_conflict');
+            }
+        }
 
         if ($role !== $currentRole) {
             $capabilityKey = $prefix . 'capabilities';
@@ -280,6 +333,7 @@ SQL);
             || (string) $persisted['display_name'] !== $displayName
             || (string) $persisted['user_email'] !== $email
             || (string) $persisted['user_url'] !== $website
+            || (string) $persisted['user_nicename'] !== $publicSlug
         ) {
             throw new RuntimeException('user_readback_mismatch');
         }
@@ -366,12 +420,16 @@ SQL);
         'coauthor_id' => $id,
     ]);
     $publishedCount = (int) $publishedStatement->fetchColumn();
-    $publicSlug = trim((string) ($persisted['user_nicename'] ?? ''));
+    $publicPreview = nj_author_profile($pdo, $publicSlug, true);
 
     return [
         'user' => nj_admin_user_payload($pdo, $persisted),
         'publicProfile' => [
             'slug' => $publicSlug,
+            'firstName' => $firstName,
+            'lastName' => $lastName,
+            'avatarId' => $avatarId,
+            'avatar' => $publicPreview['avatar'] ?? null,
             'url' => $publicSlug !== '' && $publishedCount > 0
                 ? '/autor/' . rawurlencode($publicSlug)
                 : null,

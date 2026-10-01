@@ -7478,3 +7478,135 @@
     margin-top: 6px;
   }
 }
+
+
+/* Public author profile: responsive, independent from the private account identifier. */
+.admin-author-profile-help {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: #50575e;
+  font-size: 12px;
+}
+.admin-author-profile-url {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.admin-author-profile-url > span {
+  color: #50575e;
+  font-size: 12px;
+}
+.admin-author-profile-url input { flex: 1 1 180px; min-width: 0; }
+.admin-author-avatar { min-width: 0; }
+.admin-author-avatar__current { display: flex; align-items: center; gap: 16px; }
+.admin-author-avatar__current > img,
+.admin-author-avatar__current > span {
+  width: 96px;
+  height: 96px;
+  flex: 0 0 96px;
+  border: 1px solid #c3c4c7;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #f6f7f7;
+}
+.admin-author-avatar__current > span {
+  display: grid;
+  place-items: center;
+  color: #646970;
+  font-size: 12px;
+}
+.admin-author-avatar__current > div { display: grid; gap: 6px; min-width: 0; }
+.admin-author-avatar__current strong { color: #1d2327; font-size: 13px; }
+.admin-author-avatar__current small,
+.admin-author-avatar > small { color: #646970; font-size: 11px; }
+.admin-author-avatar__actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.admin-author-avatar button { cursor: pointer; }
+.admin-author-avatar button:disabled { cursor: not-allowed; opacity: .55; }
+.admin-author-avatar__actions button,
+.admin-author-avatar__dialog button {
+  border: 1px solid #8c8f94;
+  border-radius: 4px;
+  padding: 7px 10px;
+  color: #2271b1;
+  background: #fff;
+  font: inherit;
+}
+.admin-author-avatar__overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(18, 25, 34, .72);
+}
+.admin-author-avatar__dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(780px, 100%);
+  max-height: min(82vh, 760px);
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 20px 70px rgba(0,0,0,.35);
+}
+.admin-author-avatar__dialog > header,
+.admin-author-avatar__dialog > footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 15px 18px;
+  border-bottom: 1px solid #dcdcde;
+}
+.admin-author-avatar__dialog > footer { border-top: 1px solid #dcdcde; border-bottom: 0; }
+.admin-author-avatar__dialog h2 { margin: 0; font-size: 18px; }
+.admin-author-avatar__search {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 12px 18px;
+  border-bottom: 1px solid #dcdcde;
+}
+.admin-author-avatar__search > label:first-child {
+  display: grid;
+  flex: 1 1 200px;
+  gap: 4px;
+  font-size: 11px;
+}
+.admin-author-avatar__search input[type="search"] { min-height: 36px; }
+.admin-author-avatar__upload {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-height: 35px;
+  border-radius: 4px;
+  padding: 7px 10px;
+  background: #2271b1;
+  color: #fff;
+  cursor: pointer;
+}
+.admin-author-avatar__upload input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.admin-author-avatar__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(125px, 1fr));
+  align-content: start;
+  gap: 12px;
+  padding: 18px;
+  overflow-y: auto;
+}
+.admin-author-avatar__grid button { min-width: 0; overflow: hidden; text-align: left; }
+.admin-author-avatar__grid img { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 3px; }
+.admin-author-avatar__grid span { display: block; margin-top: 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; }
+.admin-author-avatar__grid p { grid-column: 1 / -1; }
+@media (max-width: 600px) {
+  .admin-author-avatar__current { align-items: flex-start; }
+  .admin-author-avatar__current > img,
+  .admin-author-avatar__current > span { width: 76px; height: 76px; flex-basis: 76px; }
+  .admin-author-avatar__dialog { max-height: 90vh; }
+  .admin-author-avatar__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

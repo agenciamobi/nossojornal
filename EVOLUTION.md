@@ -3938,3 +3938,12 @@ Paridade não significa clonagem de código nem dependência do WordPress. O `/s
 ### Paridade visual
 
 A primeira onda também corrige a shell visual. Desktop passa a usar toolbar global escura de 32px, sidebar administrativa de 160px, itens compactos, submenu escuro, estado ativo azul, conteúdo com margens e densidade próximas ao wp-admin, tabelas listradas, ações de linha discretas, metaboxes compactos e editor em duas colunas com sidebar de 280px. Em viewport reduzida o menu colapsa e no mobile vira navegação horizontal compacta.
+
+
+## 69. Cadastro público independente do login e perfil do colunista
+
+O login administrativo permanece estável e privado como identidade de autenticação. O nome exibido em matérias, colunistas, perfil de autor e dados estruturados é `users.display_name`; o endereço público utiliza `users.user_nicename`, sem depender de `users.user_login`.
+
+Em `/sistema/usuarios/novo` e `/sistema/usuarios/:id`, o cadastro/edição passa a reunir nome público, nome e sobrenome, endereço público, foto, função editorial, biografia, site e redes sociais. A foto usa a biblioteca de attachments já existente; a API expõe somente os metadados permitidos. A criação e a edição validam endereços duplicados e MIME da foto no servidor. Mudanças posteriores de endereço acionam redirect 301 transacional pelo subsistema nativo.
+
+Para o proprietário da conta `agenciamobi`, o perfil deve ser preenchido com nome público **Pablo Oliveira**; o login não deve ser renomeado. A mudança efetiva de dados no banco de produção depende de salvar esse cadastro após o release canônico, preservando demais campos pessoais que não foram fornecidos.
