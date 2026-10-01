@@ -701,3 +701,23 @@
   .ads-quick__records > div { flex-direction: column; align-items: flex-start; }
   .ads-quick__media img { flex-basis: 65px; width: 65px; }
 }
+
+.ads-quick__record-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.ads-quick__record-actions button {
+  border: 1px solid #bbcce3;
+  border-radius: 8px;
+  padding: 7px 10px;
+  background: #fff;
+  color: #0a3284;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.ads-quick__record-actions button:disabled { opacity: .45; cursor: not-allowed; }
+@media (max-width: 640px) { .ads-quick__record-actions { justify-content: flex-start; } }
