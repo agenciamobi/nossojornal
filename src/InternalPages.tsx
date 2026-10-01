@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { cleanLegacyText } from './contentText';
+import { AdSlot } from './AdSlot';
 import './pages.css';
 
 type Category = {
@@ -1041,6 +1042,8 @@ function ArticlePage({ slug }: { slug: string }) {
                 className="article-body"
                 dangerouslySetInnerHTML={{ __html: article.contentHtml ?? '' }}
               />
+
+              <AdSlot slot="article-inline" className="article-inline-ad" />
 
               {article.tags.length > 0 && (
                 <nav className="article-tags" aria-label="Assuntos desta matéria">

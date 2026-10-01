@@ -92,13 +92,36 @@ function nj_ads_slug(string $value): string
 function nj_ads_ensure_default_slots(PDO $pdo): void
 {
     $slots = nj_app_table('ad_slots');
-    $statement = $pdo->prepare("SELECT id FROM {$slots} WHERE code = :code LIMIT 1");
-    $statement->execute(['code' => 'header']);
+    // New inventory must be available on existing installs without overwriting
+    // editorial/commercial changes already made to existing slots.
+    $defaults = [
+        [
+            'code' => 'header',
+            'name' => 'Header / Masthead',
+            'location' => 'Topo do portal, ao lado da marca',
+            'description' => 'Quando não houver campanha ativa, preserva o texto institucional do topo.',
+            'allowed_sizes' => '970x90,728x90,468x60,300x100,300x50',
+            'fallback_strategy' => 'header_message',
+        ],
+        [
+            'code' => 'home-inline',
+            'name' => 'Capa / Entre destaques e últimas',
+            'location' => 'Capa, abaixo das notícias de destaque',
+            'description' => 'Publicidade separada dos cards editoriais da capa.',
+            'allowed_sizes' => '728x90,468x60,300x250,250x250,300x100',
+            'fallback_strategy' => 'hide',
+        ],
+        [
+            'code' => 'article-inline',
+            'name' => 'Matéria / Após o conteúdo',
+            'location' => 'Matérias, após o texto e antes dos assuntos',
+            'description' => 'Publicidade após o conteúdo editorial, sem interromper a leitura.',
+            'allowed_sizes' => '728x90,468x60,300x250,250x250,300x100',
+            'fallback_strategy' => 'hide',
+        ],
+    ];
 
-    if ($statement->fetchColumn() !== false) {
-        return;
-    }
-
+    $check = $pdo->prepare("SELECT id FROM {$slots} WHERE code = :code LIMIT 1");
     $insert = $pdo->prepare(
         "INSERT INTO {$slots}
             (code,name,location,description,allowed_sizes,fallback_strategy,enabled)
@@ -106,18 +129,20 @@ function nj_ads_ensure_default_slots(PDO $pdo): void
             (:code,:name,:location,:description,:allowed_sizes,:fallback_strategy,1)"
     );
 
-    try {
-        $insert->execute([
-            'code' => 'header',
-            'name' => 'Header / Masthead',
-            'location' => 'Topo do portal, ao lado da marca',
-            'description' => 'Primeiro slot nativo. Quando não houver campanha ativa, preserva o texto institucional atual.',
-            'allowed_sizes' => '970x90,728x90,468x60,300x100,300x50',
-            'fallback_strategy' => 'header_message',
-        ]);
-    } catch (PDOException $error) {
-        if ((string) $error->getCode() !== '23000') {
-            throw $error;
+    foreach ($defaults as $slot) {
+        $check->execute(['code' => $slot['code']]);
+        if ($check->fetchColumn() !== false) {
+            $check->closeCursor();
+            continue;
+        }
+        $check->closeCursor();
+        try {
+            $insert->execute($slot);
+        } catch (PDOException $error) {
+            // Another administrator might seed the same default concurrently.
+            if ((string) $error->getCode() !== '23000') {
+                throw $error;
+            }
         }
     }
 }

@@ -1093,3 +1093,12 @@
     transition: none;
   }
 }
+
+/* Commercial unit only occupies space when a matching ad is delivered. */
+.home-inline-ad {
+  margin: 4px auto 34px;
+}
+
+.home-inline-ad .ad-slot__label {
+  color: #64748b;
+}

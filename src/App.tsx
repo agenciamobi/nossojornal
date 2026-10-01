@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { SiteHeader } from './Header';
+import { AdSlot } from './AdSlot';
 import { InternalPage, resolvePublicRoute } from './InternalPages';
 import { SiteFooter } from './SiteFooter';
 import { AdminApp } from './AdminApp';
@@ -346,6 +347,8 @@ function PublicSite() {
               </div>
             </aside>
           </section>
+
+          <AdSlot slot="home-inline" className="home-inline-ad" />
 
           <section className="container home-latest" aria-labelledby="latest-title">
             <div className="home-section-heading">

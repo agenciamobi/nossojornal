@@ -397,6 +397,49 @@ export function AdminAds({ csrfToken }: { csrfToken: string }) {
     () => data?.creatives.filter((item) => item.campaignId === placement.campaignId) ?? [],
     [data, placement.campaignId],
   );
+  const selectedCreative = activeCampaignCreatives.find((item) => item.id === placement.creativeId);
+  const selectedCampaign = data?.campaigns.find((item) => item.id === placement.campaignId);
+  const selectedAdvertiser = data?.advertisers.find((item) => item.id === selectedCampaign?.advertiserId);
+  const selectedSlot = data?.slots.find((item) => item.id === placement.slotId);
+  const creativeSize = selectedCreative ? selectedCreative.width + 'x' + selectedCreative.height : '';
+  const compatibleSlots = (data?.slots ?? []).filter(
+    (item) => item.enabled && creativeSize !== '' && item.allowedSizes.includes(creativeSize),
+  );
+  const canSavePlacement = Boolean(
+    selectedCampaign && selectedCreative && selectedSlot?.enabled
+      && selectedCreative.campaignId === selectedCampaign.id
+      && selectedSlot.allowedSizes.includes(creativeSize) && state !== 'saving',
+  );
+
+  // An active database record is not necessarily an ad currently eligible for delivery.
+  // Report scheduling and parent-status problems before an administrator activates it.
+  const deliveryIssues: string[] = [];
+  if (placement.campaignId && selectedCampaign) {
+    if (selectedCampaign.status !== 'active') deliveryIssues.push('Ative a campanha para entregar o anúncio.');
+    if (selectedAdvertiser?.status !== 'active') deliveryIssues.push('O anunciante precisa estar ativo.');
+  }
+  if (selectedCreative?.status !== 'active') {
+    if (selectedCreative) deliveryIssues.push('O criativo ainda não está ativo.');
+  }
+  if (selectedSlot && !selectedSlot.enabled) deliveryIssues.push('A posição está desabilitada.');
+  if (selectedCreative && selectedSlot && !selectedSlot.allowedSizes.includes(creativeSize)) {
+    deliveryIssues.push('O formato do criativo não é aceito nesta posição.');
+  }
+  if (placement.status === 'paused') deliveryIssues.push('Esta veiculação está pausada.');
+  const now = Date.now();
+  for (const [start, end] of [
+    [selectedCampaign?.startsAt, selectedCampaign?.endsAt],
+    [placement.startsAt, placement.endsAt],
+  ]) {
+    const startTime = start ? new Date(start.replace(' ', 'T')).getTime() : NaN;
+    const endTime = end ? new Date(end.replace(' ', 'T')).getTime() : NaN;
+    if (Number.isFinite(startTime) && startTime > now) {
+      deliveryIssues.push('O período de exibição ainda não começou.');
+    }
+    if (Number.isFinite(endTime) && endTime < now) {
+      deliveryIssues.push('O período de exibição já terminou.');
+    }
+  }
 
   async function save(body: Record<string, unknown>, reset: () => void) {
     setState('saving');
@@ -414,8 +457,27 @@ export function AdminAds({ csrfToken }: { csrfToken: string }) {
     }
   }
 
-  if (state === 'loading' || !data) {
+  if (state === 'loading') {
     return <div className="admin-loading" aria-busy="true"><span /><span /><span /></div>;
+  }
+
+  if (!data) {
+    return (
+      <div className="admin-save-feedback admin-save-feedback--error" role="alert">
+        Não foi possível carregar o gerenciador de publicidade ({errorCode || 'ads_load_failed'}).
+        <button type="button" onClick={() => {
+          setState('loading');
+          setErrorCode('');
+          void adminRequest(csrfToken).then((snapshot) => {
+            setData(snapshot);
+            setState('idle');
+          }).catch((error) => {
+            setErrorCode(error instanceof Error ? error.message : 'ads_load_failed');
+            setState('error');
+          });
+        }}>Tentar novamente</button>
+      </div>
+    );
   }
 
   return (
@@ -430,7 +492,7 @@ export function AdminAds({ csrfToken }: { csrfToken: string }) {
         <article><strong>{data.advertisers.length}</strong><span>Anunciantes</span></article>
         <article><strong>{data.campaigns.filter((item) => item.status === 'active').length}</strong><span>Campanhas ativas</span></article>
         <article><strong>{data.creatives.length}</strong><span>Criativos</span></article>
-        <article><strong>{data.placements.filter((item) => item.status === 'active').length}</strong><span>Veiculações</span></article>
+        <article><strong>{data.placements.length}</strong><span>Veiculações cadastradas</span></article>
       </div>
 
       {state === 'error' && (
@@ -631,9 +693,10 @@ export function AdminAds({ csrfToken }: { csrfToken: string }) {
           <section className="admin-editor-card">
             <div className="admin-editor-card__head"><span>Entrega</span><strong>Veiculação</strong></div>
             <div className="admin-editor-card__body admin-editor-card__body--fields">
-              <label className="admin-editor-field"><span>Campanha</span><select value={placement.campaignId} onChange={(e) => setPlacement({ ...placement, campaignId: Number(e.target.value), creativeId: 0 })}><option value={0}>Selecione</option>{data.campaigns.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select></label>
-              <label className="admin-editor-field"><span>Criativo</span><select value={placement.creativeId} onChange={(e) => setPlacement({ ...placement, creativeId: Number(e.target.value) })}><option value={0}>Selecione</option>{activeCampaignCreatives.map((item) => <option value={item.id} key={item.id}>{item.name} · {item.width}×{item.height}</option>)}</select></label>
-              <label className="admin-editor-field"><span>Posição</span><select value={placement.slotId} onChange={(e) => setPlacement({ ...placement, slotId: Number(e.target.value) })}><option value={0}>Selecione</option>{data.slots.filter((item) => item.enabled).map((item) => <option value={item.id} key={item.id}>{item.name} · {item.allowedSizes.join(', ')}</option>)}</select></label>
+              <label className="admin-editor-field"><span>Campanha</span><select value={placement.campaignId} onChange={(e) => setPlacement({ ...placement, campaignId: Number(e.target.value), creativeId: 0, slotId: 0 })}><option value={0}>Selecione</option>{data.campaigns.map((item) => <option value={item.id} key={item.id}>{item.name} · {item.status}</option>)}</select></label>
+              <label className="admin-editor-field"><span>Criativo</span><select value={placement.creativeId} disabled={!placement.campaignId} onChange={(e) => setPlacement({ ...placement, creativeId: Number(e.target.value), slotId: 0 })}><option value={0}>Selecione</option>{activeCampaignCreatives.map((item) => <option value={item.id} key={item.id}>{item.name} · {item.width}×{item.height} · {item.status}</option>)}</select></label>
+              <label className="admin-editor-field"><span>Posição compatível</span><select value={placement.slotId} disabled={!selectedCreative} onChange={(e) => setPlacement({ ...placement, slotId: Number(e.target.value) })}><option value={0}>Selecione</option>{selectedSlot && !compatibleSlots.some((item) => item.id === selectedSlot.id) && <option value={selectedSlot.id} disabled>{selectedSlot.name} (incompatível ou desativada)</option>}{compatibleSlots.map((item) => <option value={item.id} key={item.id}>{item.name} · {creativeSize}</option>)}</select></label>
+              {selectedCreative && compatibleSlots.length === 0 && <p className="ads-placement-help">Nenhuma posição habilitada aceita {creativeSize}. Ajuste os formatos em Posições ou escolha outro criativo.</p>}
               <div className="ads-field-grid">
                 <label className="admin-editor-field"><span>Dispositivo</span><select value={placement.device} onChange={(e) => setPlacement({ ...placement, device: e.target.value as Placement['device'] })}><option value="all">Todos</option><option value="desktop">Desktop</option><option value="mobile">Mobile</option></select></label>
                 <label className="admin-editor-field"><span>Status</span><select value={placement.status} onChange={(e) => setPlacement({ ...placement, status: e.target.value as Placement['status'] })}><option value="active">Ativa</option><option value="paused">Pausada</option></select></label>
@@ -643,7 +706,15 @@ export function AdminAds({ csrfToken }: { csrfToken: string }) {
                 <label className="admin-editor-field"><span>Fim opcional</span><input type="datetime-local" value={placement.endsAt} onChange={(e) => setPlacement({ ...placement, endsAt: e.target.value })} /></label>
               </div>
               <label className="admin-editor-field"><span>Prioridade</span><input type="number" min="0" max="1000" value={placement.priority} onChange={(e) => setPlacement({ ...placement, priority: Number(e.target.value) })} /></label>
-              <button className="admin-button--primary" type="button" disabled={!placement.campaignId || !placement.creativeId || !placement.slotId || state === 'saving'} onClick={() => void save({ entity: 'placement', ...placement }, () => setPlacement({ ...EMPTY_PLACEMENT }))}>
+              {selectedCreative && selectedSlot && <div className="ads-placement-readiness" role="status" aria-live="polite">
+                <strong>{deliveryIssues.length === 0 ? 'Elegível para exibição' : 'Atenção antes de veicular'}</strong>
+                {deliveryIssues.length > 0 ? (
+                  <ul>{[...new Set(deliveryIssues)].map((issue) => <li key={issue}>{issue}</li>)}</ul>
+                ) : (
+                  <p>Os cadastros estão compatíveis. A entrega também depende da prioridade de outras campanhas na posição.</p>
+                )}
+              </div>}
+              <button className="admin-button--primary" type="button" disabled={!canSavePlacement} onClick={() => void save({ entity: 'placement', ...placement }, () => setPlacement({ ...EMPTY_PLACEMENT }))}>
                 {state === 'saving' ? 'Salvando…' : placement.id ? 'Salvar veiculação' : 'Ativar veiculação'}
               </button>
             </div>
