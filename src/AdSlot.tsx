@@ -212,7 +212,7 @@ export function AdSlot({
             {ad.clickUrl && (
               <a
                 className="ad-slot__click-overlay"
-                href={ad.clickUrl}
+                href={'/api/v1/ad-click.php?t=' + encodeURIComponent(ad.token)}
                 target="_blank"
                 rel="sponsored noopener noreferrer"
                 aria-label={'Abrir anúncio de ' + ad.advertiser.name}
