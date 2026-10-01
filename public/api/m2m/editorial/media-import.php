@@ -20,7 +20,7 @@ function nj_remote_image_url(string $raw): string
     if (!is_array($parts)
         || ($parts['scheme'] ?? '') !== 'https'
         || !in_array(strtolower((string) ($parts['host'] ?? '')), NJ_MEDIA_APPROVED_HOSTS, true)
-        || isset($parts['user'], $parts['pass'])
+        || isset($parts['user']) || isset($parts['pass'])
         || isset($parts['port']) || isset($parts['query']) || isset($parts['fragment'])
         || preg_match('#^/archives/images/(?:screen|large|publication)/[a-zA-Z0-9_-]+\.(?:jpe?g|png|webp)$#', (string) ($parts['path'] ?? '')) !== 1
     ) {
@@ -180,6 +180,11 @@ nj_m2m_run('POST', 'editorial.media.import', static function (array $context): a
 
     $url = nj_remote_image_url(trim((string) ($body['asset_url'] ?? '')));
     $sourceUrl = nj_remote_source_page(trim((string) ($body['source_url'] ?? '')));
+    $assetName = pathinfo((string) parse_url($url, PHP_URL_PATH), PATHINFO_FILENAME);
+    $pageSlug = trim((string) parse_url($sourceUrl, PHP_URL_PATH), '/');
+    if ($assetName === '' || $pageSlug !== 'images/' . $assetName) {
+        throw new NjApiHttpException(422, 'media_source_mismatch');
+    }
     $sourceHash = hash('sha256', $url);
     $featured = $body['set_featured'] ?? true;
     $pdo = $context['pdo'];
@@ -201,6 +206,18 @@ nj_m2m_run('POST', 'editorial.media.import', static function (array $context): a
     $download = null;
     $createdPath = null;
     $reused = is_array($existing);
+    if ($existing !== null) {
+        $metaTable = nj_table('postmeta');
+        $fileQuery = $pdo->prepare("SELECT meta_value FROM {$metaTable} WHERE post_id = :attachment AND meta_key = '_wp_attached_file' ORDER BY meta_id DESC LIMIT 1");
+        $fileQuery->execute(['attachment' => (int) $existing['id']]);
+        $relative = (string) $fileQuery->fetchColumn();
+        if (!preg_match('#^[0-9]{4}/[0-9]{2}/[a-z0-9._-]+$#i', $relative)
+            || !is_file($uploadRoot . '/' . $relative)
+            || is_link($uploadRoot . '/' . $relative)
+        ) {
+            throw new NjApiHttpException(409, 'existing_media_file_missing');
+        }
+    }
     if ($existing === null) {
         $download = nj_remote_download_image($url);
     }
@@ -244,13 +261,13 @@ nj_m2m_run('POST', 'editorial.media.import', static function (array $context): a
 
             // Exclusive creation prevents overwriting the historical media archive.
             $src = fopen($download['temp'], 'rb');
-            $dest = fopen($path, 'x');
+            $dest = $src === false ? false : fopen($path, 'x');
+            if ($dest !== false) $createdPath = $path;
             if ($src === false || $dest === false) {
                 if (is_resource($src)) fclose($src);
                 if (is_resource($dest)) fclose($dest);
                 throw new NjApiHttpException(503, 'media_storage_unavailable');
             }
-            $createdPath = $path;
             $copied = stream_copy_to_stream($src, $dest);
             fclose($src);
             fclose($dest);
