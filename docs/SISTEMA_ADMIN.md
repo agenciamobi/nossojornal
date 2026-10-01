@@ -2046,3 +2046,14 @@ Essas funções continuam usando autenticação, CSRF e capabilities do `/sistem
 ### Paridade visual
 
 A shell autenticada também segue a gramática visual do wp-admin: toolbar escura global, sidebar compacta, menu ativo azul com ponteiro, conteúdo mais denso, headings de 23px, links/filtros/tabelas no padrão administrativo e metaboxes compactos. A identidade visual do Nosso Jornal aparece no conteúdo e na marca, não por meio de um dashboard SaaS paralelo.
+
+
+## Identidade pública de autores e colunistas
+
+As telas `/sistema/usuarios/novo` e `/sistema/usuarios/:id` separam explicitamente:
+- login estável para autenticação e regras internas;
+- nome público (`display_name`) mostrado nas matérias e perfis;
+- endereço público exclusivo (`user_nicename`), por exemplo `/autor/pablo-oliveira`;
+- nome, sobrenome, função editorial, biografia, fotografia da biblioteca, site e redes sociais.
+
+O login não é reescrito ao editar nome ou endereço públicos. Alterações de URL geram redirect 301 pelo mecanismo nativo dentro da mesma transação e conflitos manuais bloqueiam o salvamento. Fotos são attachments de imagem validados por ID no servidor, com upload no endpoint existente sujeito a `upload_files` e CSRF. Todo o cadastro permanece protegido por capabilities; não há conta ou banco paralelo.
