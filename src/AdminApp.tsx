@@ -2988,6 +2988,7 @@ function PostEditorView({
   const [correctionType, setCorrectionType] = useState<'update' | 'correction'>('update');
   const [correctionPublic, setCorrectionPublic] = useState(true);
   const [collaborationState, setCollaborationState] = useState<'idle' | 'working' | 'error'>('idle');
+  const [advancedToolsOpen, setAdvancedToolsOpen] = useState(false);
   const [error, setError] = useState(false);
 
   useEffect(() => {
@@ -3150,6 +3151,22 @@ function PostEditorView({
   const canEditOthers = user.capabilities.includes('edit_others_posts');
   const canEditPublished = user.capabilities.includes('edit_published_posts');
   const publishedLike = ['publish', 'future', 'private'].includes(post.status);
+  const plainContent = revisionPlainText(content).replace(/\s+/g, ' ').trim();
+  const automaticExcerpt = plainContent.length <= 260
+    ? plainContent
+    : plainContent.slice(0, 257).replace(/\s+\S*$/, '').trimEnd() + '…';
+  const effectiveSlug =
+    !slug.trim() || /^nova-noticia(?:-\d+)?$/u.test(slug.trim())
+      ? slugifyAdminValue(title)
+      : slug.trim();
+  const effectiveExcerpt = excerpt.trim() || automaticExcerpt;
+  const effectiveSeoTitle = seoTitle.trim() || title.trim();
+  const effectiveSeoDescription = seoDescription.trim() || effectiveExcerpt;
+  const automaticDefaultsNeeded =
+    effectiveSlug !== slug
+    || effectiveExcerpt !== excerpt
+    || effectiveSeoTitle !== seoTitle
+    || effectiveSeoDescription !== seoDescription;
 
   const canEdit =
     user.permissions.editPosts
@@ -3491,14 +3508,17 @@ function PostEditorView({
     }
   }
 
-  async function savePost() {
-    if (!canEdit || !changed || saveState === 'saving') return;
+  async function savePost(): Promise<boolean> {
+    if (!canEdit || saveState === 'saving') return false;
+
+    const shouldWritePost = postChanged || automaticDefaultsNeeded;
+    if (!shouldWritePost && !editorialChanged) return true;
 
     setSaveState('saving');
     setRedirectNotice(null);
 
     try {
-      if (postChanged) {
+      if (shouldWritePost) {
         const payload = await adminFetch<{
           ok: boolean;
           data?: {
@@ -3531,14 +3551,14 @@ function PostEditorView({
           headers: { 'X-CSRF-Token': csrfToken },
           body: JSON.stringify({
             postId: post.id,
-            title,
-            slug,
-            excerpt,
+            title: title.trim(),
+            slug: effectiveSlug,
+            excerpt: effectiveExcerpt,
             content,
             categoryIds,
             tagNames,
-            seoTitle,
-            seoDescription,
+            seoTitle: effectiveSeoTitle,
+            seoDescription: effectiveSeoDescription,
             primaryCategoryId,
           }),
         });
@@ -3582,8 +3602,13 @@ function PostEditorView({
             }
           : current
         );
+        setTitle(saved.title);
         setSlug(saved.slug);
+        setExcerpt(saved.excerpt);
         setTagNames(saved.tags.map((tag) => tag.name));
+        setSeoTitle(saved.seo.title);
+        setSeoDescription(saved.seo.description);
+        setPrimaryCategoryId(saved.seo.primaryCategoryId);
       }
 
       if (editorialChanged) {
@@ -3592,36 +3617,40 @@ function PostEditorView({
           setEditorialData(savedEditorial);
           setEditorial(savedEditorial.editorial);
         }
-      } else if (postChanged) {
+      } else if (shouldWritePost) {
         await refreshEditorialState();
       }
 
       setSaveState('saved');
       setAutosaveState('idle');
       await refreshHistoryAndCollaboration();
+      return true;
     } catch {
       setSaveState('error');
+      return false;
     }
   }
 
   async function changeStatus(action: 'publish' | 'draft' | 'schedule') {
     if (!editorial) return;
-    if (!canChangeStatus || statusState === 'working' || changed) return;
+    if (!canChangeStatus || statusState === 'working' || saveState === 'saving') return;
     if ((action === 'publish' || action === 'schedule') && !user.permissions.publishPosts) return;
 
     if (action === 'publish' || action === 'schedule') {
-      const manualPending = Object.values(editorial.checklist).filter((value) => !value).length;
-      const automaticPending = Object.values(editorial.automaticChecks).filter((value) => !value).length;
-      const pending = manualPending + automaticPending;
-
-      if (
-        pending > 0
-        && !window.confirm(
-          'Ainda existem ' + pending + ' verificações editoriais pendentes. Deseja continuar mesmo assim?',
-        )
-      ) {
+      if (!title.trim()) {
+        window.alert('Preencha o título antes de publicar.');
         return;
       }
+
+      if (!plainContent) {
+        window.alert('Escreva o conteúdo da notícia antes de publicar.');
+        return;
+      }
+    }
+
+    if (changed || automaticDefaultsNeeded) {
+      const saved = await savePost();
+      if (!saved) return;
     }
 
     setStatusState('working');
@@ -3846,7 +3875,20 @@ function PostEditorView({
     setSaveState('idle');
   }
 
-  const publicationActionDisabled = !canChangeStatus || changed || statusState === 'working';
+  const publicationActionDisabled =
+    !canChangeStatus
+    || statusState === 'working'
+    || saveState === 'saving';
+
+  const criticalPublishIssues = [
+    !title.trim() ? 'Título' : '',
+    !plainContent ? 'Conteúdo' : '',
+  ].filter(Boolean);
+
+  const publicationRecommendations = [
+    categoryIds.length === 0 ? 'categoria' : '',
+    !post.featuredImage ? 'imagem destacada' : '',
+  ].filter(Boolean);
 
   const stageLabels: Record<EditorialWorkflow['stage'], string> = {
     idea: 'Ideia',
@@ -3895,7 +3937,7 @@ function PostEditorView({
       <AdminEditorGuard
         dirty={changed}
         saving={saveState === 'saving'}
-        onSave={savePost}
+        onSave={() => { void savePost(); }}
       />
       <header className="admin-editor-header">
         <div>
@@ -3908,6 +3950,14 @@ function PostEditorView({
 
         <div className="admin-editor-header__actions">
           <AdminEditorSaveIndicator dirty={changed} state={saveState} />
+          <button
+            type="button"
+            className={advancedToolsOpen ? 'admin-editor-tools-toggle is-active' : 'admin-editor-tools-toggle'}
+            onClick={() => setAdvancedToolsOpen((current) => !current)}
+            aria-expanded={advancedToolsOpen}
+          >
+            {advancedToolsOpen ? 'Ocultar ferramentas' : 'Ferramentas editoriais'}
+          </button>
           <a href="/sistema/noticias/nova">Adicionar notícia</a>
           {post.publicUrl && post.status === 'publish' && (
             <a href={post.publicUrl} target="_blank" rel="noopener noreferrer">
@@ -3971,6 +4021,12 @@ function PostEditorView({
             />
           </label>
 
+          <details className="admin-editor-quick-options">
+            <summary>
+              <span>Resumo e endereço</span>
+              <small>O sistema completa automaticamente se você deixar em branco.</small>
+            </summary>
+            <div className="admin-editor-quick-options__body">
           <label className="admin-editor-field">
             <span>Link</span>
             <div className="admin-slug-field">
@@ -3999,6 +4055,10 @@ function PostEditorView({
             />
           </label>
 
+
+            </div>
+          </details>
+
           <AdminRichEditor
             label="Conteúdo da notícia"
             value={content}
@@ -4013,6 +4073,8 @@ function PostEditorView({
             }}
           />
 
+          {advancedToolsOpen && (
+            <div className="admin-editor-advanced-stack">
           <AdminMetabox title="Identidade da matéria" eyebrow="Apresentação" defaultOpen={false}>
           <section className="admin-editor-card admin-magazine-fields">
             <div className="admin-editor-card__head">
@@ -4645,6 +4707,9 @@ function PostEditorView({
 
           </AdminMetabox>
 
+            </div>
+          )}
+
         </section>
 
         <aside className="admin-editor-sidebar">
@@ -4655,9 +4720,28 @@ function PostEditorView({
 
             <div className="admin-publish-box__meta">
               <p><strong>Status:</strong> <span>{statusLabel(post.status)}</span></p>
-              <p><strong>Visibilidade:</strong> <span>{post.status === 'private' ? 'Privada' : 'Pública'}</span></p>
               <p><strong>Publicar em:</strong> <span>{post.publishedAt ? formatAdminDate(post.publishedAt) : 'Imediatamente'}</span></p>
-              <p><strong>Autor:</strong> <span>{post.author.name}</span></p>
+            </div>
+
+            <div className={
+              criticalPublishIssues.length > 0
+                ? 'admin-publish-readiness is-blocked'
+                : 'admin-publish-readiness is-ready'
+            }>
+              <strong>
+                {criticalPublishIssues.length > 0
+                  ? 'Falta o essencial'
+                  : 'Pronto para publicar'}
+              </strong>
+              <span>
+                {criticalPublishIssues.length > 0
+                  ? criticalPublishIssues.join(' e ')
+                  : publicationRecommendations.length > 0
+                    ? publicationRecommendations.length + (publicationRecommendations.length === 1
+                        ? ' recomendação opcional'
+                        : ' recomendações opcionais')
+                    : 'Tudo certo para seguir'}
+              </span>
             </div>
 
             {post.status !== 'publish' && user.permissions.publishPosts && (
@@ -4711,12 +4795,18 @@ function PostEditorView({
                   disabled={publicationActionDisabled || !user.permissions.publishPosts}
                   onClick={() => void changeStatus('publish')}
                 >
-                  {statusState === 'working' ? 'Publicando…' : 'Publicar'}
+                  {statusState === 'working'
+                    ? 'Publicando…'
+                    : changed || automaticDefaultsNeeded
+                      ? 'Salvar e publicar'
+                      : 'Publicar'}
                 </button>
               )}
             </div>
           </section>
 
+          {advancedToolsOpen && (
+            <div className="admin-editor-sidebar-advanced">
           <AdminMetabox title="Workflow editorial" eyebrow="Redação" defaultOpen={false}>
           <section className="admin-editor-card">
             <div className="admin-editor-card__head">
@@ -4805,12 +4895,34 @@ function PostEditorView({
 
           </AdminMetabox>
 
+
+            </div>
+          )}
+
           <section className="admin-editor-card">
             <div className="admin-editor-card__head">
               <span>Organização</span>
               <strong>Categorias</strong>
             </div>
 
+            <div className="admin-category-summary">
+              {selectedCategories.length > 0 ? (
+                <div>
+                  {selectedCategories.map((category) => (
+                    <span key={category.id}>
+                      <i style={{ background: category.color }} aria-hidden="true" />
+                      {category.name}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <span className="is-empty">Nenhuma categoria selecionada.</span>
+              )}
+            </div>
+
+            <details className="admin-category-picker">
+              <summary>{selectedCategories.length > 0 ? 'Alterar categorias' : 'Escolher categoria'}</summary>
+              <div className="admin-category-picker__body">
             <p className="admin-field-help">
               Use no máximo uma editoria e uma localidade. Ao escolher outra da mesma classe,
               a seleção anterior é substituída.
@@ -4843,6 +4955,9 @@ function PostEditorView({
                   A editoria é principal automaticamente; a localidade funciona como contexto.
                 </small>
               </label>
+
+              </div>
+            </details>
             )}
           </section>
 
@@ -4891,6 +5006,8 @@ function PostEditorView({
               <p className="admin-editor-media-error">Não foi possível atualizar a imagem.</p>
             )}
 
+            <details className="admin-image-extra">
+              <summary>Crédito e legenda</summary>
             <div className="admin-editor-card__body admin-editor-card__body--fields admin-image-editorial-meta">
               <label className="admin-editor-field">
                 <span>Crédito da imagem</span>
@@ -4914,8 +5031,12 @@ function PostEditorView({
                 />
               </label>
             </div>
+
+            </details>
           </section>
 
+          {advancedToolsOpen && (
+            <div className="admin-editor-sidebar-advanced">
           <AdminMetabox title="Checklist de publicação" eyebrow="Antes de publicar" defaultOpen={false}>
           <section className="admin-editor-card">
             <div className="admin-editor-card__head">
@@ -5076,6 +5197,9 @@ function PostEditorView({
           </section>
 
           </AdminMetabox>
+
+            </div>
+          )}
 
         </aside>
       </div>
