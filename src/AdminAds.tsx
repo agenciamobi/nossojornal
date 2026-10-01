@@ -515,6 +515,7 @@ const quickAdError: Record<string, string> = {
   quick_banner_advertiser_inactive: 'Esse anunciante está inativo. Ative-o em Configurações avançadas ou escolha outro.',
   quick_banner_image_required: 'A mídia escolhida não é uma imagem válida da Biblioteca.',
   quick_banner_image_unavailable: 'Não foi possível localizar o arquivo original da imagem selecionada.',
+  quick_banner_image_ratio: 'A proporção da imagem difere muito do espaço. Envie um banner no formato indicado.',
   advertiser_already_exists: 'Esse anunciante já existe. Escolha-o na lista.',
   invalid_ad_url: 'O endereço de destino deve começar com https:// ou http:// e ser válido.',
   invalid_campaign_window: 'A data final deve ser posterior à data inicial.',
@@ -550,12 +551,20 @@ function QuickBannerForm({
   const validSize = allowedFormats.some((item) => item.width + 'x' + item.height === draft.size);
   const selectedSize = validSize ? draft.size : (allowedFormats[0] ? allowedFormats[0].width + 'x' + allowedFormats[0].height : '');
   const [width, height] = selectedSize.split('x').map(Number);
+  const sourceAspect = draft.media?.width && draft.media.height
+    ? draft.media.width / draft.media.height : null;
+  const targetAspect = width > 0 && height > 0 ? width / height : null;
+  const aspectGap = sourceAspect && targetAspect
+    ? Math.max(sourceAspect / targetAspect, targetAspect / sourceAspect) : 1;
+  const severeRatioMismatch = aspectGap > 3;
+  const moderateRatioMismatch = aspectGap > 1.35;
   const issues = [
     !selectedSlot && 'Não existe posição habilitada.',
     allowedFormats.length === 0 && 'Esta posição não aceita formatos para o dispositivo escolhido.',
     !draft.name.trim() && 'Informe o título do anúncio.',
     draft.advertiserId === -1 && !draft.newAdvertiserName.trim() && 'Informe o nome do anunciante.',
     !draft.media && 'Selecione uma imagem da Biblioteca de Mídias.',
+    severeRatioMismatch && 'Essa imagem tem proporção muito diferente. Escolha uma arte horizontal próxima de ' + selectedSize + ' para que o banner fique visível.',
   ].filter((item): item is string => typeof item === 'string');
   const activeAds = data.placements.map((item) => {
     const campaign = data.campaigns.find((c) => c.id === item.campaignId);
@@ -734,6 +743,14 @@ function QuickBannerForm({
                 onChange={(event) => setDraft({ ...draft, priority: Number(event.target.value) })} />
             </label>
           </details>
+          {draft.media && moderateRatioMismatch && (
+            <p className="ads-quick__help" role="alert">
+              A imagem escolhida tem {draft.media.width}×{draft.media.height} pixels,
+              mas este banner tem {selectedSize}. {severeRatioMismatch
+                ? 'Ela ficaria pequena e com grandes áreas vazias. Escolha ou envie uma arte na proporção indicada.'
+                : 'Ela será exibida inteira, podendo deixar pequenas bordas vazias.'}
+            </p>
+          )}
           {competingTests.length > 0 && (
             <p className="ads-quick__help">Há {competingTests.length} banner(s) de teste com prioridade alta
               neste espaço. Eles podem aparecer com mais frequência que o novo banner.

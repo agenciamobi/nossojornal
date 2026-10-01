@@ -372,6 +372,15 @@ nj_admin_run(['GET', 'POST'], static function (string $method): array {
         if ($imageUrl === '' || nj_ads_url($imageUrl, true) === null) {
             throw new NjApiHttpException(422, 'quick_banner_image_unavailable');
         }
+        $sourceWidth = is_array($descriptor) ? (int) ($descriptor['width'] ?? 0) : 0;
+        $sourceHeight = is_array($descriptor) ? (int) ($descriptor['height'] ?? 0) : 0;
+        if ($sourceWidth > 0 && $sourceHeight > 0) {
+            $sourceAspect = $sourceWidth / $sourceHeight;
+            $targetAspect = $width / $height;
+            if (max($sourceAspect / $targetAspect, $targetAspect / $sourceAspect) > 3) {
+                throw new NjApiHttpException(422, 'quick_banner_image_ratio');
+            }
+        }
         $altText = is_array($descriptor) && trim((string) ($descriptor['alt'] ?? '')) !== ''
             ? (string) $descriptor['alt'] : $name;
 
