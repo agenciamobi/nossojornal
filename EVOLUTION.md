@@ -3968,3 +3968,6 @@ O registro da imagem importada é um attachment normal da Biblioteca de Mídias,
 Vídeos têm uma operação separada e metadata-only (`editorial.video.attach`): registra a URL verificada do YouTube como um attachment `video/x-embed`, sem baixar qualquer vídeo, preserva fonte, crédito, licença e SEO e associa até seis anexos a um draft por referência. O portal monta os players exclusivamente a partir de IDs validados, com crédito visível e link para o original. A edição de mídias permite visualizar o player e corrigir seus metadados. A página oficial ESA/Webb `potm2609a` corresponde ao vídeo YouTube `RQUMlfUnPhc`.
 
 A migração e os endpoints continuam candidatos até aceitação no MOBI Core e deploy canônico. Não há publicação automática da notícia nem download de vídeos.
+
+
+**Correção de metadados via MCP:** `editorial.media.update` permite ao Core revisar somente título, ALT, legenda, descrição, SEO, crédito e licença de imagens/vídeos cujo attachment pertença a um rascunho. Os links e arquivos originais permanecem imutáveis. A API valida limites, persiste alterações com transação/read-back e audita os campos editados, sem tocar em notícias publicadas.

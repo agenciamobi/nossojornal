@@ -70,4 +70,18 @@ for(const token of ["_nj_media_credit", "_nj_media_license", "_nj_media_seo_titl
 assert.ok(article.includes("_nj_editorial_video_attachment_ids"), "Public article must hydrate video attachments");
 assert.ok(article.includes("youtube-nocookie.com"), "Embed player must be canonical");
 assert.ok(article.includes("featuredCredit"), "Featured image must use editable library credit");
-console.log("Editorial media and URL-only video contracts OK");
+const update = phpRead("public/api/m2m/editorial/media-update.php");
+for (const token of [
+  "nj_m2m_run('POST', 'editorial.media.update'",
+  "media_update_draft_required",
+  "media_update_field_invalid",
+  "_nj_media_credit",
+  "_nj_media_license",
+  "_nj_media_seo_title",
+  "_nj_media_seo_description",
+  "media_metadata_readback_failed",
+  "editorial_media_metadata_updated",
+]) assert.ok(update.includes(token), "Missing bounded media editing guarantee: " + token);
+assert.ok(!update.includes("file_put_contents") && !update.includes("curl_exec"), "Metadata update must not modify downloaded bytes");
+assert.ok(!update.includes("editorial.publish"), "Metadata update must not publish");
+console.log("Editorial image, metadata updates and URL-only video contracts OK");
