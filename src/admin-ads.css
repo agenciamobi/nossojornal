@@ -325,3 +325,36 @@
     align-self: flex-start;
   }
 }
+
+/* Placement compatibility and delivery diagnostics are advisory, not invented metrics. */
+.ads-placement-help {
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid #f0d4a9;
+  border-radius: 12px;
+  background: #fff9ee;
+  color: #8a540b;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.ads-placement-readiness {
+  display: grid;
+  gap: 7px;
+  padding: 14px 16px;
+  border: 1px solid #dce5ef;
+  border-radius: 12px;
+  background: #f7f9fc;
+  color: #344054;
+  font-size: 12px;
+  line-height: 1.55;
+}
+.ads-placement-readiness strong {
+  font-size: 13px;
+  color: #153e74;
+}
+.ads-placement-readiness ul {
+  margin: 0;
+  padding-left: 17px;
+}
+.ads-placement-readiness p { margin: 0; }
