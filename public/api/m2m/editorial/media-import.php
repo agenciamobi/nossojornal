@@ -11,6 +11,11 @@ require __DIR__ . '/_draft.php';
 const NJ_MEDIA_REMOTE_LIMIT = 8 * 1024 * 1024;
 const NJ_MEDIA_APPROVED_HOSTS = ['cdn.esawebb.org', 'cdn2.esawebb.org'];
 
+function nj_remote_length(string $value): int
+{
+    return function_exists('mb_strlen') ? mb_strlen($value, 'UTF-8') : strlen($value);
+}
+
 function nj_remote_image_url(string $raw): string
 {
     if ($raw === '' || strlen($raw) > 1200 || preg_match('/[\x00-\x20\x7f]/', $raw)) {
@@ -169,10 +174,10 @@ nj_m2m_run('POST', 'editorial.media.import', static function (array $context): a
     $caption = trim((string) ($body['caption'] ?? ''));
     $credit = trim((string) ($body['credit'] ?? ''));
     if (!is_int($postId) || $postId <= 0
-        || $title === '' || mb_strlen($title, 'UTF-8') > 160
-        || $alt === '' || mb_strlen($alt, 'UTF-8') > 500
-        || mb_strlen($caption, 'UTF-8') > 1000
-        || $credit === '' || mb_strlen($credit, 'UTF-8') > 1000
+        || $title === '' || nj_remote_length($title) > 160
+        || $alt === '' || nj_remote_length($alt) > 500
+        || nj_remote_length($caption) > 1000
+        || $credit === '' || nj_remote_length($credit) > 1000
         || !is_bool($body['set_featured'] ?? true)
     ) {
         throw new NjApiHttpException(422, 'media_import_payload_invalid');
