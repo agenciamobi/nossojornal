@@ -368,12 +368,191 @@ async function adminRequest(csrfToken: string, body?: Record<string, unknown>) {
   return payload.data;
 }
 
+
+type AdMediaItem = {
+  id: number;
+  title: string;
+  mimeType: string;
+  url: string;
+  alt: string;
+  width: number | null;
+  height: number | null;
+};
+type AdMediaResponse = {
+  ok: boolean;
+  data?: { items: AdMediaItem[]; pagination: { page: number; totalPages: number; total: number } };
+};
+function AdMediaPicker({
+  size, onSelect, onClose,
+}: {
+  size: string;
+  onSelect: (item: AdMediaItem) => void;
+  onClose: () => void;
+}) {
+  const [input, setInput] = useState('');
+  const [query, setQuery] = useState('');
+  const [page, setPage] = useState(1);
+  const [items, setItems] = useState<AdMediaItem[]>([]);
+  const [totalPages, setTotalPages] = useState(1);
+  const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setState('loading');
+    const params = new URLSearchParams({ page: String(page), per_page: '24', q: query });
+    void fetch('/api/admin/media.php?' + params.toString(), {
+      headers: { Accept: 'application/json' }, signal: controller.signal,
+    }).then(async (response) => {
+      if (!response.ok) throw new Error('media_http_' + response.status);
+      return response.json() as Promise<AdMediaResponse>;
+    }).then((payload) => {
+      if (!payload.ok || !payload.data) throw new Error('media_invalid');
+      setItems(payload.data.items.filter((item) => item.mimeType.startsWith('image/')));
+      setTotalPages(payload.data.pagination.totalPages);
+      setState('ready');
+    }).catch((error) => {
+      if (error instanceof DOMException && error.name === 'AbortError') return;
+      setState('error');
+    });
+    return () => controller.abort();
+  }, [page, query]);
+
+  return (
+    <section className="ads-media-picker" aria-label="Selecionar imagem da biblioteca">
+      <div className="ads-media-picker__head">
+        <div><strong>Biblioteca de Mídias</strong><small>Selecione uma imagem. Formato desejado: {size}</small></div>
+        <button type="button" onClick={onClose}>Fechar</button>
+      </div>
+      <form onSubmit={(event) => { event.preventDefault(); setPage(1); setQuery(input.trim()); }}>
+        <input value={input} placeholder="Pesquisar imagens" aria-label="Pesquisar imagens" onChange={(event) => setInput(event.target.value)} />
+        <button type="submit">Buscar</button>
+      </form>
+      {state === 'loading' && <p role="status">Carregando imagens…</p>}
+      {state === 'error' && <p role="alert">Não foi possível consultar a biblioteca. Feche e abra novamente.</p>}
+      {state === 'ready' && (
+        <>
+          {items.length === 0 && <p>Nenhuma imagem nesta página. Tente outra busca.</p>}
+          <div className="ads-media-picker__grid">
+            {items.map((item) => (
+              <button type="button" key={item.id} onClick={() => onSelect(item)} title={'Usar ' + item.title}>
+                <img loading="lazy" src={item.url} alt={item.alt || item.title} />
+                <strong>{item.title}</strong>
+                <span>{item.width && item.height ? item.width + '×' + item.height : 'Dimensões não disponíveis'}</span>
+              </button>
+            ))}
+          </div>
+          <div className="ads-media-picker__pagination">
+            <button type="button" disabled={page <= 1} onClick={() => setPage((n) => n - 1)}>Anterior</button>
+            <span>Página {page} de {totalPages}</span>
+            <button type="button" disabled={page >= totalPages} onClick={() => setPage((n) => n + 1)}>Próxima</button>
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
+type AdReportRow = { impressions: number; clicks: number };
+type AdReportData = {
+  from: string; to: string;
+  summary: AdReportRow;
+  advertisers: Array<AdReportRow & { id: number; name: string }>;
+  campaigns: Array<AdReportRow & { id: number; name: string; status: string; advertiserName: string }>;
+  slots: Array<AdReportRow & { code: string; name: string }>;
+  daily: Array<AdReportRow & { day: string }>;
+};
+type AdReportResponse = { ok: boolean; data?: AdReportData; error?: { code?: string } };
+const countAds = (value: number) => new Intl.NumberFormat('pt-BR').format(value);
+const ctrAds = ({ impressions, clicks }: AdReportRow) => (
+  impressions ? (100 * clicks / impressions).toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + '%' : '0%'
+);
+function localISODate(dayOffset: number) {
+  const day = new Date();
+  day.setDate(day.getDate() + dayOffset);
+  const parts = [day.getFullYear(), String(day.getMonth() + 1).padStart(2, '0'), String(day.getDate()).padStart(2, '0')];
+  return parts.join('-');
+}
+function AdsReports() {
+  const [draft, setDraft] = useState({ from: localISODate(-29), to: localISODate(0) });
+  const [range, setRange] = useState(draft);
+  const [data, setData] = useState<AdReportData | null>(null);
+  const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [error, setError] = useState('');
+  useEffect(() => {
+    const controller = new AbortController();
+    setState('loading');
+    const params = new URLSearchParams(range);
+    void fetch('/api/admin/ads-report.php?' + params.toString(), {
+      headers: { Accept: 'application/json' }, signal: controller.signal,
+    }).then(async (response) => {
+      const payload = await response.json() as AdReportResponse;
+      if (!response.ok || !payload.ok || !payload.data) throw new Error(payload.error?.code || 'report_unavailable');
+      return payload.data;
+    }).then((report) => {
+      setData(report);
+      setState('ready');
+    }).catch((reason) => {
+      if (reason instanceof DOMException && reason.name === 'AbortError') return;
+      setError(reason instanceof Error ? reason.message : 'report_unavailable');
+      setState('error');
+    });
+    return () => controller.abort();
+  }, [range]);
+  const maxImpressions = Math.max(1, ...(data?.daily.map((row) => row.impressions) ?? []));
+  return (
+    <section className="ads-report" aria-label="Relatório de publicidade">
+      <form className="ads-report__filters" onSubmit={(event) => { event.preventDefault(); setRange({ ...draft }); }}>
+        <label>De <input type="date" value={draft.from} max={draft.to} onChange={(event) => setDraft({ ...draft, from: event.target.value })} /></label>
+        <label>Até <input type="date" value={draft.to} min={draft.from} onChange={(event) => setDraft({ ...draft, to: event.target.value })} /></label>
+        <button type="submit" disabled={!draft.from || !draft.to || draft.from > draft.to}>Atualizar relatório</button>
+        <span>Até 92 dias por consulta</span>
+      </form>
+      {state === 'loading' && <p role="status">Carregando dados reais de veiculação…</p>}
+      {state === 'error' && <p role="alert">Relatório indisponível: {error}. Verifique a migração ads-v2.</p>}
+      {state === 'ready' && data && (
+        <>
+          <p className="ads-report__note">Impressões contabilizadas após visibilidade na tela; cliques únicos por exibição. Não inclui dados anteriores à ativação deste recurso.</p>
+          <div className="ads-report__kpis">
+            <article><strong>{countAds(data.summary.impressions)}</strong><span>Impressões visíveis</span></article>
+            <article><strong>{countAds(data.summary.clicks)}</strong><span>Cliques registrados</span></article>
+            <article><strong>{ctrAds(data.summary)}</strong><span>Taxa de cliques (CTR)</span></article>
+          </div>
+          <h2>Desempenho por anunciante</h2>
+          <div className="ads-report__scroll"><table><thead><tr><th>Anunciante</th><th>Impressões</th><th>Cliques</th><th>CTR</th></tr></thead><tbody>
+            {data.advertisers.map((row) => <tr key={row.id}><th>{row.name}</th><td>{countAds(row.impressions)}</td><td>{countAds(row.clicks)}</td><td>{ctrAds(row)}</td></tr>)}
+          </tbody></table></div>
+          <h2>Campanhas</h2>
+          <div className="ads-report__scroll"><table><thead><tr><th>Campanha</th><th>Anunciante</th><th>Impressões</th><th>Cliques</th><th>CTR</th></tr></thead><tbody>
+            {data.campaigns.map((row) => <tr key={row.id}><th>{row.name}</th><td>{row.advertiserName}</td><td>{countAds(row.impressions)}</td><td>{countAds(row.clicks)}</td><td>{ctrAds(row)}</td></tr>)}
+          </tbody></table></div>
+          <h2>Posições</h2>
+          <div className="ads-report__scroll"><table><thead><tr><th>Posição</th><th>Impressões</th><th>Cliques</th><th>CTR</th></tr></thead><tbody>
+            {data.slots.map((row) => <tr key={row.code}><th>{row.name}</th><td>{countAds(row.impressions)}</td><td>{countAds(row.clicks)}</td><td>{ctrAds(row)}</td></tr>)}
+          </tbody></table></div>
+          <h2>Evolução diária</h2>
+          {data.daily.length === 0 ? <p>Sem anúncios visualizados neste período.</p> : (
+            <div className="ads-report__timeline">
+              {data.daily.map((row) => <div key={row.day} className="ads-report__day">
+                <span>{row.day.split('-').reverse().join('/')}</span>
+                <div><i style={{ width: (row.impressions * 100 / maxImpressions) + '%' }} /></div>
+                <strong>{countAds(row.impressions)}</strong>
+                <small>{countAds(row.clicks)} cliques</small>
+              </div>)}
+            </div>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
 export function AdminAds({ csrfToken }: { csrfToken: string }) {
   const [data, setData] = useState<AdsData | null>(null);
-  const [tab, setTab] = useState<'advertisers' | 'campaigns' | 'creatives' | 'slots' | 'placements'>('creatives');
+  const [tab, setTab] = useState<'advertisers' | 'campaigns' | 'creatives' | 'slots' | 'placements' | 'reports'>('creatives');
   const [state, setState] = useState<'loading' | 'idle' | 'saving' | 'error'>('loading');
   const [errorCode, setErrorCode] = useState('');
   const [builderOpen, setBuilderOpen] = useState(false);
+  const [mediaOpen, setMediaOpen] = useState(false);
 
   const [advertiser, setAdvertiser] = useState<AdvertiserDraft>({ ...EMPTY_ADVERTISER });
   const [campaign, setCampaign] = useState<CampaignDraft>({ ...EMPTY_CAMPAIGN });
@@ -450,6 +629,7 @@ export function AdminAds({ csrfToken }: { csrfToken: string }) {
       setData(snapshot);
       reset();
       setBuilderOpen(false);
+      setMediaOpen(false);
       setState('idle');
     } catch (error) {
       setErrorCode(error instanceof Error ? error.message : 'ads_save_failed');
@@ -508,6 +688,7 @@ export function AdminAds({ csrfToken }: { csrfToken: string }) {
           ['creatives', 'Criativos'],
           ['slots', 'Posições'],
           ['placements', 'Veiculação'],
+          ['reports', 'Relatórios'],
         ] as const).map(([key, label]) => (
           <button
             type="button"
@@ -652,6 +833,11 @@ export function AdminAds({ csrfToken }: { csrfToken: string }) {
               {creative.kind === 'image' ? (
                 <>
                   <label className="admin-editor-field"><span>URL da imagem</span><input placeholder="/wp-content/uploads/... ou https://" value={creative.imageUrl} onChange={(e) => setCreative({ ...creative, imageUrl: e.target.value })} /></label>
+                  <button className="ads-builder-button" type="button" onClick={() => setMediaOpen((open) => !open)}>{mediaOpen ? 'Fechar biblioteca' : 'Escolher da Biblioteca de Mídias'}</button>
+                  {mediaOpen && <AdMediaPicker size={creative.width + '×' + creative.height} onClose={() => setMediaOpen(false)} onSelect={(item) => {
+                    setCreative({ ...creative, imageUrl: item.url, altText: item.alt || item.title });
+                    setMediaOpen(false);
+                  }} />}
                   <label className="admin-editor-field"><span>Texto alternativo</span><input value={creative.altText} onChange={(e) => setCreative({ ...creative, altText: e.target.value })} /></label>
                 </>
               ) : (
@@ -687,6 +873,8 @@ export function AdminAds({ csrfToken }: { csrfToken: string }) {
           </div>
         </div>
       )}
+
+      {tab === 'reports' && <AdsReports />}
 
       {tab === 'placements' && (
         <div className="ads-workspace">
