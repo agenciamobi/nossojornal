@@ -331,10 +331,12 @@ nj_m2m_run('POST', 'editorial.media.import', static function (array $context): a
         // Store editorial metadata on the attachment, the library's source of truth.
         // A reused asset keeps the original binary while its credited metadata
         // can be curated for the currently attached draft.
-        nj_admin_upsert_postmeta($pdo, $attachmentId, '_nj_media_credit', $credit);
-        nj_admin_upsert_postmeta($pdo, $attachmentId, '_nj_media_license', $license);
-        nj_admin_upsert_postmeta($pdo, $attachmentId, '_nj_media_seo_title', $seoTitle);
-        nj_admin_upsert_postmeta($pdo, $attachmentId, '_nj_media_seo_description', $seoDescription);
+        if (!$reused) {
+            nj_admin_upsert_postmeta($pdo, $attachmentId, '_nj_media_credit', $credit);
+            nj_admin_upsert_postmeta($pdo, $attachmentId, '_nj_media_license', $license);
+            nj_admin_upsert_postmeta($pdo, $attachmentId, '_nj_media_seo_title', $seoTitle);
+            nj_admin_upsert_postmeta($pdo, $attachmentId, '_nj_media_seo_description', $seoDescription);
+        }
         if ($featured) {
             nj_admin_upsert_postmeta($pdo, $postId, '_thumbnail_id', (string) $attachmentId);
             nj_admin_upsert_postmeta($pdo, $postId, '_nj_image_credit', $credit);

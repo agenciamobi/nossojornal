@@ -83,10 +83,14 @@ nj_m2m_run('POST', 'editorial.video.attach', static function (array $context): a
             nj_admin_upsert_postmeta($pdo, $attachmentId, '_nj_remote_media_source_url', $canonical);
             nj_admin_upsert_postmeta($pdo, $attachmentId, '_wp_attachment_image_alt', '');
         }
-        nj_admin_upsert_postmeta($pdo, $attachmentId, '_nj_media_credit', $credit);
-        nj_admin_upsert_postmeta($pdo, $attachmentId, '_nj_media_license', $license);
-        nj_admin_upsert_postmeta($pdo, $attachmentId, '_nj_media_seo_title', $seoTitle);
-        nj_admin_upsert_postmeta($pdo, $attachmentId, '_nj_media_seo_description', $seoDescription);
+        // Reusing a library record never overwrites metadata already curated
+        // for another news item, especially a potentially published one.
+        if (!$reused) {
+            nj_admin_upsert_postmeta($pdo, $attachmentId, '_nj_media_credit', $credit);
+            nj_admin_upsert_postmeta($pdo, $attachmentId, '_nj_media_license', $license);
+            nj_admin_upsert_postmeta($pdo, $attachmentId, '_nj_media_seo_title', $seoTitle);
+            nj_admin_upsert_postmeta($pdo, $attachmentId, '_nj_media_seo_description', $seoDescription);
+        }
 
         $linked = $pdo->prepare(
             "SELECT meta_value FROM {$meta} WHERE post_id = :post AND meta_key = '_nj_editorial_video_attachment_ids'

@@ -57,6 +57,35 @@ nj_m2m_run('POST', 'editorial.media.update', static function (array $context): a
         if (!is_array($attachment)) {
             throw new NjApiHttpException(409, 'media_update_draft_required');
         }
+
+        // Library records can be reused across posts. MCP must not silently
+        // rewrite metadata visible on a published/scheduled/private article.
+        $publishedFeatured = $pdo->prepare(
+            "SELECT 1 FROM {$meta} m
+             INNER JOIN {$posts} p ON p.ID = m.post_id AND p.post_type = 'post'
+                 AND p.post_status IN ('publish','future','private')
+             WHERE m.meta_key = '_thumbnail_id' AND m.meta_value = :id
+             LIMIT 1"
+        );
+        $publishedFeatured->execute(['id' => (string) $id]);
+        if ($publishedFeatured->fetchColumn()) {
+            throw new NjApiHttpException(409, 'media_used_by_published_post');
+        }
+        if ((string) $attachment['post_mime_type'] === 'video/x-embed') {
+            $publishedVideo = $pdo->prepare(
+                "SELECT 1 FROM {$meta} m
+                 INNER JOIN {$posts} p ON p.ID = m.post_id AND p.post_type = 'post'
+                     AND p.post_status IN ('publish','future','private')
+                 WHERE m.meta_key = '_nj_editorial_video_attachment_ids'
+                   AND JSON_CONTAINS(IF(JSON_VALID(m.meta_value), m.meta_value, '[]'), :needle, '$') = 1
+                 LIMIT 1"
+            );
+            $publishedVideo->execute(['needle' => json_encode($id, JSON_THROW_ON_ERROR)]);
+            if ($publishedVideo->fetchColumn()) {
+                throw new NjApiHttpException(409, 'media_used_by_published_post');
+            }
+        }
+
         if ($attachment['post_mime_type'] === 'video/x-embed' && array_key_exists('alt', $fields)) {
             throw new NjApiHttpException(422, 'video_alt_not_supported');
         }
