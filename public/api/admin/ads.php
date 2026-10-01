@@ -279,7 +279,149 @@ nj_admin_run(['GET', 'POST'], static function (string $method): array {
     $creatives = nj_app_table('ad_creatives');
     $placements = nj_app_table('ad_placements');
 
-    if ($entity === 'advertiser') {
+    if ($entity === 'quick_banner') {
+        // One verified operation replaces the manual advertiser -> campaign ->
+        // creative -> placement sequence. No partially published campaigns.
+        $name = nj_ads_string($body, 'name', 190);
+        $advertiserId = max(0, (int) ($body['advertiserId'] ?? 0));
+        $newAdvertiserName = nj_ads_string($body, 'newAdvertiserName', 190);
+        $mediaId = max(0, (int) ($body['mediaId'] ?? 0));
+        $slotId = max(0, (int) ($body['slotId'] ?? 0));
+        $device = (string) ($body['device'] ?? 'desktop');
+        $width = (int) ($body['width'] ?? 0);
+        $height = (int) ($body['height'] ?? 0);
+        $priority = min(1000, max(0, (int) ($body['priority'] ?? 100)));
+        if ($name === '' || $mediaId <= 0 || $slotId <= 0
+            || !in_array($device, ['desktop','mobile','all'], true)
+            || $width <= 0 || $height <= 0
+            || ($advertiserId <= 0 && $newAdvertiserName === '')
+            || ($advertiserId > 0 && $newAdvertiserName !== '')
+        ) {
+            throw new NjApiHttpException(422, 'quick_banner_required_fields');
+        }
+        $size = $width . 'x' . $height;
+        $supported = false;
+        foreach (NJ_AD_FORMATS as $format) {
+            if ($format['width'] === $width && $format['height'] === $height
+                && ($format['device'] === 'all' || $device === $format['device'])) {
+                $supported = true;
+                break;
+            }
+        }
+        if (!$supported) throw new NjApiHttpException(422, 'quick_banner_invalid_format_device');
+
+        $startsAt = nj_ads_nullable_datetime($body['startsAt'] ?? null);
+        $endsAt = nj_ads_nullable_datetime($body['endsAt'] ?? null);
+        if ($startsAt && $endsAt && $startsAt > $endsAt) {
+            throw new NjApiHttpException(422, 'invalid_campaign_window');
+        }
+        $clickUrl = nj_ads_url(nj_ads_string($body, 'clickUrl', 1500));
+        if ($clickUrl !== null && filter_var($clickUrl, FILTER_VALIDATE_URL) === false) {
+            throw new NjApiHttpException(422, 'invalid_ad_url');
+        }
+
+        $slotStatement = $pdo->prepare("SELECT enabled,allowed_sizes FROM {$slots} WHERE id=:id LIMIT 1");
+        $slotStatement->execute(['id' => $slotId]);
+        $slotRow = $slotStatement->fetch();
+        if (!$slotRow || !(bool) $slotRow['enabled']
+            || !in_array($size, array_map('trim', explode(',', (string) $slotRow['allowed_sizes'])), true)) {
+            throw new NjApiHttpException(422, 'quick_banner_slot_incompatible');
+        }
+        if ($advertiserId > 0) {
+            $checkAdvertiser = $pdo->prepare("SELECT status FROM {$advertisers} WHERE id=:id LIMIT 1");
+            $checkAdvertiser->execute(['id' => $advertiserId]);
+            if ($checkAdvertiser->fetchColumn() !== 'active') {
+                throw new NjApiHttpException(422, 'quick_banner_advertiser_inactive');
+            }
+        } else {
+            $newSlug = nj_ads_slug($newAdvertiserName);
+            $checkSlug = $pdo->prepare("SELECT id FROM {$advertisers} WHERE slug=:slug LIMIT 1");
+            $checkSlug->execute(['slug' => $newSlug]);
+            if ($checkSlug->fetchColumn() !== false) {
+                throw new NjApiHttpException(409, 'advertiser_already_exists');
+            }
+        }
+
+        $posts = nj_table('posts');
+        $postmeta = nj_table('postmeta');
+        $mediaStmt = $pdo->prepare(
+            "SELECT p.post_title,p.post_mime_type,p.guid,
+                COALESCE((SELECT pm.meta_value FROM {$postmeta} pm
+                  WHERE pm.post_id=p.ID AND pm.meta_key='_wp_attached_file'
+                  ORDER BY pm.meta_id DESC LIMIT 1),'') AS attached_file,
+                COALESCE((SELECT pm.meta_value FROM {$postmeta} pm
+                  WHERE pm.post_id=p.ID AND pm.meta_key='_wp_attachment_metadata'
+                  ORDER BY pm.meta_id DESC LIMIT 1),'') AS attachment_metadata,
+                COALESCE((SELECT pm.meta_value FROM {$postmeta} pm
+                  WHERE pm.post_id=p.ID AND pm.meta_key='_wp_attachment_image_alt'
+                  ORDER BY pm.meta_id DESC LIMIT 1),'') AS alt_text
+             FROM {$posts} p
+             WHERE p.ID=:id AND p.post_type='attachment' LIMIT 1"
+        );
+        $mediaStmt->execute(['id' => $mediaId]);
+        $media = $mediaStmt->fetch();
+        if (!$media || !in_array($media['post_mime_type'], ['image/jpeg','image/png','image/webp','image/gif'], true)) {
+            throw new NjApiHttpException(422, 'quick_banner_image_required');
+        }
+        $descriptor = nj_media_descriptor(
+            (string) $media['guid'], (string) $media['attached_file'],
+            (string) $media['attachment_metadata'], (string) $media['alt_text'],
+            (string) $media['post_title']
+        );
+        $imageUrl = is_array($descriptor) ? (string) ($descriptor['url'] ?? '') : '';
+        if ($imageUrl === '' || nj_ads_url($imageUrl, true) === null) {
+            throw new NjApiHttpException(422, 'quick_banner_image_unavailable');
+        }
+        $altText = is_array($descriptor) && trim((string) ($descriptor['alt'] ?? '')) !== ''
+            ? (string) $descriptor['alt'] : $name;
+
+        $pdo->beginTransaction();
+        try {
+            if ($advertiserId === 0) {
+                $createAdvertiser = $pdo->prepare(
+                    "INSERT INTO {$advertisers} (name,slug,status) VALUES (:name,:slug,'active')"
+                );
+                $createAdvertiser->execute(['name' => $newAdvertiserName, 'slug' => $newSlug]);
+                $advertiserId = (int) $pdo->lastInsertId();
+            }
+            $createCampaign = $pdo->prepare(
+                "INSERT INTO {$campaigns}
+                  (advertiser_id,name,status,starts_at,ends_at,priority,created_by)
+                 VALUES (:advertiser_id,:name,'active',:starts_at,:ends_at,:priority,:created_by)"
+            );
+            $createCampaign->execute([
+                'advertiser_id' => $advertiserId,'name' => $name,
+                'starts_at' => $startsAt,'ends_at' => $endsAt,
+                'priority' => $priority,'created_by' => (int) $user['id'],
+            ]);
+            $newCampaignId = (int) $pdo->lastInsertId();
+            $createCreative = $pdo->prepare(
+                "INSERT INTO {$creatives}
+                  (campaign_id,name,kind,width,height,image_url,click_url,alt_text,status)
+                 VALUES (:campaign_id,:name,'image',:width,:height,:image_url,:click_url,:alt_text,'active')"
+            );
+            $createCreative->execute([
+                'campaign_id' => $newCampaignId,'name' => $name,
+                'width' => $width,'height' => $height,'image_url' => $imageUrl,
+                'click_url' => $clickUrl,'alt_text' => $altText,
+            ]);
+            $newCreativeId = (int) $pdo->lastInsertId();
+            $createPlacement = $pdo->prepare(
+                "INSERT INTO {$placements}
+                  (campaign_id,creative_id,slot_id,device,status,priority)
+                 VALUES (:campaign_id,:creative_id,:slot_id,:device,'active',:priority)"
+            );
+            $createPlacement->execute([
+                'campaign_id' => $newCampaignId,'creative_id' => $newCreativeId,
+                'slot_id' => $slotId,'device' => $device,'priority' => $priority,
+            ]);
+            $pdo->commit();
+        } catch (Throwable $error) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            throw $error;
+        }
+        return nj_ads_snapshot($pdo);
+    } elseif ($entity === 'advertiser') {
         $name = nj_ads_string($body, 'name', 190);
         if ($name === '') throw new NjApiHttpException(422, 'advertiser_name_required');
 

@@ -28,6 +28,13 @@ const checks = [
   ['clicks deduplicated by token in SQL', file('public/api/v1/ad-click.php').includes('click_at IS NULL')],
   ['reports require admin capability', file('public/api/admin/ads-report.php').includes("nj_admin_require_capability($user, 'manage_options')")],
   ['telemetry table has unique tickets', file('database/ads-v2.sql').includes('UNIQUE KEY njapp_ad_serves_token_uq')],
+  ['quick publication atomic transaction', file('public/api/admin/ads.php').includes("if ($entity === 'quick_banner')") && file('public/api/admin/ads.php').includes('$pdo->beginTransaction()')],
+  ['quick publication derives image from verified library media', file('public/api/admin/ads.php').includes("p.post_type='attachment'") && file('public/api/admin/ads.php').includes('nj_media_descriptor')],
+  ['quick publication rejects invalid slot', file('public/api/admin/ads.php').includes('quick_banner_slot_incompatible')],
+  ['quick publication front-end default', file('src/AdminAds.tsx').includes("('quick')")],
+  ['quick form media uploader', file('src/AdminAds.tsx').includes('/api/admin/media-upload.php')],
+  ['quick form avoids nested media form', file('src/AdminAds.tsx').includes('ads-media-picker__search')],
+
 ];
 for (const [label, result] of checks) {
   assert.ok(result, label);
