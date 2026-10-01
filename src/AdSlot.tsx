@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import './ads.css';
 
 type AdCreative = {
+  token: string;
   placementId: number;
   campaignId: number;
   campaignName: string;
@@ -64,6 +65,9 @@ export function AdSlot({
 }) {
   const [ad, setAd] = useState<AdCreative | null>(null);
   const [ready, setReady] = useState(false);
+  const [mediaReady, setMediaReady] = useState(false);
+  const [rotation, setRotation] = useState(0);
+  const displayRef = useRef<HTMLElement | null>(null);
   const [device, setDevice] = useState<'desktop' | 'mobile'>(() =>
     window.matchMedia('(max-width: 720px)').matches ? 'mobile' : 'desktop'
   );
@@ -76,8 +80,14 @@ export function AdSlot({
   }, []);
 
   useEffect(() => {
+    const rotate = () => { if (document.visibilityState === 'visible') setRotation((count) => count + 1); };
+    const timer = window.setInterval(rotate, 60000);
+    document.addEventListener('visibilitychange', rotate);
+    return () => { window.clearInterval(timer); document.removeEventListener('visibilitychange', rotate); };
+  }, []);
+
+  useEffect(() => {
     const controller = new AbortController();
-    setReady(false);
 
     void fetch(
       '/api/v1/ads.php?slot=' + encodeURIComponent(slot) + '&device=' + encodeURIComponent(device),
@@ -92,6 +102,7 @@ export function AdSlot({
       })
       .then((payload) => {
         if (!payload.ok || !payload.data) throw new Error('ad_slot_invalid');
+        setMediaReady(false);
         setAd(payload.data.ad);
         setReady(true);
       })
@@ -102,7 +113,48 @@ export function AdSlot({
       });
 
     return () => controller.abort();
-  }, [slot, device]);
+  }, [slot, device, rotation]);
+
+  // A selection request is not an impression. Register only after the banner
+  // is at least half visible for a full second in a visible browser tab.
+  useEffect(() => {
+    if (!ad?.token || !ready || !mediaReady || !displayRef.current || !('IntersectionObserver' in window)) return;
+    let timeout: number | undefined;
+    let recorded = false;
+    const token = ad.token;
+    const observer = new IntersectionObserver((entries) => {
+      if (recorded || document.visibilityState !== 'visible' || !entries.some((entry) => entry.isIntersecting && entry.intersectionRatio >= 0.5)) {
+        window.clearTimeout(timeout);
+        timeout = undefined;
+        return;
+      }
+      if (timeout !== undefined) return;
+      timeout = window.setTimeout(() => {
+        if (document.visibilityState !== 'visible') return;
+        recorded = true;
+        observer.disconnect();
+        void fetch('/api/v1/ad-event.php', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'impression', token }),
+          keepalive: true,
+        }).catch(() => { /* Metrics are best-effort and never block editorial rendering. */ });
+      }, 1000);
+    }, { threshold: [0, 0.5, 1] });
+    observer.observe(displayRef.current);
+    const visibility = () => {
+      if (document.visibilityState !== 'visible') {
+        window.clearTimeout(timeout);
+        timeout = undefined;
+      }
+    };
+    document.addEventListener('visibilitychange', visibility);
+    return () => {
+      window.clearTimeout(timeout);
+      observer.disconnect();
+      document.removeEventListener('visibilitychange', visibility);
+    };
+  }, [ad?.token, ready, mediaReady]);
 
   const style = useMemo(
     () =>
@@ -121,6 +173,7 @@ export function AdSlot({
 
   return (
     <aside
+      ref={displayRef}
       className={'ad-slot ' + className}
       data-ad-slot={slot}
       data-ad-kind={ad.kind}
@@ -132,36 +185,42 @@ export function AdSlot({
       <div className="ad-slot__frame">
         {ad.kind === 'image' ? (
           ad.clickUrl ? (
-            <a href={ad.clickUrl} target="_blank" rel="sponsored noopener noreferrer">
+            <a href={'/api/v1/ad-click.php?t=' + encodeURIComponent(ad.token)} target="_blank" rel="sponsored noopener noreferrer">
               <img
+              key={ad.token}
                 src={ad.imageUrl}
                 width={ad.width}
                 height={ad.height}
                 alt={ad.altText || ad.name}
+                onLoad={() => setMediaReady(true)}
               />
             </a>
           ) : (
             <img
+              key={ad.token}
               src={ad.imageUrl}
               width={ad.width}
               height={ad.height}
               alt={ad.altText || ad.name}
+                onLoad={() => setMediaReady(true)}
             />
           )
         ) : (
           <>
             <iframe
+              key={ad.token}
               title={ad.name}
               sandbox=""
               scrolling="no"
               srcDoc={htmlCreativeDocument(ad)}
+              onLoad={() => setMediaReady(true)}
               width={ad.width}
               height={ad.height}
             />
             {ad.clickUrl && (
               <a
                 className="ad-slot__click-overlay"
-                href={ad.clickUrl}
+                href={'/api/v1/ad-click.php?t=' + encodeURIComponent(ad.token)}
                 target="_blank"
                 rel="sponsored noopener noreferrer"
                 aria-label={'Abrir anúncio de ' + ad.advertiser.name}

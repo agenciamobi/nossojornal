@@ -358,3 +358,130 @@
   padding-left: 17px;
 }
 .ads-placement-readiness p { margin: 0; }
+
+
+/* Library browser is part of the existing creative editor, not a separate media store. */
+.ads-media-picker {
+  display: grid;
+  gap: 13px;
+  padding: 15px;
+  border: 1px solid #dce5ef;
+  border-radius: 15px;
+  background: #f8fafd;
+}
+.ads-media-picker__head,
+.ads-media-picker form,
+.ads-media-picker__pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+.ads-media-picker__head > div { display: grid; gap: 4px; }
+.ads-media-picker__head strong { color: #13396c; }
+.ads-media-picker__head small { color: #667184; }
+.ads-media-picker button, .ads-report__filters button {
+  padding: 8px 12px;
+  border: 1px solid #bdcce0;
+  border-radius: 9px;
+  background: #fff;
+  color: #0a3284;
+  cursor: pointer;
+}
+.ads-media-picker button:disabled { opacity: .5; cursor: not-allowed; }
+.ads-media-picker form input {
+  min-width: 130px;
+  flex: 1;
+  padding: 9px 11px;
+  border: 1px solid #cbd5e1;
+  border-radius: 9px;
+}
+.ads-media-picker__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(124px, 1fr));
+  gap: 10px;
+  max-height: 460px;
+  overflow: auto;
+}
+.ads-media-picker__grid button {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  padding: 7px;
+  min-width: 0;
+  text-align: left;
+  overflow: hidden;
+}
+.ads-media-picker__grid button:hover, .ads-media-picker__grid button:focus-visible {
+  border-color: #0a3284;
+  outline: 2px solid #a3bee7;
+}
+.ads-media-picker__grid img {
+  width: 100%;
+  height: 84px;
+  object-fit: contain;
+  border-radius: 5px;
+  background: #eaf0f8;
+}
+.ads-media-picker__grid strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+}
+.ads-media-picker__grid span { font-size: 10px; color: #64748b; }
+.ads-report { display: grid; gap: 20px; }
+.ads-report__filters {
+  display: flex;
+  align-items: end;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 14px;
+  border-radius: 14px;
+  background: #f1f5fa;
+}
+.ads-report__filters label { display: grid; gap: 6px; font-size: 12px; font-weight: 700; }
+.ads-report__filters input {
+  min-height: 36px;
+  padding: 6px 9px;
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+}
+.ads-report__filters button { min-height: 36px; background: #0a3284; color: #fff; }
+.ads-report__filters > span { font-size: 11px; color: #667184; }
+.ads-report__note { margin: 0; font-size: 12px; line-height: 1.5; color: #5a6678; }
+.ads-report__kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.ads-report__kpis article {
+  display: grid;
+  gap: 8px;
+  border: 1px solid #dce5ef;
+  border-radius: 14px;
+  padding: 17px;
+  background: white;
+}
+.ads-report__kpis strong { font-size: clamp(22px, 3vw, 33px); color: #0a3284; }
+.ads-report__kpis span { font-size: 12px; color: #667184; }
+.ads-report h2 { margin: 10px 0 0; font-size: 18px; }
+.ads-report__scroll { overflow-x: auto; border: 1px solid #e0e5ed; border-radius: 12px; background: white; }
+.ads-report table { border-collapse: collapse; width: 100%; min-width: 530px; font-size: 12px; }
+.ads-report td, .ads-report th { padding: 12px; text-align: left; border-bottom: 1px solid #edf1f5; }
+.ads-report thead { background: #f2f6fc; color: #263e61; }
+.ads-report td:not(:first-child) { font-variant-numeric: tabular-nums; }
+.ads-report__timeline { display: grid; gap: 10px; }
+.ads-report__day {
+  display: grid;
+  align-items: center;
+  grid-template-columns: 92px minmax(0, 1fr) 54px 76px;
+  gap: 10px;
+  font-size: 11px;
+}
+.ads-report__day > div { height: 12px; overflow: hidden; border-radius: 6px; background: #e8eff9; }
+.ads-report__day i { display: block; height: 100%; background: #0a3284; border-radius: 6px; }
+.ads-report__day strong { text-align: right; }
+.ads-report__day small { color: #64748b; text-align: right; }
+@media (max-width: 680px) {
+  .ads-report__kpis { grid-template-columns: 1fr; }
+  .ads-report__day { grid-template-columns: 72px minmax(0, 1fr) 40px; }
+  .ads-report__day small { display: none; }
+}
