@@ -24,7 +24,7 @@ try {
         throw new NjApiHttpException(404, 'ad_not_found');
     }
     $update = nj_db()->prepare(
-        "UPDATE {$table} SET click_at = NOW()
+        "UPDATE {$table} SET click_at = NOW(), impression_at = COALESCE(impression_at, NOW())
          WHERE token = :token AND click_at IS NULL AND expires_at >= NOW()"
     );
     $update->execute(['token' => $token]);
