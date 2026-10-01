@@ -12,8 +12,9 @@
     "typecheck": "tsc --noEmit",
     "preview": "vite preview",
     "validate:m2m": "node scripts/validate-editorial-m2m.mjs",
-    "quality": "npm run validate:m2m && npm run validate:media && npm run typecheck && npm run build",
-    "validate:media": "node scripts/validate-editorial-media-import.mjs"
+    "quality": "npm run validate:m2m && npm run validate:media && npm run validate:ads && npm run typecheck && npm run build",
+    "validate:media": "node scripts/validate-editorial-media-import.mjs",
+    "validate:ads": "node scripts/validate-ads-inventory.mjs"
   },
   "dependencies": {
     "react": "18.3.1",
