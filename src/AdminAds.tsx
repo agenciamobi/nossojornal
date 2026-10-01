@@ -541,6 +541,7 @@ function QuickBannerForm({
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [status, setStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
   const [error, setError] = useState('');
+  const [updatingPlacement, setUpdatingPlacement] = useState<number | null>(null);
   const selectedSlot = data.slots.find((item) => item.id === draft.slotId);
   const allowedFormats = data.formats.filter((format) =>
     selectedSlot?.allowedSizes.includes(format.width + 'x' + format.height)
@@ -572,6 +573,31 @@ function QuickBannerForm({
       && slot.allowedSizes.includes((creative?.width ?? 0) + 'x' + (creative?.height ?? 0));
     return { ...item, eligible: Boolean(eligible), advertiser: advertiser?.name || 'Anunciante indisponível' };
   });
+
+  const competingTests = activeAds.filter((ad) =>
+    ad.eligible && ad.slotId === draft.slotId
+    && (ad.device === 'all' || draft.device === 'all' || ad.device === draft.device)
+    && ad.creativeName.toLocaleLowerCase('pt-BR').includes('teste') && ad.priority >= 500
+  );
+  async function togglePlacement(ad: typeof activeAds[number]) {
+    if (updatingPlacement !== null) return;
+    setUpdatingPlacement(ad.id);
+    try {
+      const snapshot = await adminRequest(csrfToken, {
+        entity: 'placement', id: ad.id, campaignId: ad.campaignId,
+        creativeId: ad.creativeId, slotId: ad.slotId, device: ad.device,
+        status: ad.status === 'active' ? 'paused' : 'active',
+        priority: ad.priority, startsAt: ad.startsAt || '', endsAt: ad.endsAt || '',
+      });
+      onSaved(snapshot);
+    } catch (reason) {
+      setError('Não foi possível mudar essa veiculação: '
+        + (reason instanceof Error ? reason.message : 'ads_update_failed'));
+      setStatus('error');
+    } finally {
+      setUpdatingPlacement(null);
+    }
+  }
 
   async function publish(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -708,6 +734,11 @@ function QuickBannerForm({
                 onChange={(event) => setDraft({ ...draft, priority: Number(event.target.value) })} />
             </label>
           </details>
+          {competingTests.length > 0 && (
+            <p className="ads-quick__help">Há {competingTests.length} banner(s) de teste com prioridade alta
+              neste espaço. Eles podem aparecer com mais frequência que o novo banner.
+              É possível pausá-los em “Banners cadastrados”, logo abaixo.</p>
+          )}
           {issues.length > 0 && <p className="ads-quick__help">{issues[0]}</p>}
           {status === 'error' && <p role="alert" className="ads-quick__error">{error}</p>}
           {status === 'success' && <p role="status" className="ads-quick__success">
@@ -738,8 +769,18 @@ function QuickBannerForm({
         {activeAds.length === 0 ? <p>Nenhuma veiculação ainda. Publique o primeiro banner acima.</p> : (
           <div className="ads-quick__records">
             {activeAds.map((ad) => <div key={ad.id}>
-              <div><strong>{ad.creativeName}</strong><span>{ad.advertiser} · {ad.slotName} · {ad.device}</span></div>
-              <small className={ad.eligible ? 'is-ready' : ''}>{ad.eligible ? 'Elegível' : 'Verificar configuração'}</small>
+              <div><strong>{ad.creativeName}</strong>
+                <span>{ad.advertiser} · {ad.slotName} · {ad.device} · Prioridade {ad.priority}</span>
+              </div>
+              <div className="ads-quick__record-actions">
+                <small className={ad.eligible ? 'is-ready' : ''}>
+                  {ad.status === 'paused' ? 'Pausado' : ad.eligible ? 'Elegível pela configuração' : 'Verificar configuração'}
+                </small>
+                <button type="button" disabled={updatingPlacement !== null}
+                  onClick={() => void togglePlacement(ad)}>
+                  {updatingPlacement === ad.id ? 'Salvando…' : ad.status === 'active' ? 'Pausar' : 'Ativar'}
+                </button>
+              </div>
             </div>)}
           </div>
         )}
