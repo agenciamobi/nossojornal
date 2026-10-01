@@ -452,6 +452,260 @@ function AdMediaPicker({
   );
 }
 
+type QuickBannerDraft = {
+  advertiserId: number;
+  newAdvertiserName: string;
+  name: string;
+  media: AdMediaItem | null;
+  slotId: number;
+  device: 'desktop' | 'mobile' | 'all';
+  size: string;
+  clickUrl: string;
+  startsAt: string;
+  endsAt: string;
+  priority: number;
+};
+
+const quickAdError: Record<string, string> = {
+  quick_banner_required_fields: 'Informe o anunciante, o título, a imagem e o local do anúncio.',
+  quick_banner_invalid_format_device: 'O formato escolhido não é compatível com o dispositivo.',
+  quick_banner_slot_incompatible: 'O espaço foi alterado. Selecione outro formato ou local.',
+  quick_banner_advertiser_inactive: 'Esse anunciante está inativo. Ative-o em Configurações avançadas ou escolha outro.',
+  quick_banner_image_required: 'A mídia escolhida não é uma imagem válida da Biblioteca.',
+  quick_banner_image_unavailable: 'Não foi possível localizar o arquivo original da imagem selecionada.',
+  advertiser_already_exists: 'Esse anunciante já existe. Escolha-o na lista.',
+  invalid_ad_url: 'O endereço de destino deve começar com https:// ou http:// e ser válido.',
+  invalid_campaign_window: 'A data final deve ser posterior à data inicial.',
+};
+
+function QuickBannerForm({
+  csrfToken, data, onSaved, onAdvanced,
+}: {
+  csrfToken: string;
+  data: AdsData;
+  onSaved: (snapshot: AdsData) => void;
+  onAdvanced: () => void;
+}) {
+  const defaultAdvertiser = data.advertisers.find((item) => item.status === 'active')?.id ?? -1;
+  const defaultSlot = data.slots.find((item) => item.enabled && item.code === 'header')?.id
+    ?? data.slots.find((item) => item.enabled)?.id ?? 0;
+  const [draft, setDraft] = useState<QuickBannerDraft>({
+    advertiserId: defaultAdvertiser,
+    newAdvertiserName: '', name: '', media: null,
+    slotId: defaultSlot, device: 'desktop', size: '970x90',
+    clickUrl: '', startsAt: '', endsAt: '', priority: 100,
+  });
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [status, setStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
+  const [error, setError] = useState('');
+  const selectedSlot = data.slots.find((item) => item.id === draft.slotId);
+  const allowedFormats = data.formats.filter((format) =>
+    selectedSlot?.allowedSizes.includes(format.width + 'x' + format.height)
+      && (format.device === 'all' || format.device === draft.device),
+  );
+  const validSize = allowedFormats.some((item) => item.width + 'x' + item.height === draft.size);
+  const selectedSize = validSize ? draft.size : (allowedFormats[0] ? allowedFormats[0].width + 'x' + allowedFormats[0].height : '');
+  const [width, height] = selectedSize.split('x').map(Number);
+  const issues = [
+    !selectedSlot && 'Não existe posição habilitada.',
+    allowedFormats.length === 0 && 'Esta posição não aceita formatos para o dispositivo escolhido.',
+    !draft.name.trim() && 'Informe o título do anúncio.',
+    draft.advertiserId === -1 && !draft.newAdvertiserName.trim() && 'Informe o nome do anunciante.',
+    !draft.media && 'Selecione uma imagem da Biblioteca de Mídias.',
+  ].filter((item): item is string => typeof item === 'string');
+  const activeAds = data.placements.map((item) => {
+    const campaign = data.campaigns.find((c) => c.id === item.campaignId);
+    const creative = data.creatives.find((c) => c.id === item.creativeId);
+    const advertiser = data.advertisers.find((a) => a.id === campaign?.advertiserId);
+    const slot = data.slots.find((record) => record.id === item.slotId);
+    const now = Date.now();
+    const inTime = (from: string | null, to: string | null) =>
+      (!from || new Date(from.replace(' ', 'T')).getTime() <= now)
+        && (!to || new Date(to.replace(' ', 'T')).getTime() >= now);
+    const eligible = item.status === 'active' && campaign?.status === 'active'
+      && creative?.status === 'active' && advertiser?.status === 'active'
+      && slot?.enabled && inTime(campaign.startsAt, campaign.endsAt)
+      && inTime(item.startsAt, item.endsAt)
+      && slot.allowedSizes.includes((creative?.width ?? 0) + 'x' + (creative?.height ?? 0));
+    return { ...item, eligible: Boolean(eligible), advertiser: advertiser?.name || 'Anunciante indisponível' };
+  });
+
+  async function publish(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (issues.length || !selectedSize || status === 'saving') return;
+    setStatus('saving');
+    setError('');
+    try {
+      const snapshot = await adminRequest(csrfToken, {
+        entity: 'quick_banner',
+        advertiserId: draft.advertiserId > 0 ? draft.advertiserId : 0,
+        newAdvertiserName: draft.advertiserId === -1 ? draft.newAdvertiserName.trim() : '',
+        name: draft.name.trim(), mediaId: draft.media?.id,
+        slotId: draft.slotId, device: draft.device,
+        width, height, clickUrl: draft.clickUrl.trim(),
+        startsAt: draft.startsAt, endsAt: draft.endsAt, priority: draft.priority,
+      });
+      onSaved(snapshot);
+      const newAdvertiser = snapshot.advertisers.find((item) => item.name === draft.newAdvertiserName.trim());
+      setDraft((current) => ({
+        ...current,
+        advertiserId: current.advertiserId === -1 ? (newAdvertiser?.id ?? -1) : current.advertiserId,
+        newAdvertiserName: '', name: '', media: null, clickUrl: '',
+      }));
+      setPickerOpen(false);
+      setStatus('success');
+    } catch (reason) {
+      const code = reason instanceof Error ? reason.message : 'ads_save_failed';
+      setError(quickAdError[code] ?? 'Não foi possível publicar. Código: ' + code);
+      setStatus('error');
+    }
+  }
+
+  return (
+    <div className="ads-quick">
+      <header className="ads-quick__intro">
+        <div><strong>Publicação rápida</strong><p>Um formulário para criar o anunciante, a campanha e a veiculação automaticamente.</p></div>
+        <a href="/" target="_blank" rel="noreferrer">Ver o portal ↗</a>
+      </header>
+      <form className="ads-quick__form" onSubmit={(event) => void publish(event)}>
+        <div className="ads-quick__fields">
+          <label className="admin-editor-field"><span>1. Anunciante</span>
+            <select value={draft.advertiserId} onChange={(event) => setDraft({ ...draft, advertiserId: Number(event.target.value) })}>
+              {data.advertisers.filter((item) => item.status === 'active').map((item) => (
+                <option value={item.id} key={item.id}>{item.name}</option>
+              ))}
+              <option value={-1}>+ Novo anunciante</option>
+            </select>
+          </label>
+          {draft.advertiserId === -1 && (
+            <label className="admin-editor-field"><span>Nome do novo anunciante</span>
+              <input value={draft.newAdvertiserName} maxLength={190} required
+                onChange={(event) => setDraft({ ...draft, newAdvertiserName: event.target.value })} />
+            </label>
+          )}
+          <label className="admin-editor-field"><span>2. Nome da campanha / banner</span>
+            <input value={draft.name} maxLength={190} required placeholder="Ex.: Promoção de outubro"
+              onChange={(event) => setDraft({ ...draft, name: event.target.value })} />
+          </label>
+          <div className="admin-editor-field">
+            <span>3. Imagem</span>
+            {draft.media ? (
+              <div className="ads-quick__media">
+                <img src={draft.media.url} alt={draft.media.alt || draft.media.title} />
+                <div><strong>{draft.media.title}</strong><small>{draft.media.width && draft.media.height
+                  ? draft.media.width + '×' + draft.media.height + ' pixels' : 'Dimensões não informadas'}</small>
+                  <button type="button" onClick={() => setPickerOpen(true)}>Trocar imagem</button>
+                </div>
+              </div>
+            ) : (
+              <button className="ads-quick__media-button" type="button"
+                onClick={() => setPickerOpen(true)}>Selecionar ou enviar imagem</button>
+            )}
+            {pickerOpen && <AdMediaPicker size={selectedSize || 'a definir'} csrfToken={csrfToken}
+              onClose={() => setPickerOpen(false)} onSelect={(item) => {
+                setDraft((current) => ({ ...current, media: item }));
+                setPickerOpen(false);
+              }} />}
+          </div>
+          <div className="ads-field-grid">
+            <label className="admin-editor-field"><span>4. Onde aparece?</span>
+              <select value={draft.slotId} onChange={(event) => {
+                const id = Number(event.target.value);
+                const next = data.slots.find((item) => item.id === id);
+                const match = data.formats.find((item) =>
+                  next?.allowedSizes.includes(item.width + 'x' + item.height)
+                  && (item.device === 'all' || item.device === draft.device));
+                setDraft({ ...draft, slotId: id, size: match ? match.width + 'x' + match.height : '' });
+              }}>
+                {data.slots.filter((item) => item.enabled).map((item) => (
+                  <option key={item.id} value={item.id}>{item.name}</option>
+                ))}
+              </select>
+            </label>
+            <label className="admin-editor-field"><span>Dispositivo</span>
+              <select value={draft.device} onChange={(event) => {
+                const device = event.target.value as QuickBannerDraft['device'];
+                const match = data.formats.find((item) =>
+                  selectedSlot?.allowedSizes.includes(item.width + 'x' + item.height)
+                  && (item.device === 'all' || item.device === device));
+                setDraft({ ...draft, device, size: match ? match.width + 'x' + match.height : '' });
+              }}>
+                <option value="desktop">Computador</option>
+                <option value="mobile">Celular</option>
+                <option value="all">Ambos (formato responsivo)</option>
+              </select>
+            </label>
+          </div>
+          <label className="admin-editor-field"><span>Formato</span>
+            <select value={selectedSize} disabled={!allowedFormats.length}
+              onChange={(event) => setDraft({ ...draft, size: event.target.value })}>
+              {allowedFormats.map((item) => (
+                <option key={item.width + 'x' + item.height} value={item.width + 'x' + item.height}>
+                  {item.width}×{item.height} · {item.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="admin-editor-field"><span>5. Link ao clicar (opcional)</span>
+            <input type="url" placeholder="https://site-do-anunciante.com.br" value={draft.clickUrl}
+              onChange={(event) => setDraft({ ...draft, clickUrl: event.target.value })} />
+          </label>
+          <details className="ads-quick__advanced" open={advancedOpen} onToggle={(event) => setAdvancedOpen(event.currentTarget.open)}>
+            <summary>Agendamento e prioridade (opcional)</summary>
+            <div className="ads-field-grid">
+              <label className="admin-editor-field"><span>Início</span>
+                <input type="datetime-local" value={draft.startsAt}
+                  onChange={(event) => setDraft({ ...draft, startsAt: event.target.value })} /></label>
+              <label className="admin-editor-field"><span>Fim</span>
+                <input type="datetime-local" value={draft.endsAt}
+                  onChange={(event) => setDraft({ ...draft, endsAt: event.target.value })} /></label>
+            </div>
+            <label className="admin-editor-field"><span>Prioridade (padrão: 100)</span>
+              <input type="number" min={0} max={1000} value={draft.priority}
+                onChange={(event) => setDraft({ ...draft, priority: Number(event.target.value) })} />
+            </label>
+          </details>
+          {issues.length > 0 && <p className="ads-quick__help">{issues[0]}</p>}
+          {status === 'error' && <p role="alert" className="ads-quick__error">{error}</p>}
+          {status === 'success' && <p role="status" className="ads-quick__success">
+            Banner criado e ativado. Ele passa a concorrer pela exibição conforme prioridade e dispositivo.
+            {draft.startsAt ? ' Respeitando o início agendado.' : ''}
+          </p>}
+          <button className="admin-button--primary ads-quick__submit" type="submit"
+            disabled={issues.length > 0 || !selectedSize || status === 'saving'}>
+            {status === 'saving' ? 'Publicando…' : 'Publicar banner'}
+          </button>
+        </div>
+        <aside className="ads-quick__preview">
+          <span>Prévia do espaço · {selectedSlot?.name ?? 'Selecione um espaço'}</span>
+          {draft.media && selectedSize ? (
+            <div className="ads-quick__preview-image" style={{ aspectRatio: width + '/' + height }}>
+              <img src={draft.media.url} alt={draft.media.alt || draft.name || 'Imagem selecionada'} />
+            </div>
+          ) : <div className="ads-quick__placeholder">Selecione a imagem para visualizar o banner.</div>}
+          <small>{selectedSize || 'Sem formato'} · {draft.device === 'desktop' ? 'Computador'
+            : draft.device === 'mobile' ? 'Celular' : 'Ambos'}.
+            A imagem será ajustada sem deformação.</small>
+        </aside>
+      </form>
+      <section className="ads-quick__registered">
+        <header><div><h2>Banners cadastrados</h2><p>Veja onde estão e se atendem às condições de exibição.</p></div>
+          <button type="button" onClick={onAdvanced}>Gerenciar veiculações</button>
+        </header>
+        {activeAds.length === 0 ? <p>Nenhuma veiculação ainda. Publique o primeiro banner acima.</p> : (
+          <div className="ads-quick__records">
+            {activeAds.map((ad) => <div key={ad.id}>
+              <div><strong>{ad.creativeName}</strong><span>{ad.advertiser} · {ad.slotName} · {ad.device}</span></div>
+              <small className={ad.eligible ? 'is-ready' : ''}>{ad.eligible ? 'Elegível' : 'Verificar configuração'}</small>
+            </div>)}
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
 type AdReportRow = { impressions: number; clicks: number };
 type AdReportData = {
   from: string; to: string;
@@ -548,7 +802,7 @@ function AdsReports() {
 
 export function AdminAds({ csrfToken }: { csrfToken: string }) {
   const [data, setData] = useState<AdsData | null>(null);
-  const [tab, setTab] = useState<'advertisers' | 'campaigns' | 'creatives' | 'slots' | 'placements' | 'reports'>('creatives');
+  const [tab, setTab] = useState<'quick' | 'advertisers' | 'campaigns' | 'creatives' | 'slots' | 'placements' | 'reports'>('quick');
   const [state, setState] = useState<'loading' | 'idle' | 'saving' | 'error'>('loading');
   const [errorCode, setErrorCode] = useState('');
   const [builderOpen, setBuilderOpen] = useState(false);
@@ -681,6 +935,12 @@ export function AdminAds({ csrfToken }: { csrfToken: string }) {
         </div>
       )}
 
+      <nav className="ads-tabs" aria-label="Áreas principais">
+        <button type="button" className={tab === 'quick' ? 'is-active' : ''} onClick={() => setTab('quick')}>Publicar banner</button>
+        <button type="button" className={tab === 'reports' ? 'is-active' : ''} onClick={() => setTab('reports')}>Relatórios</button>
+      </nav>
+      <details className="ads-advanced-navigation" id="ads-advanced-navigation">
+        <summary>Configurações avançadas e gestão</summary>
       <nav className="ads-tabs" aria-label="Áreas de publicidade">
         {([
           ['advertisers', 'Anunciantes'],
@@ -688,7 +948,6 @@ export function AdminAds({ csrfToken }: { csrfToken: string }) {
           ['creatives', 'Criativos'],
           ['slots', 'Posições'],
           ['placements', 'Veiculação'],
-          ['reports', 'Relatórios'],
         ] as const).map(([key, label]) => (
           <button
             type="button"
@@ -700,6 +959,14 @@ export function AdminAds({ csrfToken }: { csrfToken: string }) {
           </button>
         ))}
       </nav>
+      </details>
+
+      {tab === 'quick' && <QuickBannerForm csrfToken={csrfToken} data={data}
+        onSaved={setData} onAdvanced={() => {
+          setTab('placements');
+          const node = document.querySelector<HTMLDetailsElement>('#ads-advanced-navigation');
+          if (node) node.open = true;
+        }} />}
 
       {tab === 'advertisers' && (
         <div className="ads-workspace">
