@@ -16,6 +16,18 @@ const checks = [
   ['server validates placement format', file('public/api/admin/ads.php').includes('creative_size_not_allowed_for_slot')],
   ['admin filters compatible positions', file('src/AdminAds.tsx').includes("item.allowedSizes.includes(creativeSize)")],
   ['admin explains delivery readiness', file('src/AdminAds.tsx').includes('Elegível para exibição')],
+  ['image chooser uses existing media API', file('src/AdminAds.tsx').includes('/api/admin/media.php')],
+  ['media chooser has image MIME filter', file('src/AdminAds.tsx').includes("item.mimeType.startsWith('image/')")],
+  ['native reporting route is wired', file('src/AdminAds.tsx').includes('/api/admin/ads-report.php')],
+  ['delivery uses active slot and valid formats', file('public/api/v1/ads.php').includes('FIND_IN_SET')],
+  ['delivery is not cached', file('public/api/v1/ads.php').includes('private, no-store')],
+  ['rotating units refresh in visible tabs', file('src/AdSlot.tsx').includes('setInterval(rotate, 60000)')],
+  ['impressions require client visibility', file('src/AdSlot.tsx').includes('IntersectionObserver')],
+  ['impressions deduplicated by token in SQL', file('public/api/v1/ad-event.php').includes('impression_at IS NULL')],
+  ['click targets read only from server', file('public/api/v1/ad-click.php').includes('SELECT click_url')],
+  ['clicks deduplicated by token in SQL', file('public/api/v1/ad-click.php').includes('click_at IS NULL')],
+  ['reports require admin capability', file('public/api/admin/ads-report.php').includes("nj_admin_require_capability($user, 'manage_options')")],
+  ['telemetry table has unique tickets', file('database/ads-v2.sql').includes('UNIQUE KEY njapp_ad_serves_token_uq')],
 ];
 for (const [label, result] of checks) {
   assert.ok(result, label);
