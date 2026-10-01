@@ -8,6 +8,7 @@ import {
 import { AdminWordPressTools } from './AdminWordPressTools';
 import { AdminAds } from './AdminAds';
 import { AdminTags } from './AdminTags';
+import { AdminAuthorAvatar } from './AdminAuthorAvatar';
 import { useAdminEditorGuard } from './admin/useAdminEditorGuard';
 import './admin.css';
 import './admin-wp-parity.css';
@@ -39,6 +40,10 @@ type AdminPublicProfile = {
   slug: string;
   url: string | null;
   publishedCount: number;
+  firstName: string;
+  lastName: string;
+  avatarId: number;
+  avatar: { url: string; alt?: string } | null;
   bio: string;
   bioSource: 'nossojornal' | 'wordpress' | 'empty';
   role: string;
@@ -7946,10 +7951,26 @@ function UsersView() {
   );
 }
 
-function NewUserView({ csrfToken }: { csrfToken: string }) {
+function authorPublicSlug(value: string) {
+  return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80);
+}
+
+function NewUserView({ csrfToken, canUpload }: { csrfToken: string; canUpload: boolean }) {
   const [data, setData] = useState<UsersPayload['data']>();
   const [login, setLogin] = useState('');
   const [displayName, setDisplayName] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [publicSlug, setPublicSlug] = useState('');
+  const [publicRole, setPublicRole] = useState('');
+  const [publicBio, setPublicBio] = useState('');
+  const [avatarId, setAvatarId] = useState(0);
+  const [website, setWebsite] = useState('');
+  const [instagram, setInstagram] = useState('');
+  const [facebook, setFacebook] = useState('');
+  const [linkedin, setLinkedin] = useState('');
+  const [xProfile, setXProfile] = useState('');
   const [email, setEmail] = useState('');
   const [role, setRole] = useState('author');
   const [password, setPassword] = useState('');
@@ -7986,12 +8007,14 @@ function NewUserView({ csrfToken }: { csrfToken: string }) {
 
   const normalizedLogin = login.trim().toLowerCase();
   const loginValid = /^[a-z0-9][a-z0-9._-]{2,59}$/.test(normalizedLogin);
+  const publicSlugValid = /^[a-z0-9](?:[a-z0-9-]{0,78}[a-z0-9])?$/.test(publicSlug);
   const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
   const passwordValid = password.length >= 12;
   const passwordsMatch = password !== '' && password === passwordConfirm;
   const canSubmit =
     displayName.trim() !== ''
     && loginValid
+    && publicSlugValid
     && emailValid
     && passwordValid
     && passwordsMatch
@@ -8000,9 +8023,9 @@ function NewUserView({ csrfToken }: { csrfToken: string }) {
 
   const dirty = !created && [
     login,
-    displayName,
-    email,
-    password,
+    displayName, firstName, lastName, publicSlug, publicRole, publicBio,
+    website, instagram, facebook, linkedin, xProfile,
+    email, password,
     passwordConfirm,
   ].some((value) => value.trim() !== '');
 
@@ -8056,6 +8079,10 @@ function NewUserView({ csrfToken }: { csrfToken: string }) {
         body: JSON.stringify({
           login: normalizedLogin,
           displayName: displayName.trim(),
+          firstName: firstName.trim(), lastName: lastName.trim(), publicSlug,
+          publicRole: publicRole.trim(), publicBio: publicBio.trim(), avatarId,
+          website: website.trim(), instagram: instagram.trim(),
+          facebook: facebook.trim(), linkedin: linkedin.trim(), x: xProfile.trim(),
           email: email.trim(),
           password,
           role,
@@ -8078,6 +8105,8 @@ function NewUserView({ csrfToken }: { csrfToken: string }) {
       const code = cause instanceof Error ? cause.message : '';
       const messages: Record<string, string> = {
         user_already_exists: 'Já existe um usuário com este login ou e-mail.',
+        public_slug_exists: 'Esse endereço público já pertence a outro autor.',
+        invalid_public_slug: 'Use um endereço público com letras minúsculas, números e hífens.',
         invalid_user_login: 'Use um login com 3 a 60 caracteres: letras minúsculas, números, ponto, hífen ou sublinhado.',
         invalid_user_email: 'Informe um e-mail válido.',
         invalid_user_password: 'A senha precisa ter pelo menos 12 caracteres.',
@@ -8112,7 +8141,9 @@ function NewUserView({ csrfToken }: { csrfToken: string }) {
               onClick={() => {
                 setCreated(null);
                 setLogin('');
-                setDisplayName('');
+                setDisplayName(''); setFirstName(''); setLastName(''); setPublicSlug('');
+                setPublicRole(''); setPublicBio(''); setAvatarId(0);
+                setWebsite(''); setInstagram(''); setFacebook(''); setLinkedin(''); setXProfile('');
                 setEmail('');
                 setRole(data.roles.some((item) => item.key === 'author') ? 'author' : data.roles[0]?.key ?? '');
                 setPassword('');
@@ -8204,15 +8235,19 @@ function NewUserView({ csrfToken }: { csrfToken: string }) {
 
           <div className="admin-editor-card__body admin-editor-card__body--fields">
             <label className="admin-editor-field">
-              <span>Nome de exibição</span>
+              <span>Nome público</span>
               <input
                 value={displayName}
                 autoFocus
                 required
                 maxLength={250}
-                placeholder="Nome que aparece na redação"
+                placeholder="Nome e sobrenome publicados nas matérias"
                 onChange={(event) => {
-                  setDisplayName(event.target.value);
+                  const nextName = event.target.value;
+                  if (publicSlug === '' || publicSlug === authorPublicSlug(displayName)) {
+                    setPublicSlug(authorPublicSlug(nextName));
+                  }
+                  setDisplayName(nextName);
                   setSaveState('idle');
                 }}
               />
@@ -8239,7 +8274,7 @@ function NewUserView({ csrfToken }: { csrfToken: string }) {
                 }}
               />
               <small className="admin-field-help">
-                Mínimo de 3 caracteres. Esse login também vira o slug inicial do perfil público.
+                Login exclusivo para acessar o Sistema. Não altera o nome nem o endereço público.
               </small>
             </label>
 
@@ -8277,6 +8312,54 @@ function NewUserView({ csrfToken }: { csrfToken: string }) {
                 Autores e editores acessam a redação conforme as capabilities herdadas do papel WordPress.
               </small>
             </label>
+          </div>
+        </section>
+
+        <section className="admin-editor-card">
+          <div className="admin-editor-card__head">
+            <span>Colunista</span><strong>Perfil público</strong>
+          </div>
+          <div className="admin-editor-card__body admin-editor-card__body--fields">
+            <p className="admin-author-profile-help">O login é privado. O nome e endereço públicos identificam o autor nas matérias e no portal.</p>
+            <label className="admin-editor-field"><span>Primeiro nome</span>
+              <input value={firstName} maxLength={100} autoComplete="given-name"
+                onChange={(event) => { setFirstName(event.target.value); setSaveState('idle'); }} />
+            </label>
+            <label className="admin-editor-field"><span>Sobrenome</span>
+              <input value={lastName} maxLength={100} autoComplete="family-name"
+                onChange={(event) => { setLastName(event.target.value); setSaveState('idle'); }} />
+            </label>
+            <label className="admin-editor-field admin-editor-field--wide"><span>Endereço do perfil</span>
+              <div className="admin-author-profile-url"><span>nossojornal.com.br/autor/</span>
+                <input value={publicSlug} required maxLength={80} aria-invalid={publicSlug !== '' && !publicSlugValid}
+                  onChange={(event) => { setPublicSlug(event.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '')); setSaveState('idle'); }} />
+              </div>
+              <small>Independente do login. Exemplo: pablo-oliveira.</small>
+            </label>
+            <div className="admin-editor-field admin-editor-field--wide">
+              <AdminAuthorAvatar selectedId={avatarId} initialAvatar={null} csrfToken={csrfToken} canUpload={canUpload}
+                onChange={(id) => { setAvatarId(id); setSaveState('idle'); }} />
+            </div>
+            <label className="admin-editor-field"><span>Função editorial pública</span>
+              <input value={publicRole} maxLength={160} placeholder="Ex.: Colunista, Editor"
+                onChange={(event) => { setPublicRole(event.target.value); setSaveState('idle'); }} />
+            </label>
+            <label className="admin-editor-field admin-editor-field--wide"><span>Biografia pública</span>
+              <textarea value={publicBio} maxLength={3000} rows={4} placeholder="Áreas de interesse e experiência do autor."
+                onChange={(event) => { setPublicBio(event.target.value); setSaveState('idle'); }} />
+            </label>
+            {([
+              ['Site', website, setWebsite, 'https://'],
+              ['Instagram', instagram, setInstagram, 'https://instagram.com/'],
+              ['Facebook', facebook, setFacebook, 'https://facebook.com/'],
+              ['LinkedIn', linkedin, setLinkedin, 'https://linkedin.com/'],
+              ['X / Twitter', xProfile, setXProfile, 'https://x.com/'],
+            ] as const).map(([label, value, setter, placeholder]) => (
+              <label key={label} className="admin-editor-field"><span>{label}</span>
+                <input type="url" value={value} placeholder={placeholder}
+                  onChange={(event) => { setter(event.target.value); setSaveState('idle'); }} />
+              </label>
+            ))}
           </div>
         </section>
 
@@ -10928,7 +11011,7 @@ export function AdminApp() {
           {view === 'users' && <UsersView />}
           {view === 'userNew' && (
             user.capabilities.includes('create_users') && user.capabilities.includes('promote_users')
-              ? <NewUserView csrfToken={csrfToken} />
+              ? <NewUserView csrfToken={csrfToken} canUpload={user.permissions.uploadFiles} />
               : <AdminAccessDenied />
           )}
           {view === 'user' && <UserEditorView user={user} csrfToken={csrfToken} />}
