@@ -457,8 +457,27 @@ export function AdminAds({ csrfToken }: { csrfToken: string }) {
     }
   }
 
-  if (state === 'loading' || !data) {
+  if (state === 'loading') {
     return <div className="admin-loading" aria-busy="true"><span /><span /><span /></div>;
+  }
+
+  if (!data) {
+    return (
+      <div className="admin-save-feedback admin-save-feedback--error" role="alert">
+        Não foi possível carregar o gerenciador de publicidade ({errorCode || 'ads_load_failed'}).
+        <button type="button" onClick={() => {
+          setState('loading');
+          setErrorCode('');
+          void adminRequest(csrfToken).then((snapshot) => {
+            setData(snapshot);
+            setState('idle');
+          }).catch((error) => {
+            setErrorCode(error instanceof Error ? error.message : 'ads_load_failed');
+            setState('error');
+          });
+        }}>Tentar novamente</button>
+      </div>
+    );
   }
 
   return (
