@@ -515,6 +515,7 @@ const quickAdError: Record<string, string> = {
   quick_banner_advertiser_inactive: 'Esse anunciante está inativo. Ative-o em Configurações avançadas ou escolha outro.',
   quick_banner_image_required: 'A mídia escolhida não é uma imagem válida da Biblioteca.',
   quick_banner_image_unavailable: 'Não foi possível localizar o arquivo original da imagem selecionada.',
+  quick_banner_image_ratio: 'A proporção da imagem difere muito do espaço. Envie um banner no formato indicado.',
   advertiser_already_exists: 'Esse anunciante já existe. Escolha-o na lista.',
   invalid_ad_url: 'O endereço de destino deve começar com https:// ou http:// e ser válido.',
   invalid_campaign_window: 'A data final deve ser posterior à data inicial.',
