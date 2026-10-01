@@ -12,7 +12,8 @@
     "typecheck": "tsc --noEmit",
     "preview": "vite preview",
     "validate:m2m": "node scripts/validate-editorial-m2m.mjs",
-    "quality": "npm run validate:m2m && npm run typecheck && npm run build"
+    "quality": "npm run validate:m2m && npm run validate:media && npm run typecheck && npm run build",
+    "validate:media": "node scripts/validate-editorial-media-import.mjs"
   },
   "dependencies": {
     "react": "18.3.1",

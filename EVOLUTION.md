@@ -3952,3 +3952,10 @@ Para o proprietário da conta `agenciamobi`, o perfil deve ser preenchido com no
 ## 70. Refino editorial da área de Colunistas
 
 A listagem pública `/colunistas` recebeu hierarquia editorial de abertura, contagem real em destaque, diretório de pessoas em linhas com fotografias em retrato 4:5, fallback tipográfico por iniciais, chamadas de perfil, leitura mais confortável e composição responsiva própria. A página `/autor/:slug` usa o mesmo vocabulário visual, com retrato, nome público, biografia, links e dados reais de publicação. O layout não inventa conteúdos nem depende de novas entidades ou consultas. Permanecem as APIs, metadados e JSON-LD existentes; sem mudança na autenticação, URLs ou banco de dados.
+
+
+## Importação remota de mídia editorial via MOBI Core (candidato, 01/10/2026)
+
+A conexão M2M editorial passou a admitir uma operação bounded de **importação de imagens oficiais para posts já em rascunho**, inicialmente limitada ao CDN da ESA/Webb. O servidor do Nosso Jornal faz o download diretamente, valida DNS/IP, TLS, MIME, resolução e tamanho (8 MiB), impede redirecionamentos e uso como proxy, grava exclusivamente no diretório mensal persistente \`wp-content/uploads/AAAA/MM\` e cria um attachment MariaDB com ALT, URL original, hash e crédito. A API pode definir a imagem destacada e os campos de crédito/legenda do artigo, preservando o status \`draft\`. Repetições idempotentes não baixam novamente um arquivo já registrado.
+
+A capability depende da PR correspondente do MOBI Core e da migração de autorização no Integration Hub. Não considerar a ferramenta LIVE antes do merge nas duas fontes, migração, deploy canônico e teste real no rascunho #6746. Vídeo oficial acima do limite de imagem deve usar incorporação com atribuição apropriada: esta capability não baixa nem publica vídeo e não cria uma API genérica de fetch de URLs.
