@@ -65,6 +65,7 @@ export function AdSlot({
 }) {
   const [ad, setAd] = useState<AdCreative | null>(null);
   const [ready, setReady] = useState(false);
+  const [mediaReady, setMediaReady] = useState(false);
   const [rotation, setRotation] = useState(0);
   const displayRef = useRef<HTMLElement | null>(null);
   const [device, setDevice] = useState<'desktop' | 'mobile'>(() =>
@@ -101,6 +102,7 @@ export function AdSlot({
       })
       .then((payload) => {
         if (!payload.ok || !payload.data) throw new Error('ad_slot_invalid');
+        setMediaReady(false);
         setAd(payload.data.ad);
         setReady(true);
       })
@@ -116,7 +118,7 @@ export function AdSlot({
   // A selection request is not an impression. Register only after the banner
   // is at least half visible for a full second in a visible browser tab.
   useEffect(() => {
-    if (!ad?.token || !ready || !displayRef.current || !('IntersectionObserver' in window)) return;
+    if (!ad?.token || !ready || !mediaReady || !displayRef.current || !('IntersectionObserver' in window)) return;
     let timeout: number | undefined;
     let recorded = false;
     const token = ad.token;
@@ -152,7 +154,7 @@ export function AdSlot({
       observer.disconnect();
       document.removeEventListener('visibilitychange', visibility);
     };
-  }, [ad?.token, ready]);
+  }, [ad?.token, ready, mediaReady]);
 
   const style = useMemo(
     () =>
@@ -189,6 +191,7 @@ export function AdSlot({
                 width={ad.width}
                 height={ad.height}
                 alt={ad.altText || ad.name}
+                onLoad={() => setMediaReady(true)}
               />
             </a>
           ) : (
@@ -197,6 +200,7 @@ export function AdSlot({
               width={ad.width}
               height={ad.height}
               alt={ad.altText || ad.name}
+                onLoad={() => setMediaReady(true)}
             />
           )
         ) : (
@@ -206,6 +210,7 @@ export function AdSlot({
               sandbox=""
               scrolling="no"
               srcDoc={htmlCreativeDocument(ad)}
+              onLoad={() => setMediaReady(true)}
               width={ad.width}
               height={ad.height}
             />
