@@ -12,7 +12,9 @@ try {
     if ((int) ($_SERVER['CONTENT_LENGTH'] ?? 0) > 256) {
         throw new NjApiHttpException(413, 'event_too_large');
     }
-    $body = json_decode((string) file_get_contents('php://input'), true);
+    $raw = (string) file_get_contents('php://input');
+    if (strlen($raw) > 256) throw new NjApiHttpException(413, 'event_too_large');
+    $body = json_decode($raw, true);
     $token = is_array($body) ? (string) ($body['token'] ?? '') : '';
     if (!preg_match('/^[0-9a-f]{32}$/D', $token) || ($body['type'] ?? '') !== 'impression') {
         throw new NjApiHttpException(422, 'invalid_ad_event');
