@@ -4921,44 +4921,46 @@ function PostEditorView({
             </div>
 
             <details className="admin-category-picker">
-              <summary>{selectedCategories.length > 0 ? 'Alterar categorias' : 'Escolher categoria'}</summary>
+              <summary>
+                {selectedCategories.length > 0 ? 'Alterar categorias' : 'Escolher categoria'}
+              </summary>
+
               <div className="admin-category-picker__body">
-            <p className="admin-field-help">
-              Use no máximo uma editoria e uma localidade. Ao escolher outra da mesma classe,
-              a seleção anterior é substituída.
-            </p>
+                <p className="admin-field-help">
+                  Use no máximo uma editoria e uma localidade. Ao escolher outra da mesma classe,
+                  a seleção anterior é substituída.
+                </p>
 
-            <div className="admin-editor-categories">
-              {selectableCategories.map((category) => (
-                <label key={category.id}>
-                  <input
-                    type="checkbox"
-                    checked={selectedSet.has(category.id)}
-                    disabled={!canEdit}
-                    onChange={() => toggleCategory(category.id)}
-                  />
-                  <i style={{ background: category.color }} aria-hidden="true" />
-                  <span>{category.name}</span>
-                </label>
-              ))}
-            </div>
-
-            {selectedCategories.length > 0 && (
-              <label className="admin-editor-primary-category">
-                <span>Categoria principal</span>
-                <select value={primaryCategoryId || ''} disabled>
-                  {selectedCategories.map((category) => (
-                    <option value={category.id} key={category.id}>{category.name}</option>
+                <div className="admin-editor-categories">
+                  {selectableCategories.map((category) => (
+                    <label key={category.id}>
+                      <input
+                        type="checkbox"
+                        checked={selectedSet.has(category.id)}
+                        disabled={!canEdit}
+                        onChange={() => toggleCategory(category.id)}
+                      />
+                      <i style={{ background: category.color }} aria-hidden="true" />
+                      <span>{category.name}</span>
+                    </label>
                   ))}
-                </select>
-                <small className="admin-field-help">
-                  A editoria é principal automaticamente; a localidade funciona como contexto.
-                </small>
-              </label>
+                </div>
 
+                {selectedCategories.length > 0 && (
+                  <label className="admin-editor-primary-category">
+                    <span>Categoria principal</span>
+                    <select value={primaryCategoryId || ''} disabled>
+                      {selectedCategories.map((category) => (
+                        <option value={category.id} key={category.id}>{category.name}</option>
+                      ))}
+                    </select>
+                    <small className="admin-field-help">
+                      A editoria é principal automaticamente; a localidade funciona como contexto.
+                    </small>
+                  </label>
+                )}
               </div>
             </details>
-            )}
           </section>
 
           <section className="admin-editor-card">
