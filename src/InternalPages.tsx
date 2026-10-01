@@ -1374,7 +1374,6 @@ function ColumnistsPage() {
 
   const jsonLd = useMemo(() => {
     if (!payload) return '';
-
     const pageUrl = new URL('/colunistas', window.location.origin).toString();
 
     return JSON.stringify({
@@ -1414,75 +1413,93 @@ function ColumnistsPage() {
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd }} />
       )}
 
-      <div className="container">
-        <Breadcrumbs
-          items={[
-            { label: 'Capa', href: '/' },
-            { label: 'Colunistas' },
-          ]}
-        />
+      <div className="container columnists-shell">
+        <Breadcrumbs items={[{ label: 'Capa', href: '/' }, { label: 'Colunistas' }]} />
 
         <header className="columnists-header">
-          <span className="internal-kicker">Quem escreve</span>
-          <h1>Colunistas</h1>
-          <p>
-            Conheça as pessoas que assinam análises, opiniões, reportagens e conteúdos especiais no Nosso Jornal.
-          </p>
-          <span className="columnists-header__count">
-            {payload.count.toLocaleString('pt-BR')} {payload.count === 1 ? 'colunista' : 'colunistas'}
-          </span>
+          <div className="columnists-header__intro">
+            <span className="internal-kicker">As vozes do jornal</span>
+            <h1>Colunistas<span aria-hidden="true">.</span></h1>
+            <p>
+              Diferentes olhares, histórias e perspectivas. Conheça quem assina os textos
+              e acompanhe suas publicações no Nosso Jornal.
+            </p>
+          </div>
+          <div className="columnists-header__aside" aria-label="Colunistas cadastrados">
+            <strong>{payload.count.toLocaleString('pt-BR')}</strong>
+            <span>{payload.count === 1 ? 'colunista' : 'colunistas'}</span>
+            <small>Conheça quem escreve</small>
+          </div>
         </header>
 
         {payload.items.length > 0 ? (
-          <section className="columnists-grid" aria-label="Colunistas do Nosso Jornal">
-            {payload.items.map((author) => (
-              <article className="columnist-card" key={author.id}>
-                <a
-                  className="columnist-card__link"
-                  href={author.url}
-                  aria-label={`Ver perfil de ${author.name}`}
-                >
-                  <div className="columnist-card__avatar-wrap">
-                    {author.avatar ? (
-                      <img
-                        className="columnist-card__avatar"
-                        src={author.avatar.url}
-                        srcSet={author.avatar.srcSet || undefined}
-                        sizes={author.avatar.srcSet ? '(max-width: 640px) 88px, 112px' : undefined}
-                        width={author.avatar.width ?? undefined}
-                        height={author.avatar.height ?? undefined}
-                        alt={author.avatar.alt || `Foto de ${author.name}`}
-                        loading="lazy"
-                      />
-                    ) : (
-                      <span className="columnist-card__avatar columnist-card__avatar--fallback" aria-hidden="true">
-                        {author.name.charAt(0).toUpperCase()}
-                      </span>
-                    )}
-                  </div>
+          <section className="columnists-directory" aria-labelledby="columnists-directory-title">
+            <div className="columnists-directory__heading">
+              <div>
+                <span className="internal-kicker">Pessoas e ideias</span>
+                <h2 id="columnists-directory-title">Conheça nossos autores</h2>
+              </div>
+              <span className="columnists-directory__eyebrow" aria-hidden="true">Nosso Jornal / Colunistas</span>
+            </div>
 
-                  <div className="columnist-card__body">
-                    <span className="internal-kicker">{author.role || 'Colunista'}</span>
-                    <h2>{author.name}</h2>
-                    <p>
-                      {author.bio || `Veja o perfil editorial e as publicações de ${author.name} no Nosso Jornal.`}
-                    </p>
+            <div className="columnists-grid">
+              {payload.items.map((author) => {
+                const initials = author.name.trim().split(/\s+/).slice(0, 2)
+                  .map((part) => part.charAt(0).toUpperCase()).join('');
 
-                    <div className="columnist-card__meta">
-                      <span>
-                        <strong>{author.publishedCount.toLocaleString('pt-BR')}</strong>
-                        {' '}
-                        {author.publishedCount === 1 ? 'publicação' : 'publicações'}
-                      </span>
-                      <span className="columnist-card__cta">Ver perfil →</span>
-                    </div>
-                  </div>
-                </a>
-              </article>
-            ))}
+                return (
+                  <article className="columnist-card" key={author.id}>
+                    <a
+                      className="columnist-card__link"
+                      href={author.url}
+                      aria-label={`Conhecer o perfil e as publicações de ${author.name}`}
+                    >
+                      <div className="columnist-card__avatar-wrap">
+                        {author.avatar ? (
+                          <img
+                            className="columnist-card__avatar"
+                            src={author.avatar.url}
+                            srcSet={author.avatar.srcSet || undefined}
+                            sizes={author.avatar.srcSet
+                              ? '(max-width: 560px) 86px, (max-width: 860px) 116px, 136px'
+                              : undefined}
+                            width={author.avatar.width ?? undefined}
+                            height={author.avatar.height ?? undefined}
+                            alt={author.avatar.alt || `Foto de ${author.name}`}
+                            loading="lazy"
+                          />
+                        ) : (
+                          <span className="columnist-card__avatar columnist-card__avatar--fallback" aria-hidden="true">
+                            {initials}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="columnist-card__body">
+                        <span className="columnist-card__role">{author.role || 'Colunista'}</span>
+                        <h3>{author.name}</h3>
+                        <p>
+                          {author.bio || `Conheça o perfil e os textos publicados por ${author.name} no Nosso Jornal.`}
+                        </p>
+                        <div className="columnist-card__meta">
+                          <span>
+                            <strong>{author.publishedCount.toLocaleString('pt-BR')}</strong>
+                            {' '}
+                            {author.publishedCount === 1 ? 'publicação' : 'publicações'}
+                          </span>
+                          <span className="columnist-card__cta">
+                            Ver perfil <span aria-hidden="true">↗</span>
+                          </span>
+                        </div>
+                      </div>
+                    </a>
+                  </article>
+                );
+              })}
+            </div>
           </section>
         ) : (
-          <div className="archive-empty">
+          <div className="archive-empty columnists-empty">
             <strong>Nenhum colunista disponível.</strong>
             <p>Os perfis editoriais aparecerão aqui assim que forem cadastrados.</p>
           </div>
@@ -1602,15 +1619,21 @@ function AuthorPage({ slug }: { slug: string }) {
               />
             ) : (
               <div className="author-profile__avatar author-profile__avatar--fallback" aria-hidden="true">
-                {author.name.charAt(0).toUpperCase()}
+                {author.name.trim().split(/\s+/).slice(0, 2).map((part) => part.charAt(0).toUpperCase()).join('')}
               </div>
             )}
 
-            <div>
-              <span className="internal-kicker">{isColumnist ? 'Colunista' : 'Autor'}</span>
+            <div className="author-profile__copy">
+              <span className="internal-kicker">{isColumnist ? 'Perfil de colunista' : 'Perfil do autor'}</span>
               <h1>{author.name}</h1>
               {author.role && <strong>{author.role}</strong>}
               {author.bio && <p>{author.bio}</p>}
+
+              {isColumnist && (
+                <a className="author-profile__directory-link" href="/colunistas">
+                  Todos os colunistas <span aria-hidden="true">↗</span>
+                </a>
+              )}
 
               {(author.website || author.social.length > 0) && (
                 <div className="author-profile__links" aria-label={`Links de ${author.name}`}>
