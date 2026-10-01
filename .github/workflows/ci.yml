@@ -60,3 +60,27 @@ jobs:
 
       - name: Validate editorial HMAC contract
         run: php scripts/validate-editorial-hmac.php
+
+  official-editorial-media-transport:
+    name: Official media transport (ephemeral, unmerged)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Transport official ESA images as verified base64 text
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fLSs --proto '=https' --tlsv1.2 --max-time 30 'https://cdn.esawebb.org/archives/images/screen/potm2609a.jpg' -o /tmp/esa-webb.jpg
+          curl -fLSs --proto '=https' --tlsv1.2 --max-time 30 'https://cdn.esahubble.org/archives/images/screen/potw1412a.jpg' -o /tmp/esa-hubble.jpg
+          python3 - <<'PY'
+          import base64, hashlib, pathlib
+          for name, path in [("webb", "/tmp/esa-webb.jpg"),("hubble", "/tmp/esa-hubble.jpg")]:
+              payload=pathlib.Path(path).read_bytes()
+              if not (payload[:3] == b'\\xff\\xd8\\xff' and len(payload) < 3_000_000):
+                  raise RuntimeError(f"unexpected image: {name}")
+              encoded=base64.b64encode(payload).decode('ascii')
+              print(f"NJMEDIA_META:{name}:{len(payload)}:{hashlib.sha256(payload).hexdigest()}")
+              for index in range(0, len(encoded), 7500):
+                  print(f"NJMEDIA_CHUNK:{name}:{index // 7500}:{encoded[index:index+7500]}")
+              print(f"NJMEDIA_END:{name}")
+          PY
