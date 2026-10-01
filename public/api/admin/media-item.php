@@ -128,6 +128,61 @@ SQL);
         ];
     }
 
+    if ((string) $row['mime_type'] === 'video/x-embed') {
+        // Video posts link by metadata rather than by _thumbnail_id.
+        $videoUsage = $pdo->prepare(
+            "SELECT p.ID AS id, p.post_title AS title, p.post_name AS slug, p.post_status AS status
+             FROM {$postmeta} pm
+             INNER JOIN {$posts} p ON p.ID = pm.post_id AND p.post_type = 'post'
+             WHERE pm.meta_key = '_nj_editorial_video_attachment_ids'
+               AND JSON_VALID(pm.meta_value) = 1
+               AND JSON_CONTAINS(pm.meta_value, :needle, '
+            'id' => (int) $row['id'],
+            'authorId' => (int) $row['author_id'],
+            'title' => (string) $row['title'],
+            'caption' => (string) $row['caption'],
+            'description' => (string) $row['description'],
+            'mimeType' => (string) $row['mime_type'],
+            'url' => $publicUrl,
+            'alt' => is_array($image)
+                ? (string) $image['alt']
+                : (string) $row['alt_text'],
+            'width' => is_array($image) ? $image['width'] : null,
+            'height' => is_array($image) ? $image['height'] : null,
+            'srcSet' => is_array($image) ? (string) $image['srcSet'] : '',
+            'variants' => is_array($image) ? $image['variants'] : [],
+            'attachedFile' => (string) $row['attached_file'],
+            'createdAt' => nj_content_iso8601((string) $row['created_at']),
+            'modifiedAt' => nj_content_iso8601((string) $row['modified_at']),
+            'parentId' => (int) $row['parent_id'],
+            'credit' => (string) ($extras['_nj_media_credit'] ?? ''),
+            'license' => (string) ($extras['_nj_media_license'] ?? ''),
+            'seoTitle' => (string) ($extras['_nj_media_seo_title'] ?? ''),
+            'seoDescription' => (string) ($extras['_nj_media_seo_description'] ?? ''),
+            'sourceUrl' => (string) ($extras['_nj_remote_media_source_url'] ?? ''),
+            'sourcePage' => (string) ($extras['_nj_remote_media_source_page'] ?? ''),
+            'videoId' => (string) ($extras['_nj_embed_youtube_id'] ?? ''),
+            'usedBy' => $usedBy,
+        ],
+    ];
+});
+) = 1
+             ORDER BY p.post_modified DESC LIMIT 30"
+        );
+        $videoUsage->execute(['needle' => json_encode($id, JSON_THROW_ON_ERROR)]);
+        foreach ($videoUsage->fetchAll() as $post) {
+            $usedBy[(int) $post['id']] = [
+                'id' => (int) $post['id'],
+                'title' => (string) $post['title'] ?: '(sem título)',
+                'status' => (string) $post['status'],
+                'adminUrl' => '/sistema/noticias/' . (int) $post['id'],
+                'publicUrl' => (string) $post['slug'] !== ''
+                    ? '/noticia/' . rawurlencode((string) $post['slug']) : null,
+            ];
+        }
+        $usedBy = array_values($usedBy);
+    }
+
     return [
         'media' => [
             'id' => (int) $row['id'],

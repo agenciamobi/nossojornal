@@ -9492,7 +9492,9 @@ function MediaItemView({ csrfToken }: { csrfToken: string }) {
 
             <div className="admin-media-usage">
               {media.usedBy.length === 0 ? (
-                <p>Esta imagem não está definida como destaque de nenhuma notícia.</p>
+                <p>{media.videoId
+                  ? 'Este vídeo ainda não está associado a notícias.'
+                  : 'Esta imagem não está definida como destaque de nenhuma notícia.'}</p>
               ) : (
                 media.usedBy.map((post) => (
                   <article key={post.id}>

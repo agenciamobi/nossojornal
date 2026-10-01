@@ -843,6 +843,19 @@ function ArticlePage({ slug }: { slug: string }) {
             },
           ],
         },
+        ...(article.videos ?? []).filter((video) => video.sourcePage && video.title).map((video) => ({
+          '@type': 'VideoObject',
+          '@id': `${articleUrl}#video-${video.id}`,
+          name: video.seoTitle || video.title,
+          description: video.seoDescription || video.caption || video.title,
+          embedUrl: video.embedUrl,
+          thumbnailUrl: `https://i.ytimg.com/vi/${video.id}/hqdefault.jpg`,
+          creditText: video.credit || undefined,
+          license: video.license?.toUpperCase() === 'CC BY 4.0'
+            ? 'https://creativecommons.org/licenses/by/4.0/'
+            : undefined,
+          isPartOf: { '@id': `${articleUrl}#article` },
+        })),
       ],
     });
   }, [
