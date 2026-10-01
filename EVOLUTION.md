@@ -3947,3 +3947,8 @@ O login administrativo permanece estável e privado como identidade de autentica
 Em `/sistema/usuarios/novo` e `/sistema/usuarios/:id`, o cadastro/edição passa a reunir nome público, nome e sobrenome, endereço público, foto, função editorial, biografia, site e redes sociais. A foto usa a biblioteca de attachments já existente; a API expõe somente os metadados permitidos. A criação e a edição validam endereços duplicados e MIME da foto no servidor. Mudanças posteriores de endereço acionam redirect 301 transacional pelo subsistema nativo.
 
 Para o proprietário da conta `agenciamobi`, o perfil deve ser preenchido com nome público **Pablo Oliveira**; o login não deve ser renomeado. A mudança efetiva de dados no banco de produção depende de salvar esse cadastro após o release canônico, preservando demais campos pessoais que não foram fornecidos.
+
+
+## 70. Refino editorial da área de Colunistas
+
+A listagem pública `/colunistas` recebeu hierarquia editorial de abertura, contagem real em destaque, diretório de pessoas em linhas com fotografias em retrato 4:5, fallback tipográfico por iniciais, chamadas de perfil, leitura mais confortável e composição responsiva própria. A página `/autor/:slug` usa o mesmo vocabulário visual, com retrato, nome público, biografia, links e dados reais de publicação. O layout não inventa conteúdos nem depende de novas entidades ou consultas. Permanecem as APIs, metadados e JSON-LD existentes; sem mudança na autenticação, URLs ou banco de dados.
