@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import './admin-ads.css';
 
 type FormatPreset = {
@@ -383,8 +383,9 @@ type AdMediaResponse = {
   data?: { items: AdMediaItem[]; pagination: { page: number; totalPages: number; total: number } };
 };
 function AdMediaPicker({
-  size, onSelect, onClose,
+  size, onSelect, onClose, csrfToken,
 }: {
+  csrfToken?: string;
   size: string;
   onSelect: (item: AdMediaItem) => void;
   onClose: () => void;
@@ -395,6 +396,8 @@ function AdMediaPicker({
   const [items, setItems] = useState<AdMediaItem[]>([]);
   const [totalPages, setTotalPages] = useState(1);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
 
   useEffect(() => {
     const controller = new AbortController();
@@ -427,6 +430,41 @@ function AdMediaPicker({
         <input value={input} placeholder="Pesquisar imagens" aria-label="Pesquisar imagens" onChange={(event) => setInput(event.target.value)} />
         <button type="submit">Buscar</button>
       </form>
+      {csrfToken && (
+        <label className="ads-media-picker__upload">
+          <span>{uploading ? 'Enviando imagem…' : '+ Enviar nova imagem (JPG, PNG, WebP ou GIF)'}</span>
+          <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" disabled={uploading}
+            onChange={(event) => {
+              const file = event.currentTarget.files?.[0];
+              if (!file) return;
+              if (file.size > 12 * 1024 * 1024) {
+                setUploadError('A imagem deve ter até 12 MB.');
+                event.currentTarget.value = '';
+                return;
+              }
+              const upload = new FormData();
+              upload.append('file', file);
+              setUploadError('');
+              setUploading(true);
+              void fetch('/api/admin/media-upload.php', {
+                method: 'POST', headers: { 'X-CSRF-Token': csrfToken }, body: upload,
+              }).then(async (response) => {
+                const payload = await response.json() as {
+                  ok: boolean; data?: { media: AdMediaItem }; error?: { code?: string };
+                };
+                if (!response.ok || !payload.ok || !payload.data?.media) {
+                  throw new Error(payload.error?.code ?? 'media_upload_failed');
+                }
+                onSelect(payload.data.media);
+              }).catch((reason) => {
+                setUploadError('Não foi possível enviar a imagem: '
+                  + (reason instanceof Error ? reason.message : 'media_upload_failed'));
+              }).finally(() => setUploading(false));
+              event.currentTarget.value = '';
+            }} />
+        </label>
+      )}
+      {uploadError && <p role="alert">{uploadError}</p>}
       {state === 'loading' && <p role="status">Carregando imagens…</p>}
       {state === 'error' && <p role="alert">Não foi possível consultar a biblioteca. Feche e abra novamente.</p>}
       {state === 'ready' && (
@@ -531,7 +569,7 @@ function QuickBannerForm({
     return { ...item, eligible: Boolean(eligible), advertiser: advertiser?.name || 'Anunciante indisponível' };
   });
 
-  async function publish(event: React.FormEvent<HTMLFormElement>) {
+  async function publish(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (issues.length || !selectedSize || status === 'saving') return;
     setStatus('saving');
@@ -1101,7 +1139,7 @@ export function AdminAds({ csrfToken }: { csrfToken: string }) {
                 <>
                   <label className="admin-editor-field"><span>URL da imagem</span><input placeholder="/wp-content/uploads/... ou https://" value={creative.imageUrl} onChange={(e) => setCreative({ ...creative, imageUrl: e.target.value })} /></label>
                   <button className="ads-builder-button" type="button" onClick={() => setMediaOpen((open) => !open)}>{mediaOpen ? 'Fechar biblioteca' : 'Escolher da Biblioteca de Mídias'}</button>
-                  {mediaOpen && <AdMediaPicker size={creative.width + '×' + creative.height} onClose={() => setMediaOpen(false)} onSelect={(item) => {
+                  {mediaOpen && <AdMediaPicker size={creative.width + '×' + creative.height} csrfToken={csrfToken} onClose={() => setMediaOpen(false)} onSelect={(item) => {
                     setCreative({ ...creative, imageUrl: item.url, altText: item.alt || item.title });
                     setMediaOpen(false);
                   }} />}
