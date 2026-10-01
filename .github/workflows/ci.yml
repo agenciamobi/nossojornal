@@ -76,7 +76,7 @@ jobs:
           import base64, hashlib, pathlib
           for name, path in [("webb", "/tmp/esa-webb.jpg"),("hubble", "/tmp/esa-hubble.jpg")]:
               payload=pathlib.Path(path).read_bytes()
-              if not (payload[:3] == b'\\xff\\xd8\\xff' and len(payload) < 3_000_000):
+              if not (payload[:3] == bytes([255, 216, 255]) and len(payload) < 3_000_000):
                   raise RuntimeError(f"unexpected image: {name}")
               encoded=base64.b64encode(payload).decode('ascii')
               print(f"NJMEDIA_META:{name}:{len(payload)}:{hashlib.sha256(payload).hexdigest()}")
