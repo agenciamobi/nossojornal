@@ -5420,7 +5420,6 @@ function PostEditorView({
           </div>
         );
       })()}
-      )}
     </>
   );
 }
