@@ -43,4 +43,31 @@ assert.ok(!file.includes("editorial.publish"), "Image import must not publish.")
 assert.ok(!file.includes("CURLOPT_FOLLOWLOCATION => true"), "Redirects are forbidden.");
 assert.ok(!file.includes("shell_exec"), "No arbitrary shell is permitted.");
 assert.ok(!file.includes("file_get_contents($url)"), "Unbounded downloads are forbidden.");
-console.log("Editorial media import contract OK");
+const phpRead = (path) => readFileSync(path, "utf8");
+const video = phpRead("public/api/m2m/editorial/video-attach.php");
+const security = phpRead("public/api/m2m/editorial/_video.php");
+const library = phpRead("public/api/admin/media-item.php");
+const librarySave = phpRead("public/api/admin/media-save.php");
+const article = phpRead("public/api/v1/article.php");
+for(const token of [
+  "nj_m2m_run('POST', 'editorial.video.attach'",
+  "video_draft_required",
+  "video_limit_reached",
+  "_nj_editorial_video_attachment_ids",
+  "video/x-embed",
+  "nj_admin_log_post_activity",
+  "video_link_readback_failed"
+]) assert.ok(video.includes(token), "Missing metadata-only video contract: " + token);
+for(const token of [
+  "nj_video_youtube_id", "youtube-nocookie.com",
+  "video_source_mismatch", "RQUMlfUnPhc"
+]) assert.ok(security.includes(token), "Missing allowed video source rule: " + token);
+assert.ok(!video.includes("curl_exec") && !video.includes("file_get_contents"), "Video attachment must never download bytes");
+for(const token of ["_nj_media_credit", "_nj_media_license", "_nj_media_seo_title", "_nj_media_seo_description"]) {
+  assert.ok(library.includes(token) && librarySave.includes(token),
+    "Both media editor endpoints must expose metadata: " + token);
+}
+assert.ok(article.includes("_nj_editorial_video_attachment_ids"), "Public article must hydrate video attachments");
+assert.ok(article.includes("youtube-nocookie.com"), "Embed player must be canonical");
+assert.ok(article.includes("featuredCredit"), "Featured image must use editable library credit");
+console.log("Editorial media and URL-only video contracts OK");
