@@ -49,6 +49,13 @@ type Article = {
     provider: 'youtube';
     id: string;
     embedUrl: string;
+    title?: string;
+    caption?: string;
+    credit?: string;
+    license?: string;
+    seoTitle?: string;
+    seoDescription?: string;
+    sourcePage?: string;
   }>;
   publishedAt: string;
   modifiedAt: string;
@@ -644,13 +651,22 @@ function ArticleVideos({
           <div className="article-video__frame">
             <iframe
               src={video.embedUrl}
-              title={`Vídeo: ${title}`}
+              title={video.seoTitle || video.title || `Vídeo: ${title}`}
               loading="lazy"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
               referrerPolicy="strict-origin-when-cross-origin"
               allowFullScreen
             />
           </div>
+          {(video.caption || video.credit || video.sourcePage) && (
+            <figcaption className="article-video__caption">
+              {video.caption && <span>{video.caption}</span>}
+              {video.credit && <small>Crédito: {video.credit}</small>}
+              {video.sourcePage && /^https:\/\//.test(video.sourcePage) && (
+                <a href={video.sourcePage} target="_blank" rel="noopener noreferrer">Vídeo original ↗</a>
+              )}
+            </figcaption>
+          )}
         </figure>
       ))}
     </div>

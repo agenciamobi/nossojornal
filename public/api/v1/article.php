@@ -52,6 +52,7 @@ WHERE
         '_nj_coauthors',
         '_nj_image_credit',
         '_nj_image_caption',
+        '_nj_editorial_video_attachment_ids',
         '_nj_original_source_url',
         '_nj_canonical_url',
         '_nj_provenance_mode',
@@ -204,6 +205,78 @@ SQL;
         }
     }
 
+
+    // Attachment metadata stays authoritative for library-edited credit/caption.
+    $featuredCredit = '';
+    $featuredCaption = '';
+    $featuredMetadata = $pdo->prepare(
+        "SELECT a.post_excerpt AS caption, m.meta_value AS credit
+         FROM {$postmeta} thumb
+         INNER JOIN {$posts} a ON a.ID = CAST(thumb.meta_value AS UNSIGNED)
+            AND a.post_type = 'attachment' AND a.post_mime_type LIKE 'image/%'
+         LEFT JOIN {$postmeta} m ON m.post_id = a.ID AND m.meta_key = '_nj_media_credit'
+         WHERE thumb.post_id = :id AND thumb.meta_key = '_thumbnail_id'
+         ORDER BY m.meta_id DESC LIMIT 1"
+    );
+    $featuredMetadata->execute(['id' => $article['id']]);
+    $featuredRow = $featuredMetadata->fetch();
+    if (is_array($featuredRow)) {
+        $featuredCredit = trim((string) ($featuredRow['credit'] ?? ''));
+        $featuredCaption = trim((string) ($featuredRow['caption'] ?? ''));
+    }
+
+    // Each video is a metadata-only media library attachment; no video bytes
+    // are stored or served by Nosso Jornal. Iframe URLs are constructed from
+    // strictly validated YouTube IDs, never copied from an external input.
+    $linkedVideoIds = json_decode((string) ($metaValues['_nj_editorial_video_attachment_ids'] ?? '[]'), true);
+    $linkedVideoIds = is_array($linkedVideoIds)
+        ? array_slice(array_values(array_unique(array_filter(array_map('intval', $linkedVideoIds), static fn (int $v): bool => $v > 0))), 0, 6)
+        : [];
+    if ($linkedVideoIds !== []) {
+        $placeholders = implode(',', array_fill(0, count($linkedVideoIds), '?'));
+        $videoRows = $pdo->prepare(
+            "SELECT a.ID, a.post_title AS title, a.post_excerpt AS caption,
+             MAX(CASE WHEN m.meta_key = '_nj_embed_youtube_id' THEN m.meta_value END) AS youtube_id,
+             MAX(CASE WHEN m.meta_key = '_nj_media_credit' THEN m.meta_value END) AS credit,
+             MAX(CASE WHEN m.meta_key = '_nj_media_license' THEN m.meta_value END) AS license,
+             MAX(CASE WHEN m.meta_key = '_nj_media_seo_title' THEN m.meta_value END) AS seo_title,
+             MAX(CASE WHEN m.meta_key = '_nj_media_seo_description' THEN m.meta_value END) AS seo_description,
+             MAX(CASE WHEN m.meta_key = '_nj_remote_media_source_page' THEN m.meta_value END) AS source_page
+             FROM {$posts} a
+             INNER JOIN {$postmeta} m ON m.post_id = a.ID
+             WHERE a.ID IN ({$placeholders}) AND a.post_type = 'attachment'
+             AND a.post_mime_type = 'video/x-embed'
+             GROUP BY a.ID, a.post_title, a.post_excerpt"
+        );
+        $videoRows->execute($linkedVideoIds);
+        $videos = [];
+        foreach ($videoRows->fetchAll() as $video) {
+            $id = (string) ($video['youtube_id'] ?? '');
+            if (!preg_match('/^[A-Za-z0-9_-]{11}$/', $id)) continue;
+            $videos[(int) $video['ID']] = [
+                'provider' => 'youtube',
+                'id' => $id,
+                'embedUrl' => 'https://www.youtube-nocookie.com/embed/' . $id,
+                'title' => nj_content_clean_text_source((string) $video['title']),
+                'caption' => nj_content_clean_text_source((string) $video['caption']),
+                'credit' => nj_content_clean_text_source((string) ($video['credit'] ?? '')),
+                'license' => nj_content_clean_text_source((string) ($video['license'] ?? '')),
+                'seoTitle' => nj_content_clean_text_source((string) ($video['seo_title'] ?? '')),
+                'seoDescription' => nj_content_clean_text_source((string) ($video['seo_description'] ?? '')),
+                'sourcePage' => (string) ($video['source_page'] ?? ''),
+            ];
+        }
+        $existingVideoIds = array_fill_keys(array_column($article['videos'] ?? [], 'id'), true);
+        foreach ($linkedVideoIds as $linkedId) {
+            if (!isset($videos[$linkedId])) continue;
+            $video = $videos[$linkedId];
+            if (!isset($existingVideoIds[$video['id']])) {
+                $article['videos'][] = $video;
+                $existingVideoIds[$video['id']] = true;
+            }
+        }
+    }
+
     $corrections = [];
     $correctionStatement = $pdo->prepare(<<<SQL
 SELECT
@@ -264,8 +337,8 @@ SQL);
             'standfirst' => nj_content_clean_text_source((string) ($metaValues['_nj_standfirst'] ?? '')),
             'dateline' => nj_content_clean_text_source((string) ($metaValues['_nj_dateline'] ?? '')),
             'coauthors' => $coauthors,
-            'imageCredit' => nj_content_clean_text_source((string) ($metaValues['_nj_image_credit'] ?? '')),
-            'imageCaption' => nj_content_clean_text_source((string) ($metaValues['_nj_image_caption'] ?? '')),
+            'imageCredit' => nj_content_clean_text_source($featuredCredit !== '' ? $featuredCredit : (string) ($metaValues['_nj_image_credit'] ?? '')),
+            'imageCaption' => nj_content_clean_text_source($featuredCaption !== '' ? $featuredCaption : (string) ($metaValues['_nj_image_caption'] ?? '')),
             'originalSourceUrl' => (string) ($metaValues['_nj_original_source_url'] ?? ''),
             'provenance' => [
                 'mode' => $provenanceMode,
