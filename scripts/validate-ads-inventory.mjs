@@ -31,6 +31,7 @@ const checks = [
   ['quick publication atomic transaction', file('public/api/admin/ads.php').includes("if ($entity === 'quick_banner')") && file('public/api/admin/ads.php').includes('$pdo->beginTransaction()')],
   ['quick publication derives image from verified library media', file('public/api/admin/ads.php').includes("p.post_type='attachment'") && file('public/api/admin/ads.php').includes('nj_media_descriptor')],
   ['quick publication rejects invalid slot', file('public/api/admin/ads.php').includes('quick_banner_slot_incompatible')],
+  ['quick banner rejects extreme image ratio', file('public/api/admin/ads.php').includes('quick_banner_image_ratio') && file('src/AdminAds.tsx').includes('severeRatioMismatch')],
   ['quick publication front-end default', file('src/AdminAds.tsx').includes("('quick')")],
   ['quick form media uploader', file('src/AdminAds.tsx').includes('/api/admin/media-upload.php')],
   ['quick form avoids nested media form', file('src/AdminAds.tsx').includes('ads-media-picker__search')],
