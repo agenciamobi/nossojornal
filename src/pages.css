@@ -2409,3 +2409,12 @@
 .article-video__caption small { font-size: 11px; color: #64748b; }
 .article-video__caption a { color: #0a3284; font-weight: 700; }
 .article-video__caption a:focus-visible { outline: 2px solid #6597f8; outline-offset: 3px; }
+
+/* Keep the article's ad below editorial copy and outside the article HTML. */
+.article-inline-ad {
+  margin: 42px auto 34px;
+}
+
+.article-inline-ad .ad-slot__label {
+  color: #64748b;
+}
