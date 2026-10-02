@@ -139,7 +139,8 @@ WHERE
         '_thumbnail_id',
         '_yoast_wpseo_title',
         '_yoast_wpseo_metadesc',
-        '_yoast_wpseo_primary_category'
+        '_yoast_wpseo_primary_category',
+        '_nj_mobi_human_review_required'
     )
 ORDER BY meta_id DESC
 SQL);
@@ -217,6 +218,7 @@ SQL);
                 $selectedTags
             ),
             'featuredImage' => $featuredImage,
+            'reviewRequired' => ($meta['_nj_mobi_human_review_required'] ?? '') === '1',
             'seo' => [
                 'title' => nj_content_clean_text_source((string) ($meta['_yoast_wpseo_title'] ?? '')),
                 'description' => nj_content_clean_text_source((string) ($meta['_yoast_wpseo_metadesc'] ?? '')),
