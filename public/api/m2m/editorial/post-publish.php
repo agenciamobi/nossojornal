@@ -54,6 +54,17 @@ nj_m2m_run('POST', 'editorial.post.publish', static function (array $context): a
             AND post_mime_type LIKE 'image/%' LIMIT 1");
         $image->execute(['id' => $featuredId]);
         if (!$image->fetchColumn()) throw new NjApiHttpException(422, 'publish_featured_image_invalid');
+        $file = $pdo->prepare("SELECT meta_value FROM {$meta}
+            WHERE post_id = :id AND meta_key = '_wp_attached_file'
+            ORDER BY meta_id DESC LIMIT 1");
+        $file->execute(['id' => $featuredId]);
+        $relative = (string) $file->fetchColumn();
+        $root = rtrim((string) ($_SERVER['DOCUMENT_ROOT'] ?? ''), '/');
+        if (!preg_match('#^[0-9]{4}/[0-9]{2}/[a-z0-9._-]+$#i', $relative)
+            || $root === '' || !is_file($root . '/wp-content/uploads/' . $relative)
+            || is_link($root . '/wp-content/uploads/' . $relative)) {
+            throw new NjApiHttpException(422, 'publish_featured_image_file_missing');
+        }
         $categories = $pdo->prepare("SELECT tr.term_taxonomy_id FROM {$relationships} tr
             JOIN {$taxonomy} tt ON tt.term_taxonomy_id = tr.term_taxonomy_id AND tt.taxonomy = 'category'
             WHERE tr.object_id = :id");
