@@ -24,6 +24,33 @@ function nj_ai_stage_root(): string
         throw new NjApiHttpException(503, 'generated_staging_unsafe');
     }
     @chmod($path, 0700);
+
+    // Opportunistic bounded garbage collection. An abandoned or failed upload
+    // must not accumulate binary parts forever. Never follow symlinks or remove
+    // a staging directory while another request holds its lock.
+    $candidates = array_slice(glob($real . '/*', GLOB_ONLYDIR) ?: [], 0, 16);
+    foreach ($candidates as $candidate) {
+        if (is_link($candidate) || preg_match('/^[0-9a-f]{64}$/', basename($candidate)) !== 1) continue;
+        $manifest = $candidate . '/manifest.json';
+        if (!is_file($manifest) || is_link($manifest) || filemtime($manifest) >= time() - NJ_AI_STAGE_TTL) continue;
+        $handle = fopen($candidate . '/lock', 'c');
+        if ($handle === false) continue;
+        if (flock($handle, LOCK_EX | LOCK_NB)) {
+            if (is_file($manifest) && !is_link($manifest) && filemtime($manifest) < time() - NJ_AI_STAGE_TTL) {
+                foreach (glob($candidate . '/*.part') ?: [] as $part) {
+                    if (preg_match('/^[0-9]{3}\\.part$/', basename($part)) === 1
+                        && is_file($part) && !is_link($part)) @unlink($part);
+                }
+                @unlink($manifest);
+            }
+            flock($handle, LOCK_UN);
+        }
+        fclose($handle);
+        if (!file_exists($manifest)) {
+            @unlink($candidate . '/lock');
+            @rmdir($candidate);
+        }
+    }
     return $real;
 }
 
