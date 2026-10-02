@@ -2,6 +2,10 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const source = (name) => readFileSync(name, 'utf8');
+const providerRuntime = source('public/api/m2m/editorial/_m2m.php');
+const providerStatus = source('public/api/m2m/editorial/status.php');
+assert.ok(providerRuntime.includes("const NJ_EDITORIAL_M2M_VERSION = 'm2m-editorial@2026-10-02-r2'"), 'M3 must advertise its own provider revision');
+assert.ok(providerStatus.includes("'version' => NJ_EDITORIAL_M2M_VERSION"), 'integration.status must expose actual provider version');
 const upload = source('public/api/m2m/editorial/media-generated-upload.php');
 const featured = source('public/api/m2m/editorial/post-featured-set.php');
 const publish = source('public/api/m2m/editorial/post-publish.php');
