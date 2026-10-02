@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { cleanLegacyText } from './contentText';
 import { AdSlot } from './AdSlot';
+import { ArticleAuthorCard } from './ArticleAuthorCard';
 import './pages.css';
 
 type Category = {
@@ -1079,6 +1080,8 @@ function ArticlePage({ slug }: { slug: string }) {
             </div>
 
             <aside className="article-detail__aside" aria-label="Navegação da matéria">
+              <ArticleAuthorCard author={article.author} />
+
               {(article.toc ?? []).length > 0 && (
                 <nav className="article-toc" aria-label="Nesta matéria">
                   <span className="internal-kicker">Nesta matéria</span>
