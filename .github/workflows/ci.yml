@@ -60,3 +60,6 @@ jobs:
 
       - name: Validate editorial HMAC contract
         run: php scripts/validate-editorial-hmac.php
+
+      - name: Validate generated media and publication M3 boundary
+        run: node scripts/validate-editorial-generated-publish.mjs
