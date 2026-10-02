@@ -40,6 +40,7 @@ type AdminPublicProfile = {
   slug: string;
   url: string | null;
   publishedCount: number;
+  statsAvailable?: boolean;
   firstName: string;
   lastName: string;
   avatarId: number;
@@ -8473,19 +8474,19 @@ function UserEditorView({
 
         setData(payload.data);
         setDisplayName(payload.data.user.displayName);
-        setFirstName(payload.data.publicProfile.firstName);
-        setLastName(payload.data.publicProfile.lastName);
-        setPublicSlug(payload.data.publicProfile.slug);
-        setAvatarId(payload.data.publicProfile.avatarId);
+        setFirstName(resolvedProfile.firstName);
+        setLastName(resolvedProfile.lastName);
+        setPublicSlug(resolvedProfile.slug);
+        setAvatarId(resolvedProfile.avatarId);
         setEmail(payload.data.user.email);
         setRole(payload.data.user.roles[0] ?? '');
-        setPublicBio(payload.data.publicProfile.bio);
-        setPublicRole(payload.data.publicProfile.role);
-        setWebsite(payload.data.publicProfile.website);
-        setInstagram(payload.data.publicProfile.instagram);
-        setFacebook(payload.data.publicProfile.facebook);
-        setLinkedin(payload.data.publicProfile.linkedin);
-        setXProfile(payload.data.publicProfile.x);
+        setPublicBio(resolvedProfile.bio);
+        setPublicRole(resolvedProfile.role);
+        setWebsite(resolvedProfile.website);
+        setInstagram(resolvedProfile.instagram);
+        setFacebook(resolvedProfile.facebook);
+        setLinkedin(resolvedProfile.linkedin);
+        setXProfile(resolvedProfile.x);
       })
       .catch(() => setError(true));
   }, [userId]);
@@ -8555,31 +8556,45 @@ function UserEditorView({
         throw new Error('user_save_invalid_response');
       }
 
+      // Preserve previously loaded author statistics if the optional refresh
+      // failed after the profile itself was committed successfully.
+      const updatedProfile = payload.data.publicProfile;
+      const resolvedProfile = updatedProfile.statsAvailable === false
+        ? {
+            ...updatedProfile,
+            publishedCount: data.publicProfile.publishedCount,
+            avatar: updatedProfile.avatarId === data.publicProfile.avatarId ? data.publicProfile.avatar : null,
+            url: data.publicProfile.publishedCount > 0
+              ? '/autor/' + encodeURIComponent(updatedProfile.slug)
+              : null,
+          }
+        : updatedProfile;
+
       setData((current) => current
         ? {
             ...current,
             user: payload.data!.user,
-            publicProfile: payload.data!.publicProfile,
+            publicProfile: resolvedProfile,
           }
         : current
       );
       setDisplayName(payload.data.user.displayName);
-      setFirstName(payload.data.publicProfile.firstName);
-      setLastName(payload.data.publicProfile.lastName);
-      setPublicSlug(payload.data.publicProfile.slug);
-      setAvatarId(payload.data.publicProfile.avatarId);
+      setFirstName(resolvedProfile.firstName);
+      setLastName(resolvedProfile.lastName);
+      setPublicSlug(resolvedProfile.slug);
+      setAvatarId(resolvedProfile.avatarId);
       setEmail(payload.data.user.email);
       setRole(payload.data.user.roles[0] ?? role);
       setNewPassword('');
       setNewPasswordConfirm('');
       setShowNewPassword(false);
-      setPublicBio(payload.data.publicProfile.bio);
-      setPublicRole(payload.data.publicProfile.role);
-      setWebsite(payload.data.publicProfile.website);
-      setInstagram(payload.data.publicProfile.instagram);
-      setFacebook(payload.data.publicProfile.facebook);
-      setLinkedin(payload.data.publicProfile.linkedin);
-      setXProfile(payload.data.publicProfile.x);
+      setPublicBio(resolvedProfile.bio);
+      setPublicRole(resolvedProfile.role);
+      setWebsite(resolvedProfile.website);
+      setInstagram(resolvedProfile.instagram);
+      setFacebook(resolvedProfile.facebook);
+      setLinkedin(resolvedProfile.linkedin);
+      setXProfile(resolvedProfile.x);
       setSaveState('saved');
     } catch (cause) {
       const code = cause instanceof Error ? cause.message : '';
@@ -8588,7 +8603,21 @@ function UserEditorView({
         public_slug_redirect_conflict: 'Existe redirecionamento manual para o endereço anterior. Resolva antes de mudar o slug.',
         invalid_public_slug: 'O endereço público aceita apenas letras minúsculas, números e hífens.',
         invalid_public_avatar: 'Selecione uma foto válida da biblioteca.',
-      } as Record<string, string>)[code] ?? 'Não foi possível salvar o usuário. Revise os campos e tente novamente.');
+        invalid_user_email: 'Informe um e-mail válido.',
+        user_email_exists: 'Este e-mail já pertence a outro usuário.',
+        invalid_public_name: 'Nome ou sobrenome excede o limite permitido.',
+        public_bio_too_large: 'A biografia ultrapassa o limite de 3.000 caracteres.',
+        invalid_public_website: 'Informe um site válido começando com https://.',
+        invalid_public_instagram: 'O link do Instagram deve apontar para instagram.com.',
+        invalid_public_facebook: 'O link do Facebook deve apontar para facebook.com.',
+        invalid_public_linkedin: 'O link do LinkedIn deve apontar para linkedin.com.',
+        invalid_public_x: 'O link do X deve apontar para x.com ou twitter.com.',
+        database_write_unavailable: 'O servidor não tem permissão para gravar esse perfil. Contate o suporte.',
+        role_change_not_allowed: 'Não é permitido alterar a função desta conta.',
+        authentication_required: 'Sua sessão expirou. Entre novamente e tente salvar.',
+        invalid_csrf_token: 'Sua sessão mudou. Recarregue a página e tente novamente.',
+        internal_error: 'O servidor apresentou um erro ao salvar. Contate o suporte se persistir.',
+      } as Record<string, string>)[code] ?? ('Não foi possível salvar o usuário. Tente novamente.' + (code ? ' Código: ' + code + '.' : '')));
       setSaveState('error');
     }
   }
