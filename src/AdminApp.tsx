@@ -220,6 +220,7 @@ type PostDetailPayload = {
         title: string;
         alt: string;
       } | null;
+      reviewRequired: boolean;
       seo: {
         title: string;
         description: string;
@@ -2987,6 +2988,7 @@ function PostEditorView({
     collapsed: number;
   } | null>(null);
   const [statusState, setStatusState] = useState<'idle' | 'working' | 'saved' | 'error'>('idle');
+  const [reviewState, setReviewState] = useState<'idle' | 'working' | 'saved' | 'error'>('idle');
   const [revisions, setRevisions] = useState<PostRevisionItem[]>([]);
   const [revisionToCompare, setRevisionToCompare] = useState<PostRevisionItem | null>(null);
   const [collaboration, setCollaboration] = useState<NonNullable<CollaborationPayload['data']>>({
@@ -3642,6 +3644,30 @@ function PostEditorView({
       setSaveState('error');
       return false;
     }
+  }
+
+  async function approveHumanReview() {
+    if (!data?.post.reviewRequired || !user.permissions.publishPosts || reviewState === 'working') return;
+    if (changed || automaticDefaultsNeeded) {
+      window.alert('Salve todas as alterações antes de confirmar a revisão editorial.');
+      return;
+    }
+    if (!window.confirm('Você revisou pessoalmente o título, o conteúdo, as fontes e a imagem desta notícia?')) return;
+    setReviewState('working');
+    try {
+      const result = await adminFetch<{ ok: boolean; data?: { reviewed: boolean; reviewRequired: boolean } }>(
+        '/api/admin/post-review-approve.php', {
+          method: 'POST', headers: { 'X-CSRF-Token': csrfToken },
+          body: JSON.stringify({ postId: data.post.id, confirmReviewed: true }),
+        },
+      );
+      if (!result.ok || !result.data?.reviewed) throw new Error('human_review_failed');
+      setData((current) => current ? {
+        ...current, post: { ...current.post, reviewRequired: false },
+      } : current);
+      setReviewState('saved');
+      await refreshHistoryAndCollaboration();
+    } catch { setReviewState('error'); }
   }
 
   async function changeStatus(action: 'publish' | 'draft' | 'schedule') {
@@ -4757,6 +4783,20 @@ function PostEditorView({
               </span>
             </div>
 
+            {post.reviewRequired && post.status === 'draft' && (
+              <div className="admin-publish-readiness is-blocked" role="status">
+                <strong>Revisão humana pendente</strong>
+                <span>Esta notícia foi preparada com auxílio de IA. Revise conteúdo, fontes e imagem antes de aprovar.</span>
+                {user.permissions.publishPosts && (
+                  <button type="button" disabled={reviewState === 'working' || changed || automaticDefaultsNeeded}
+                    onClick={() => void approveHumanReview()}>
+                    {reviewState === 'working' ? 'Confirmando…' : 'Confirmar revisão editorial'}
+                  </button>
+                )}
+                {reviewState === 'error' && <span role="alert">Falha ao registrar revisão. Tente novamente.</span>}
+              </div>
+            )}
+
             {post.status !== 'publish' && user.permissions.publishPosts && (
               <div className="admin-schedule">
                 <label>
@@ -4770,7 +4810,7 @@ function PostEditorView({
                 </label>
                 <button
                   type="button"
-                  disabled={publicationActionDisabled || scheduledAt === ''}
+                  disabled={publicationActionDisabled || scheduledAt === '' || post.reviewRequired}
                   onClick={() => void changeStatus('schedule')}
                 >
                   Agendar
@@ -4805,7 +4845,7 @@ function PostEditorView({
                 <button
                   type="button"
                   className="is-primary"
-                  disabled={publicationActionDisabled || !user.permissions.publishPosts}
+                  disabled={publicationActionDisabled || !user.permissions.publishPosts || post.reviewRequired}
                   onClick={() => void changeStatus('publish')}
                 >
                   {statusState === 'working'
