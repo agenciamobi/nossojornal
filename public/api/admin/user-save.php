@@ -352,6 +352,9 @@ SQL);
             }
         }
 
+        // Build the authoritative response before committing. A response failure
+        // must not turn an already persisted profile into an apparent failed save.
+        $userPayload = nj_admin_user_payload($pdo, $persisted);
         $pdo->commit();
     } catch (PDOException $error) {
         if ($pdo->inTransaction()) {
@@ -371,9 +374,15 @@ SQL);
         throw $error;
     }
 
-    $posts = nj_table('posts');
-    $postmeta = nj_table('postmeta');
-    $publishedStatement = $pdo->prepare(
+    // Public author statistics are optional presentation data. A failure here
+    // must never report the committed user update as an unsuccessful save.
+    $publishedCount = 0;
+    $publicPreview = null;
+    $profileStatsAvailable = true;
+    try {
+        $posts = nj_table('posts');
+        $postmeta = nj_table('postmeta');
+        $publishedStatement = $pdo->prepare(
         "SELECT COUNT(*)
          FROM {$posts} p
          WHERE
@@ -420,10 +429,14 @@ SQL);
         'coauthor_id' => $id,
     ]);
     $publishedCount = (int) $publishedStatement->fetchColumn();
-    $publicPreview = nj_author_profile($pdo, $publicSlug, true);
+        $publicPreview = nj_author_profile($pdo, $publicSlug, true);
+    } catch (Throwable $error) {
+        $profileStatsAvailable = false;
+        error_log('[nossojornal-admin] optional_user_profile_stats_failed type=' . get_class($error));
+    }
 
     return [
-        'user' => nj_admin_user_payload($pdo, $persisted),
+        'user' => $userPayload,
         'publicProfile' => [
             'slug' => $publicSlug,
             'firstName' => $firstName,
@@ -434,6 +447,7 @@ SQL);
                 ? '/autor/' . rawurlencode($publicSlug)
                 : null,
             'publishedCount' => $publishedCount,
+            'statsAvailable' => $profileStatsAvailable,
             'bio' => $publicBio,
             'bioSource' => $publicBio !== '' ? 'nossojornal' : 'empty',
             'role' => $publicRole,
