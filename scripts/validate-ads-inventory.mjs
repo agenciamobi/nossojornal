@@ -35,6 +35,12 @@ const checks = [
   ['quick publication front-end default', file('src/AdminAds.tsx').includes("('quick')")],
   ['quick form media uploader', file('src/AdminAds.tsx').includes('/api/admin/media-upload.php')],
   ['quick form avoids nested media form', file('src/AdminAds.tsx').includes('ads-media-picker__search')],
+  ['header creative frame is constrained to 468x60', file('src/ads.css').includes('max-width: 468px') && file('src/ads.css').includes('height: 60px;')],
+  ['header never stretches ad across available masthead width', file('src/ads.css').includes('flex: 0 1 468px')],
+  ['masthead no longer reserves oversized blank space', file('src/styles.css').includes('min-height: 100px') && file('src/styles.css').includes('padding-block: 16px')],
+  ['mobile creative retains own bounded height', file('src/ads.css').includes('height: min(100px, calc(var(--ad-height) * 1px))')],
+  ['quick publishing defaults to compact header banner', file('src/AdminAds.tsx').includes("size: '468x60'") && file('src/AdminAds.tsx').includes("device === 'mobile' ? '300x100' : '468x60'")],
+
 
 ];
 for (const [label, result] of checks) {

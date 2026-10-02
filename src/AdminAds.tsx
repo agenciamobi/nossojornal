@@ -535,9 +535,20 @@ function QuickBannerForm({
   const [draft, setDraft] = useState<QuickBannerDraft>({
     advertiserId: defaultAdvertiser,
     newAdvertiserName: '', name: '', media: null,
-    slotId: defaultSlot, device: 'desktop', size: '970x90',
+    slotId: defaultSlot, device: 'desktop', size: '468x60',
     clickUrl: '', startsAt: '', endsAt: '', priority: 100,
   });
+  // Keep the compact masthead format selected when changing placement/device.
+  const preferredFormat = (slot: AdSlotRecord | undefined, device: QuickBannerDraft['device']) => {
+    const matches = data.formats.filter((item) =>
+      slot?.allowedSizes.includes(item.width + 'x' + item.height)
+      && (item.device === 'all' || item.device === device));
+    const preferred = slot?.code === 'header'
+      ? device === 'mobile' ? '300x100' : '468x60'
+      : '';
+    const found = matches.find((item) => item.width + 'x' + item.height === preferred) ?? matches[0];
+    return found ? found.width + 'x' + found.height : '';
+  };
   const [pickerOpen, setPickerOpen] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [status, setStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
@@ -690,10 +701,7 @@ function QuickBannerForm({
               <select value={draft.slotId} onChange={(event) => {
                 const id = Number(event.target.value);
                 const next = data.slots.find((item) => item.id === id);
-                const match = data.formats.find((item) =>
-                  next?.allowedSizes.includes(item.width + 'x' + item.height)
-                  && (item.device === 'all' || item.device === draft.device));
-                setDraft({ ...draft, slotId: id, size: match ? match.width + 'x' + match.height : '' });
+                setDraft({ ...draft, slotId: id, size: preferredFormat(next, draft.device) });
               }}>
                 {data.slots.filter((item) => item.enabled).map((item) => (
                   <option key={item.id} value={item.id}>{item.name}</option>
@@ -703,10 +711,7 @@ function QuickBannerForm({
             <label className="admin-editor-field"><span>Dispositivo</span>
               <select value={draft.device} onChange={(event) => {
                 const device = event.target.value as QuickBannerDraft['device'];
-                const match = data.formats.find((item) =>
-                  selectedSlot?.allowedSizes.includes(item.width + 'x' + item.height)
-                  && (item.device === 'all' || item.device === device));
-                setDraft({ ...draft, device, size: match ? match.width + 'x' + match.height : '' });
+                setDraft({ ...draft, device, size: preferredFormat(selectedSlot, device) });
               }}>
                 <option value="desktop">Computador</option>
                 <option value="mobile">Celular</option>
@@ -724,6 +729,12 @@ function QuickBannerForm({
               ))}
             </select>
           </label>
+          {selectedSlot?.code === 'header' && draft.device === 'desktop' && (
+            <p className="ads-quick__help">
+              Para o cabeçalho, envie a arte pronta em 468×60 pixels, sem margens ou
+              fundo branco externos. Outros formatos devem usar posições próprias.
+            </p>
+          )}
           <label className="admin-editor-field"><span>5. Link ao clicar (opcional)</span>
             <input type="url" placeholder="https://site-do-anunciante.com.br" value={draft.clickUrl}
               onChange={(event) => setDraft({ ...draft, clickUrl: event.target.value })} />

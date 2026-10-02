@@ -122,11 +122,12 @@ img {
 }
 
 .masthead__inner {
-  min-height: 132px;
+  min-height: 100px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 40px;
+  gap: clamp(20px, 4vw, 40px);
+  padding-block: 16px;
 }
 
 .brand {
@@ -148,7 +149,7 @@ img {
 }
 
 .masthead__message {
-  max-width: 520px;
+  max-width: 468px;
   text-align: right;
 }
 
@@ -1179,7 +1180,11 @@ input:focus-visible {
   }
 
   .masthead__inner {
-    min-height: 110px;
+    min-height: 0;
+    flex-direction: column;
+    justify-content: center;
+    gap: 22px;
+    padding-block: 18px;
   }
 
   .masthead__message {
