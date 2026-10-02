@@ -58,6 +58,9 @@ for (const marker of [
 ]) {
   assert.ok(adminUi.includes(marker), `editor missing explicit review control: ${marker}`);
 }
+const finalReceipt = upload.slice(upload.indexOf("$finish = true;"));
+assert.ok(finalReceipt.includes("'upload_id' => $uploadId"),
+  'finalized generated upload must return the upload_id expected by MOBI Core');
 assert.ok(!upload.includes('CURLOPT_'), 'generated media must not download arbitrary remote URLs');
 assert.ok(!upload.includes('shell_exec('), 'generated media must not execute shell');
 assert.ok(!publish.includes('nj_admin_run('), 'M2M publishing must not borrow browser admin sessions');
