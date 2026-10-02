@@ -40,7 +40,8 @@ nj_m2m_run('POST', 'editorial.post.publish', static function (array $context): a
         $review->execute(['id' => $postId]);
         if ((string) $review->fetchColumn() === '1') throw new NjApiHttpException(409, 'publish_human_review_required');
 
-        if (trim((string) $post['post_title']) === '' || trim((string) $post['post_content']) === ''
+        $plainBody = trim(html_entity_decode(strip_tags((string) $post['post_content']), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+        if (trim((string) $post['post_title']) === '' || $plainBody === ''
             || trim((string) $post['post_excerpt']) === '') {
             throw new NjApiHttpException(422, 'publish_required_editorial_content_missing');
         }
