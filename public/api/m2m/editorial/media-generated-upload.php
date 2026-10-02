@@ -35,6 +35,7 @@ function nj_ai_stage_root(): string
         if (!is_file($manifest) || is_link($manifest) || filemtime($manifest) >= time() - NJ_AI_STAGE_TTL) continue;
         $handle = fopen($candidate . '/lock', 'c');
         if ($handle === false) continue;
+        $cleaned = false;
         if (flock($handle, LOCK_EX | LOCK_NB)) {
             if (is_file($manifest) && !is_link($manifest) && filemtime($manifest) < time() - NJ_AI_STAGE_TTL) {
                 foreach (glob($candidate . '/*.part') ?: [] as $part) {
@@ -42,11 +43,12 @@ function nj_ai_stage_root(): string
                         && is_file($part) && !is_link($part)) @unlink($part);
                 }
                 @unlink($manifest);
+                $cleaned = true;
             }
             flock($handle, LOCK_UN);
         }
         fclose($handle);
-        if (!file_exists($manifest)) {
+        if ($cleaned && !file_exists($manifest)) {
             @unlink($candidate . '/lock');
             @rmdir($candidate);
         }
