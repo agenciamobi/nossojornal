@@ -404,7 +404,7 @@ nj_m2m_run('POST', 'editorial.media.generated.upload', static function (array $c
             }
             $pdo->commit();
             $finish = true;
-            return ['phase' => 'finalize', 'post_id' => (string) $postId,
+            return ['phase' => 'finalize', 'upload_id' => $uploadId, 'post_id' => (string) $postId,
                 'attachment_id' => (string) $attachmentId, 'media_url' => $guid,
                 'sha256' => $hash, 'featured' => ($body['set_featured'] ?? true) === true,
                 'reused' => $reused, 'generated' => true];
