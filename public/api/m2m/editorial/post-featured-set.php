@@ -27,7 +27,7 @@ nj_m2m_run('POST', 'editorial.post.featured.set', static function (array $contex
         if (!is_array($draft)) throw new NjApiHttpException(409, 'featured_draft_required');
 
         // Do not accept a foreign organization's asset or an arbitrary historical attachment.
-        $check = $pdo->prepare("SELECT ID, guid FROM {$posts}
+        $check = $pdo->prepare("SELECT ID, guid, post_excerpt FROM {$posts}
             WHERE ID = :id AND post_type = 'attachment' AND post_mime_type IN ('image/jpeg','image/png','image/webp')
               AND post_parent = :post LIMIT 1");
         $check->execute(['id' => $attachmentId, 'post' => $postId]);
@@ -44,7 +44,16 @@ nj_m2m_run('POST', 'editorial.post.featured.set', static function (array $contex
             || is_link($root . '/wp-content/uploads/' . $relative)) {
             throw new NjApiHttpException(409, 'featured_attachment_file_missing');
         }
+        // Switching featured media must also switch (or clear) the display
+        // credit/caption. Never leave attribution from a different photograph.
+        $creditQuery = $pdo->prepare("SELECT meta_value FROM {$meta}
+            WHERE post_id = :id AND meta_key = '_nj_media_credit'
+            ORDER BY meta_id DESC LIMIT 1");
+        $creditQuery->execute(['id' => $attachmentId]);
+        $credit = (string) ($creditQuery->fetchColumn() ?: '');
         nj_admin_upsert_postmeta($pdo, $postId, '_thumbnail_id', (string) $attachmentId);
+        nj_admin_upsert_postmeta($pdo, $postId, '_nj_image_credit', $credit);
+        nj_admin_upsert_postmeta($pdo, $postId, '_nj_image_caption', (string) $image['post_excerpt']);
         $pdo->prepare("UPDATE {$posts} SET post_modified = NOW(), post_modified_gmt = UTC_TIMESTAMP() WHERE ID = :id")
             ->execute(['id' => $postId]);
         nj_admin_log_post_activity($pdo, $postId, (int) $draft['post_author'], 'editorial_featured_set', [
