@@ -8474,19 +8474,19 @@ function UserEditorView({
 
         setData(payload.data);
         setDisplayName(payload.data.user.displayName);
-        setFirstName(resolvedProfile.firstName);
-        setLastName(resolvedProfile.lastName);
-        setPublicSlug(resolvedProfile.slug);
-        setAvatarId(resolvedProfile.avatarId);
+        setFirstName(payload.data.publicProfile.firstName);
+        setLastName(payload.data.publicProfile.lastName);
+        setPublicSlug(payload.data.publicProfile.slug);
+        setAvatarId(payload.data.publicProfile.avatarId);
         setEmail(payload.data.user.email);
         setRole(payload.data.user.roles[0] ?? '');
-        setPublicBio(resolvedProfile.bio);
-        setPublicRole(resolvedProfile.role);
-        setWebsite(resolvedProfile.website);
-        setInstagram(resolvedProfile.instagram);
-        setFacebook(resolvedProfile.facebook);
-        setLinkedin(resolvedProfile.linkedin);
-        setXProfile(resolvedProfile.x);
+        setPublicBio(payload.data.publicProfile.bio);
+        setPublicRole(payload.data.publicProfile.role);
+        setWebsite(payload.data.publicProfile.website);
+        setInstagram(payload.data.publicProfile.instagram);
+        setFacebook(payload.data.publicProfile.facebook);
+        setLinkedin(payload.data.publicProfile.linkedin);
+        setXProfile(payload.data.publicProfile.x);
       })
       .catch(() => setError(true));
   }, [userId]);
@@ -8559,12 +8559,13 @@ function UserEditorView({
       // Preserve previously loaded author statistics if the optional refresh
       // failed after the profile itself was committed successfully.
       const updatedProfile = payload.data.publicProfile;
+      const previousProfile = data?.publicProfile;
       const resolvedProfile = updatedProfile.statsAvailable === false
         ? {
             ...updatedProfile,
-            publishedCount: data.publicProfile.publishedCount,
-            avatar: updatedProfile.avatarId === data.publicProfile.avatarId ? data.publicProfile.avatar : null,
-            url: data.publicProfile.publishedCount > 0
+            publishedCount: previousProfile?.publishedCount ?? 0,
+            avatar: updatedProfile.avatarId === previousProfile?.avatarId ? previousProfile?.avatar ?? null : null,
+            url: (previousProfile?.publishedCount ?? 0) > 0
               ? '/autor/' + encodeURIComponent(updatedProfile.slug)
               : null,
           }
