@@ -51,9 +51,19 @@
 }
 
 .masthead__ad-slot {
-  flex: 1 1 auto;
-  max-width: 970px;
+  /* The header is a compact banner location, not a full-width billboard. */
+  flex: 0 1 468px;
+  width: min(100%, 468px);
+  max-width: 468px;
   margin-left: auto;
+}
+
+.masthead__ad-slot .ad-slot__frame {
+  /* Contain even legacy, larger creatives without growing the masthead. */
+  height: 60px;
+  aspect-ratio: auto;
+  border-radius: 8px;
+  background: transparent;
 }
 
 @media (max-width: 720px) {
@@ -63,7 +73,13 @@
   }
 
   .masthead__ad-slot {
+    flex: 0 1 auto;
     width: min(100%, 300px);
+    max-width: 300px;
     margin-inline: auto;
+  }
+
+  .masthead__ad-slot .ad-slot__frame {
+    height: min(100px, calc(var(--ad-height) * 1px));
   }
 }
