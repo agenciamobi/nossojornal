@@ -351,6 +351,32 @@ nj_m2m_run('POST', 'editorial.media.generated.upload', static function (array $c
                     throw new NjApiHttpException(409, 'generated_existing_media_invalid');
                 }
                 $guid = (string) $attachment['guid'];
+                // A reused image keeps the Library's original attribution.
+                // Do not attach contradictory AI provenance to an existing binary.
+                $prior = $pdo->prepare("SELECT meta_key, meta_value FROM {$meta}
+                    WHERE post_id = :id AND meta_key IN (
+                        '_nj_media_credit','_nj_ai_generated_model','_wp_attachment_image_alt',
+                        '_nj_media_license','_nj_ai_prompt_summary'
+                    ) ORDER BY meta_id DESC");
+                $prior->execute(['id' => $attachmentId]);
+                $saved = [];
+                foreach ($prior->fetchAll() as $row) {
+                    if (!array_key_exists((string) $row['meta_key'], $saved)) {
+                        $saved[(string) $row['meta_key']] = (string) $row['meta_value'];
+                    }
+                }
+                foreach ([
+                    '_nj_media_credit' => $credit,
+                    '_nj_ai_generated_model' => $model,
+                    '_wp_attachment_image_alt' => $alt,
+                    '_nj_media_license' => $license,
+                    '_nj_ai_prompt_summary' => $prompt,
+                ] as $field => $expectedValue) {
+                    if (!array_key_exists($field, $saved)
+                        || !hash_equals($saved[$field], $expectedValue)) {
+                        throw new NjApiHttpException(409, 'generated_reused_media_metadata_conflict');
+                    }
+                }
             }
             if (($body['set_featured'] ?? true) === true) {
                 nj_admin_upsert_postmeta($pdo, $postId, '_thumbnail_id', (string) $attachmentId);
