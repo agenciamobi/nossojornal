@@ -73,6 +73,17 @@ SQL);
         throw new NjApiHttpException(403, 'insufficient_permissions');
     }
 
+    if (in_array($action, ['publish', 'schedule'], true)) {
+        $meta = nj_table('postmeta');
+        $review = $pdo->prepare("SELECT meta_value FROM {$meta}
+            WHERE post_id = :id AND meta_key = '_nj_mobi_human_review_required'
+            ORDER BY meta_id DESC LIMIT 1");
+        $review->execute(['id' => $postId]);
+        if ((string) $review->fetchColumn() === '1') {
+            throw new NjApiHttpException(409, 'human_review_required');
+        }
+    }
+
     if (in_array($action, ['publish', 'schedule'], true) && $title === '') {
         throw new NjApiHttpException(422, 'post_title_required');
     }

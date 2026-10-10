@@ -4,7 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../../admin/_admin.php';
 require_once __DIR__ . '/_hmac.php';
 
-const NJ_EDITORIAL_M2M_VERSION = 'm2m-editorial@2026-09-30-r1';
+const NJ_EDITORIAL_M2M_VERSION = 'm2m-editorial@2026-10-02-r2';
 const NJ_EDITORIAL_M2M_MAX_BODY_BYTES = 200704;
 const NJ_EDITORIAL_M2M_TIMESTAMP_WINDOW_SECONDS = 300;
 const NJ_EDITORIAL_M2M_IDEMPOTENCY_STALE_SECONDS = 300;
