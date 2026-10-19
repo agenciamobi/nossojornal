@@ -17,11 +17,11 @@
     "validate:ads": "node scripts/validate-ads-inventory.mjs"
   },
   "dependencies": {
-    "react": "18.3.1",
+    "react": "19.3.1",
     "react-dom": "18.3.1"
   },
   "devDependencies": {
-    "@types/react": "18.3.23",
+    "@types/react": "19.3.0",
     "@types/react-dom": "18.3.7",
     "@vitejs/plugin-react-swc": "3.11.0",
     "typescript": "7.0.2",
